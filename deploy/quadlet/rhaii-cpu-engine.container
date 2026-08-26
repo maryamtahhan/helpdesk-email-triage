@@ -1,0 +1,40 @@
+# Podman Quadlet container unit — place in ~/.config/containers/systemd/
+#
+# Prerequisites:
+#   podman login registry.redhat.io
+#   mkdir -p ~/rhaii-cache
+#   echo "HF_TOKEN=hf_..." > ~/.config/helpdesk/secrets.env
+#
+# Enable:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now rhaii-cpu-engine.service
+
+[Unit]
+Description=Red Hat AI Inference 3.5 CPU Engine
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=registry.redhat.io/rhaii/vllm-cpu-rhel9:3.5.0-1786546771
+ContainerName=rhaii-cpu-engine
+PublishPort=8000:8000
+Environment=VLLM_CPU_KVCACHE_SPACE=10
+Volume=%h/rhaii-cache:/opt/app-root/src/.cache:Z
+Network=helpdesk.network
+Exec=--model Qwen/Qwen2.5-1.5B-Instruct --host 0.0.0.0
+UserNS=keep-id:uid=1001
+ShmSize=4g
+SecurityLabelDisable=true
+HealthCmd=python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/models', timeout=3)"
+HealthInterval=10s
+HealthRetries=18
+HealthStartPeriod=60s
+
+[Service]
+Restart=on-failure
+RestartSec=15
+TimeoutStartSec=600
+EnvironmentFile=%h/.config/helpdesk/secrets.env
+
+[Install]
+WantedBy=default.target

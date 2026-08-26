@@ -1,0 +1,88 @@
+version: "3.8"
+
+# Production stack: Red Hat AI Inference 3.5 CPU engine + email gateway + Streamlit UI.
+# Requires: RHEL x86_64, Podman, registry.redhat.io login, Hugging Face token.
+#
+#   export HF_TOKEN=...
+#   podman login registry.redhat.io
+#   podman compose up --build
+
+services:
+  rhaii-cpu-engine:
+    image: ${RHAIIS_IMAGE:-registry.redhat.io/rhaii/vllm-cpu-rhel9:3.5.0-1786546771}
+    container_name: rhaii-cpu-engine
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+      HF_HUB_OFFLINE: "0"
+      VLLM_CPU_KVCACHE_SPACE: ${VLLM_CPU_KVCACHE_SPACE:-8}
+      LD_PRELOAD: /usr/lib64/libomp.so
+    volumes:
+      - ${RHEL_CACHE_DIR:-~/rhaii-cache}:/opt/app-root/src/.cache:Z
+    security_opt:
+      - label=disable
+    shm_size: "4g"
+    userns_mode: "keep-id:uid=1001"
+    command:
+      - --model
+      - ${MODEL_NAME:-Qwen/Qwen2.5-1.5B-Instruct}
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/models', timeout=3)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 180s
+
+  email-gateway:
+    build:
+      context: ./email-gateway
+    image: localhost/helpdesk-email-gateway:dev
+    container_name: rhaii-email-gateway
+    restart: unless-stopped
+    depends_on:
+      rhaii-cpu-engine:
+        condition: service_healthy
+    ports:
+      - "3025:3025"
+      - "8080:8080"
+    environment:
+      VLLM_BASE_URL: http://rhaii-cpu-engine:8000/v1
+      VLLM_ENDPOINT: http://rhaii-cpu-engine:8000/v1/chat/completions
+      MODEL_NAME: ${MODEL_NAME:-Qwen/Qwen2.5-1.5B-Instruct}
+      GATEWAY_MODE: ${GATEWAY_MODE:-FILE_WATCHER}
+      EMAIL_INPUT_DIR: /app/input_emails
+      TICKET_DATA_DIR: /app/data
+    volumes:
+      - ./sample_emails:/app/input_emails:Z
+      - gateway-data:/app/data:Z
+
+  agent-dashboard-ui:
+    build:
+      context: ./agent-dashboard
+    image: localhost/helpdesk-triage-ui:dev
+    container_name: rhaii-triage-ui
+    restart: unless-stopped
+    depends_on:
+      - email-gateway
+    ports:
+      - "8501:8501"
+    environment:
+      GATEWAY_URL: http://email-gateway:8080
+      SMTP_HOST: email-gateway
+    volumes:
+      - ./docs:/app/docs:ro,Z
+
+volumes:
+  gateway-data:

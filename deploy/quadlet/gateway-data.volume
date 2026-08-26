@@ -1,0 +1,4 @@
+# Podman Quadlet volume unit — place in ~/.config/containers/systemd/
+# Persists ticket JSON across gateway restarts.
+[Volume]
+VolumeName=gateway-data

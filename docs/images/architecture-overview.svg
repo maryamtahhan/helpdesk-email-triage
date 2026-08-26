@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="420" viewBox="0 0 1100 420" role="img" aria-labelledby="title desc">
+  <title id="title">Helpdesk email triage architecture</title>
+  <desc id="desc">Support email arrives at the gateway which regex-tokenizes PII into a local vault. Red Hat AI Inference on CPU then classifies category and urgency on already-sanitized text. The agent dashboard shows only tokens; authorized agents rehydrate originals from the vault.</desc>
+  <rect width="1100" height="420" fill="#f8f8f8"/>
+  <text x="32" y="36" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#151515">Secure local helpdesk triage on RHEL</text>
+  <text x="32" y="58" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#4d4d4d">Ingest &#x2192; regex-tokenize PII (gateway) &#x2192; classify on CPU (RHAII) &#x2192; route sanitized ticket</text>
+
+  <rect x="32" y="90" width="230" height="150" rx="8" fill="#ffffff" stroke="#8a8d90"/>
+  <text x="147" y="118" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">STAGE 1</text>
+  <text x="147" y="142" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#151515">Ingestion</text>
+  <text x="147" y="168" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">Live mailbox or .eml files</text>
+  <text x="147" y="188" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">SMTP :3025 · file watcher</text>
+  <text x="147" y="216" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">Raw RFC-822 in RAM only</text>
+
+  <polygon points="272,155 272,175 292,165" fill="#C9190B"/>
+
+  <rect x="302" y="90" width="230" height="150" rx="8" fill="#ffffff" stroke="#8a8d90"/>
+  <text x="417" y="118" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">STAGE 2</text>
+  <text x="417" y="142" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#151515">Email gateway</text>
+  <text x="417" y="162" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">Parse RFC-822 headers &amp; body</text>
+  <text x="417" y="181" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">Regex-tokenize PII &#x2192; vault</text>
+  <text x="417" y="200" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">cards · phones · SSNs · emails</text>
+  <text x="417" y="220" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">Container: email-gateway</text>
+
+  <polygon points="542,155 542,175 562,165" fill="#C9190B"/>
+
+  <rect x="572" y="90" width="230" height="150" rx="8" fill="#ffffff" stroke="#8a8d90"/>
+  <text x="687" y="118" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">STAGE 3</text>
+  <text x="687" y="142" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#151515">Local CPU inference</text>
+  <text x="687" y="168" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">Red Hat AI Inference 3.5</text>
+  <text x="687" y="188" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">Classify category &amp; urgency</text>
+  <text x="687" y="208" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">Sees only pre-tokenized text</text>
+  <text x="687" y="225" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">vLLM CPU · OpenAI-compatible API</text>
+
+  <polygon points="812,155 812,175 832,165" fill="#C9190B"/>
+
+  <rect x="842" y="90" width="226" height="150" rx="8" fill="#ffffff" stroke="#8a8d90"/>
+  <text x="955" y="118" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">STAGE 4</text>
+  <text x="955" y="142" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#151515">Agent inbox</text>
+  <text x="955" y="168" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">Tokenized queues</text>
+  <text x="955" y="188" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">SLA classification time</text>
+  <text x="955" y="216" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">Streamlit :8501</text>
+
+  <rect x="32" y="270" width="1036" height="120" rx="8" fill="#ffffff" stroke="#8a8d90"/>
+  <text x="52" y="302" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#151515">What never leaves the host</text>
+  <text x="52" y="328" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#151515">Raw card numbers, phone numbers, and names stay in the gateway vault keyed by Ticket ID.</text>
+  <text x="52" y="350" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#151515">Downstream systems receive only tokens such as [NAME_1], [PHONE_1], and [CARD_LAST4_1].</text>
+  <text x="52" y="372" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#151515">Authorized agents can rehydrate original metadata from the vault without calling an external API.</text>
+</svg>
