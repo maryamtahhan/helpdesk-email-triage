@@ -13,3 +13,4 @@ rhaii-cache/
 *.egg-info/
 .template-src/
 local/
+docs/quay-publish.md
