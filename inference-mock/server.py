@@ -44,7 +44,11 @@ def _classify(text: str) -> dict[str, str]:
     ):
         category = "General"
     elif any(
-        word in lowered for word in ("charged", "invoice", "refund", "card was", "double charge")
+        word in lowered
+        for word in (
+            "charged", "invoice", "refund", "card was", "double charge",
+            "payroll", "overtime", "insurer", "insurance", "emergency room",
+        )
     ):
         category = "Billing"
     elif any(word in lowered for word in ("password", "lock", "mfa", "2fa", "reset")):
@@ -63,7 +67,10 @@ def _classify(text: str) -> dict[str, str]:
         urgency = "Medium" if category != "General" else "Low"
     elif any(
         word in lowered
-        for word in ("urgent", "asap", "immediately", "locked out", "charged twice")
+        for word in (
+            "urgent", "asap", "immediately", "locked out", "charged twice",
+            "missing overtime", "unexpected invoice",
+        )
     ):
         urgency = "High"
     elif category == "General":

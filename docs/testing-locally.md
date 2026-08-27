@@ -37,7 +37,7 @@ When the dashboard opens, the queue on the left should already contain several t
 | Double charge on card | Billing | High |
 | MFA lockout | Account Access | High |
 | VPN dropping | Tech Support | High |
-| GDPR erasure request | General | Medium |
+| GDPR erasure request | General | Low |
 | Healthcare ER bill | Billing | High |
 | HR payroll dispute | Billing | High |
 | Thank-you note | General | Low |

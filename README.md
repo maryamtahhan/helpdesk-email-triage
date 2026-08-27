@@ -46,7 +46,7 @@ Use it as a pattern for on-premise helpdesk automation: keep inference on the sa
 
 After the stack is up, the dashboard opens automatically (local script) or navigate to [http://127.0.0.1:8501](http://127.0.0.1:8501).
 
-Four **quick demo scenario** buttons in the sidebar let you triage a pre-built email instantly — a billing double-charge, an MFA lockout, a VPN failure, and a low-urgency thank-you note — without touching the command line. Each submission classifies the email, replaces PII with structured tokens (`[NAME_1]`, `[CARD_LAST4_1]`, `[PHONE_1]`), and adds a ticket to the queue within a couple of seconds.
+Seven **quick demo scenario** buttons in the sidebar let you triage a pre-built email instantly — a billing double-charge, an MFA lockout, a VPN failure, a healthcare ER bill, an HR payroll dispute, a GDPR erasure request, and a low-urgency thank-you note — without touching the command line. Each submission classifies the email, replaces PII with structured tokens (`[NAME_1]`, `[CARD_LAST4_1]`, `[PHONE_1]`), and adds a ticket to the queue within a couple of seconds.
 
 The sample `.eml` files in `sample_emails/` are also ingested automatically by the file watcher when the stack starts. The queue refreshes every 10 seconds without a browser reload.
 
@@ -220,7 +220,7 @@ Local demo processes started by `scripts/run-demo-local.sh` stop when you interr
 
 ## Technical details
 
-Classification uses the vLLM email gateway from `email-gateway/gateways/email_classification_gateway.py`. That filter is adapted from Michael Dawson's email classification gateway in `redhat-et/vllm-audio-demo`: it parses RFC-822, sends the `text/plain` body to an OpenAI-compatible endpoint (`responses.create`, with a `chat.completions` fallback), and expects JSON with `category`, `urgency`, and `redacted_text`. You can still run it as a drop-in mail filter:
+Classification uses the vLLM email gateway from `email-gateway/gateways/email_classification_gateway.py`. That filter is adapted from Michael Dawson's email classification gateway in `redhat-et/vllm-audio-demo`: it parses RFC-822, sends the `text/plain` body to an OpenAI-compatible endpoint (`responses.create`, with a `chat.completions` fallback), and expects JSON with `category`, `urgency`, and `sanitized_text`. You can still run it as a drop-in mail filter:
 
 ```bash
 python email-gateway/gateways/email_classification_gateway.py \
@@ -228,7 +228,23 @@ python email-gateway/gateways/email_classification_gateway.py \
   --file sample_emails/01-billing-double-charge.eml
 ```
 
-The HTTP gateway regex-tokenizes high-confidence structured PII (cards that pass a Luhn check, NANP phone numbers, emails, SSNs, and `ACC-*` account IDs) into a local vault so authorized agents can rehydrate a ticket. Model `redacted_text` is shown in the inbox as sanitized text. If the inference endpoint is down or returns invalid JSON, ingest falls back to keyword triage so mail is not dropped.
+The HTTP gateway regex-tokenizes high-confidence structured PII (cards that pass a Luhn check, NANP phone numbers, emails, SSNs, and `ACC-*` account IDs) into a local vault so authorized agents can rehydrate a ticket. Model `sanitized_text` is shown in the inbox. If the inference endpoint is down or returns invalid JSON, ingest falls back to keyword triage so mail is not dropped.
+
+### Why regex handles structured PII and the model handles only names
+
+This split is a deliberate security and compliance decision, not a convenience shortcut.
+
+**Regex for structured PII (card numbers, phone numbers, SSNs, email addresses, account IDs):**
+
+- *Deterministic and auditable.* A Luhn-validated card-number regex either matches or it does not. Regulations such as GDPR, HIPAA, and GLBA require controls that a compliance auditor can verify. An LLM cannot provide that guarantee — non-determinism is a fundamental property of the model, not a fixable bug.
+- *Raw high-risk PII never reaches the inference engine.* vLLM logs request payloads by default. Sending raw card numbers or SSNs to the model creates a log-exposure surface even on a fully local CPU deployment.
+- *Resilient fallback.* If the model returns malformed JSON or the inference endpoint is down, the pipeline falls back to keyword triage operating on already regex-sanitized text. Structured PII stays redacted regardless of inference health.
+
+**Model for names only:**
+
+Full names cannot be caught reliably by regex across arbitrary prose ("please call John", "regards, Sarah Chen", "my husband Mike"). The model handles this residual category. Importantly, the model receives text where structured tokens (`[PHONE_1]`, `[CARD_LAST4_1]`, etc.) are already in place, so it treats them as opaque literals and does not attempt to re-tokenize them.
+
+The prompt sent to the model (`INSTR` in `email-gateway/gateways/email_classification_gateway.py`) reflects this boundary explicitly.
 
 Ticket IDs start at `TICKET-8921`. Public ticket APIs omit the original body. `GET /tickets/{id}/vault` returns the original text and token map for the authorized-agent view in the dashboard. Classification latency is stored as `classification_ms` and shown as an `X-Classification-Time` SLA tag.
 
@@ -237,6 +253,8 @@ Sample messages use fictional reserved values (Visa test PAN `4111-1111-1111-111
 ## Authors
 
 - Michael Dawson, [midawson@redhat.com](mailto:midawson@redhat.com)
+- Maryam Tahhan, [mtahhan@redhat.com](mailto:mtahhan@redhat.com)
+- Anton Ivanov, [anivanov@redhat.com](mailto:anivanov@redhat.com)
 
 ## Tags
 

@@ -15,7 +15,7 @@ _EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 _SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 _ACCOUNT_RE = re.compile(r"\bACC-\d{3,}\b", re.IGNORECASE)
 _NAME_INTRO_RE = re.compile(
-    r"\b(?:[Mm]y name is|[Ii](?: am|'m))\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)"
+    r"\b(?:[Mm]y name is|[Ii](?: am|'m)|[Tt]his is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)"
 )
 _SIGNOFF_RE = re.compile(
     r"(?:^|\n)\s*(?:[Tt]hanks|[Tt]hank you|[Rr]egards|[Bb]est|[Cc]heers)[,]?\s*\n\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*$"
@@ -52,14 +52,20 @@ def _luhn_ok(digits: str) -> bool:
     return total % 10 == 0
 
 
-def tokenize_structured_pii(text: str) -> tuple[str, TokenVault]:
+def tokenize_structured_pii(
+    text: str, vault: TokenVault | None = None
+) -> tuple[str, TokenVault]:
     """Replace high-confidence PII with reversible tokens.
 
     Cards, phones, emails, SSNs, account IDs, and obvious name phrases are
     swapped before the model sees the payload. The original values stay in
     the returned vault so an authorized agent can rehydrate a ticket.
+
+    Pass an existing vault to extend the same token namespace across multiple
+    fields (e.g. subject and sender share tokens with the body).
     """
-    vault = TokenVault()
+    if vault is None:
+        vault = TokenVault()
     sanitized = text
 
     def _sub_card(match: re.Match[str]) -> str:
@@ -69,7 +75,8 @@ def tokenize_structured_pii(text: str) -> tuple[str, TokenVault]:
             return raw
         if not _luhn_ok(digits):
             return raw
-        return vault.add("CARD_LAST4", raw)
+        # Store only the last 4 digits — never the full PAN.
+        return vault.add("CARD_LAST4", f"****-{digits[-4:]}")
 
     sanitized = _CARD_RE.sub(_sub_card, sanitized)
 

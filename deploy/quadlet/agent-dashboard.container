@@ -17,6 +17,8 @@ Image=localhost/helpdesk-triage-ui:prod
 ContainerName=rhaii-triage-ui
 PublishPort=8501:8501
 Environment=GATEWAY_URL=http://rhaii-email-gateway:8080
+Environment=SMTP_HOST=rhaii-email-gateway
+EnvironmentFile=%h/.config/helpdesk/secrets.env
 Volume=%h/helpdesk/docs:/app/docs:ro
 Network=helpdesk.network
 

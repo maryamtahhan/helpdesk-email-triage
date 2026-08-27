@@ -32,16 +32,24 @@ def process_parsed_email(
     raw_email_bytes: bytes | None = None,
 ) -> dict:
     started = time.perf_counter()
-    regex_sanitized, vault = tokenize_structured_pii(body)
+    # Tokenize all three user-supplied fields through a shared vault so tokens
+    # are consistent (e.g. the same email address in the From header and body
+    # gets the same [EMAIL_1] token) and the public view exposes no raw PII.
+    regex_sanitized_sender, vault = tokenize_structured_pii(sender)
+    regex_sanitized_subject, vault = tokenize_structured_pii(subject, vault=vault)
+    regex_sanitized, vault = tokenize_structured_pii(body, vault=vault)
     model_used = "heuristic-fallback"
     try:
-        # Always send the regex-sanitized text to the model. This ensures the
-        # mock (and real RHAIIS) echoes structured tokens ([NAME_1] etc.) in
-        # sanitized_text rather than raw PII, regardless of ingestion path.
+        # Always send the regex-sanitized text to the model so it never sees
+        # raw PII. Only category and urgency are taken from the model response;
+        # the regex-sanitized body is always what gets stored and displayed.
+        # Using model sanitized_text as the display body is unsafe: a 1.5B
+        # model can echo raw PII, drop existing tokens, or invent tokens that
+        # have no entry in the vault.
         result = inference.classify_and_sanitize(regex_sanitized)
         category = result["category"]
         urgency = result["urgency"]
-        sanitized_text = result["sanitized_text"] or regex_sanitized
+        sanitized_text = regex_sanitized
         model_used = result["model"]
     except Exception as exc:  # noqa: BLE001 — demo path must keep ingesting
         logger.warning("Inference failed (%s); using heuristic triage", exc)
@@ -50,8 +58,8 @@ def process_parsed_email(
 
     elapsed_ms = (time.perf_counter() - started) * 1000
     ticket = store.create_ticket(
-        sender=sender,
-        subject=subject,
+        sender=regex_sanitized_sender,
+        subject=regex_sanitized_subject,
         original_text=body,
         sanitized_text=sanitized_text,
         category=category,

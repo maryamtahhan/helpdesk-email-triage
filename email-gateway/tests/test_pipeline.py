@@ -1,3 +1,7 @@
+import importlib
+import sys
+from unittest.mock import patch
+
 from app.email_parser import parse_raw_email
 from app.inference import extract_json_object
 from app.tokenizer import heuristic_triage, tokenize_structured_pii
@@ -89,3 +93,102 @@ def test_gateway_parse_bytes_reads_plain_text():
     gateway.parse_bytes(SAMPLE)
     types = [part.get_content_type() for part in gateway.message.walk()]
     assert "text/plain" in types
+
+
+# ── Pipeline tests ────────────────────────────────────────────────────
+
+
+def test_pipeline_uses_regex_body_not_model_text(tmp_path, monkeypatch):
+    """Sanitized body stored must be the regex output, not the model's text."""
+    monkeypatch.setenv("TICKET_DATA_DIR", str(tmp_path))
+
+    # Reload store so it picks up the temp data dir.
+    import app.store as store_mod
+    importlib.reload(store_mod)
+
+    fake_result = {
+        "category": "Billing",
+        "urgency": "High",
+        "sanitized_text": "model replaced EVERYTHING including 4111-1111-1111-1111",
+        "model": "mock-triage",
+    }
+    with patch("app.pipeline.inference.classify_and_sanitize", return_value=fake_result):
+        from app.pipeline import process_parsed_email
+
+        ticket = process_parsed_email(
+            sender="jane@example.com",
+            subject="Billing issue",
+            body="Card 4111-1111-1111-1111 was charged twice.",
+            source="test",
+        )
+
+    # The full card number must NOT appear in the stored sanitized body.
+    assert "4111-1111-1111-1111" not in ticket["sanitized_text"]
+    # The model's echo of the raw card number must not have been used.
+    assert "model replaced EVERYTHING" not in ticket["sanitized_text"]
+    assert ticket["category"] == "Billing"
+    assert ticket["urgency"] == "High"
+
+
+def test_pipeline_heuristic_fallback_on_inference_error(tmp_path, monkeypatch):
+    """When inference raises, the pipeline falls back to keyword triage."""
+    monkeypatch.setenv("TICKET_DATA_DIR", str(tmp_path))
+
+    import app.store as store_mod
+    importlib.reload(store_mod)
+
+    with patch("app.pipeline.inference.classify_and_sanitize", side_effect=RuntimeError("down")):
+        from app.pipeline import process_parsed_email
+
+        ticket = process_parsed_email(
+            sender="user@example.com",
+            subject="Charged twice",
+            body="I was charged twice on my billing statement urgently.",
+            source="test",
+        )
+
+    assert ticket["model"] == "heuristic-fallback"
+    assert ticket["category"] == "Billing"
+    assert ticket["urgency"] == "High"
+    assert "4111" not in ticket.get("sanitized_text", "")
+
+
+# ── Store tests ───────────────────────────────────────────────────────
+
+
+def test_store_public_omits_vault_and_original(tmp_path, monkeypatch):
+    """Public ticket view must not expose vault contents or original body."""
+    monkeypatch.setenv("TICKET_DATA_DIR", str(tmp_path))
+
+    import app.store as store_mod
+    importlib.reload(store_mod)
+    store_mod.load()
+
+    ticket = store_mod.create_ticket(
+        sender="a@b.com",
+        subject="Test",
+        original_text="raw body with 4111-1111-1111-1111",
+        sanitized_text="sanitized body with [CARD_LAST4_1]",
+        category="Billing",
+        urgency="High",
+        vault={"[CARD_LAST4_1]": "****-1111"},
+        classification_ms=42.0,
+        source="test",
+        model="mock",
+    )
+    public = store_mod.get_ticket(ticket["id"])  # no include_vault
+
+    assert "vault" not in public
+    assert "original_text" not in public
+    assert public["token_count"] == 1
+    assert public["sanitized_text"] == "sanitized body with [CARD_LAST4_1]"
+
+
+def test_tokenize_shared_vault_deduplicates_across_fields():
+    """Same value in sender and body should produce a single token."""
+    _, vault = tokenize_structured_pii("jane@example.com")
+    sanitized, vault = tokenize_structured_pii(
+        "Contact jane@example.com for help.", vault=vault
+    )
+    assert sanitized.count("[EMAIL_1]") == 1
+    assert len([k for k in vault.mapping if k.startswith("[EMAIL_")]) == 1

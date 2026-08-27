@@ -17,6 +17,7 @@ import streamlit as st
 GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://127.0.0.1:8080").rstrip("/")
 SMTP_HOST = os.environ.get("SMTP_HOST", "127.0.0.1")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "3025"))
+VAULT_SECRET = os.environ.get("VAULT_SECRET", "")
 
 CATEGORIES = ("All", "Billing", "Tech Support", "Account Access", "General")
 
@@ -339,8 +340,13 @@ def fetch_tickets() -> list[dict]:
 
 @st.cache_data(ttl=10)
 def fetch_vault(ticket_id: str) -> dict | None:
+    headers = {"X-Vault-Secret": VAULT_SECRET} if VAULT_SECRET else {}
     try:
-        r = httpx.get(f"{GATEWAY_URL}/tickets/{ticket_id}/vault", timeout=10.0)
+        r = httpx.get(
+            f"{GATEWAY_URL}/tickets/{ticket_id}/vault",
+            headers=headers,
+            timeout=10.0,
+        )
         r.raise_for_status()
         return r.json()
     except httpx.HTTPError:
@@ -655,10 +661,10 @@ def inbox_panel() -> None:
             )
             st.markdown("---")
 
-            # PII token badges — visible before vault, no values exposed
-            vault_keys = list(
-                (fetch_vault(selected["id"]) or {}).get("vault", {}).keys()
-            ) if token_count > 0 else []
+            # PII token badges — extracted from sanitized_text so the vault
+            # endpoint is never hit before an agent explicitly opens the vault.
+            sanitized_preview = selected.get("sanitized_text", "")
+            vault_keys = sorted(set(re.findall(r"\[[A-Z_]+_\d+\]", sanitized_preview)))
             if vault_keys:
                 badges = " ".join(
                     f'<span class="pii-token">{html.escape(k)}</span>'

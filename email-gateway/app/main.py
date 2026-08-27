@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from aiosmtpd.controller import Controller
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import store
@@ -20,15 +20,27 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "3025"))
+SMTP_BIND = os.environ.get("SMTP_BIND", "0.0.0.0")
 INPUT_DIR = Path(os.environ.get("EMAIL_INPUT_DIR", "/app/input_emails"))
 WATCH_INTERVAL = float(os.environ.get("WATCH_INTERVAL_SECONDS", "2"))
+# Set VAULT_SECRET in the environment to require an X-Vault-Secret header on
+# vault requests. Leave unset for the demo path (a warning is logged on start).
+VAULT_SECRET = os.environ.get("VAULT_SECRET", "")
+# Streamlit UI origin; kept narrow so browsers can't make cross-origin vault requests.
+_DASHBOARD_ORIGIN = os.environ.get("DASHBOARD_ORIGIN", "http://localhost:8501")
 
 
 class _SmtpHandler:
     async def handle_DATA(self, server, session, envelope):  # noqa: N802
-        process_raw_email(envelope.content, source="smtp")
+        import asyncio
+
         peer = getattr(session, "peer", "?")
-        logger.info("Accepted SMTP message from %s", peer)
+        # Run classification in a thread so inference latency doesn't block
+        # the aiosmtpd event loop and hold up subsequent SMTP connections.
+        asyncio.get_event_loop().run_in_executor(
+            None, process_raw_email, envelope.content, "smtp"
+        )
+        logger.info("Accepted SMTP message from %s (processing in background)", peer)
         return "250 Message accepted"
 
 
@@ -37,10 +49,12 @@ def _watch_loop() -> None:
     INPUT_DIR.mkdir(parents=True, exist_ok=True)
     while True:
         for path in sorted(INPUT_DIR.glob("*.eml")):
-            source = f"file:{path.name}"
-            key = f"{path.name}:{path.stat().st_mtime_ns}"
-            if key in seen or store.has_source(source):
-                seen.add(key)
+            mtime = path.stat().st_mtime_ns
+            # Include mtime in both key and source so a modified file gets a
+            # fresh source ID and is re-ingested rather than silently skipped.
+            source = f"file:{path.name}:{mtime}"
+            if source in seen or store.has_source(source):
+                seen.add(source)
                 continue
             try:
                 process_raw_email(path.read_bytes(), source=source)
@@ -54,9 +68,20 @@ def _watch_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     store.load()
-    smtp = Controller(_SmtpHandler(), hostname="0.0.0.0", port=SMTP_PORT)
+    if SMTP_BIND == "0.0.0.0":
+        logger.warning(
+            "SMTP listener bound to all interfaces (0.0.0.0:%s) with no auth. "
+            "Set SMTP_BIND=127.0.0.1 or place behind a firewall for any real deployment.",
+            SMTP_PORT,
+        )
+    if not VAULT_SECRET:
+        logger.warning(
+            "VAULT_SECRET is not set — vault endpoint is unauthenticated. "
+            "Set VAULT_SECRET in the environment before any real deployment."
+        )
+    smtp = Controller(_SmtpHandler(), hostname=SMTP_BIND, port=SMTP_PORT)
     smtp.start()
-    logger.info("SMTP ingest listening on 0.0.0.0:%s", SMTP_PORT)
+    logger.info("SMTP ingest listening on %s:%s", SMTP_BIND, SMTP_PORT)
     watcher = None
     mode = os.environ.get("GATEWAY_MODE", "FILE_WATCHER").upper()
     if mode == "FILE_WATCHER":
@@ -74,9 +99,9 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[_DASHBOARD_ORIGIN],
+    allow_methods=["GET", "POST"],
+    allow_headers=["X-Vault-Secret"],
 )
 
 
@@ -99,8 +124,13 @@ def get_ticket(ticket_id: str) -> dict:
 
 
 @app.get("/tickets/{ticket_id}/vault")
-def get_vault(ticket_id: str) -> dict:
+def get_vault(
+    ticket_id: str,
+    x_vault_secret: str = Header(default=""),
+) -> dict:
     """Authorized rehydration: original body plus token map for this ticket."""
+    if VAULT_SECRET and x_vault_secret != VAULT_SECRET:
+        raise HTTPException(status_code=401, detail="Invalid vault secret")
     ticket = store.get_ticket(ticket_id, include_vault=True)
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")

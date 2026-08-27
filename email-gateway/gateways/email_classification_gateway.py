@@ -28,14 +28,26 @@ from types import SimpleNamespace
 from openai import OpenAI
 
 DEFAULT_CONFIG = f"{os.environ['HOME']}/.vllm-email-gw.json"
+# Structured PII (card numbers, phone numbers, SSNs, email addresses, account IDs) is
+# regex-tokenized by the pipeline BEFORE this prompt is sent, so the model never sees
+# raw values. The model's only redaction responsibility is full names, which regex cannot
+# reliably catch across arbitrary prose. This split is intentional:
+#   - Regex is deterministic and auditable — required for GDPR/HIPAA/GLBA compliance.
+#   - Keeping high-risk structured PII out of the inference engine eliminates log-exposure
+#     risk (vLLM logs request payloads by default).
+#   - If inference fails, the regex-tokenized text is already safe to pass downstream.
 INSTR = '''
- You are a secure data sanitization and classification assistant.
- Analyze the input text and return a JSON object with these exact keys:
- - 'category' (Billing, Tech Support, Account Access, General)
- - 'urgency' (Low, Medium, High)
- - 'sanitized_text' (Cleaned text replacing each unique entity with a structured token:
-   full names → [NAME_N], phone numbers → [PHONE_N], card numbers → [CARD_LAST4_N],
-   email addresses → [EMAIL_N], account/SSN IDs → [ACCOUNT_ID_N], where N starts at 1)
+You are a helpdesk email classification assistant. The text you receive has already had
+structured PII replaced with tokens by a deterministic regex pipeline:
+  [PHONE_N], [CARD_LAST4_N], [EMAIL_N], [ACCOUNT_ID_N], [SSN_N]
+
+Do not re-tokenize or alter those tokens — treat them as opaque literals.
+
+Return a JSON object with these exact keys:
+- 'category' (Billing, Tech Support, Account Access, General)
+- 'urgency' (Low, Medium, High)
+- 'sanitized_text' (copy of the input with any remaining full names replaced:
+  each unique full name → [NAME_N] where N starts at 1 and increments per unique name)
 '''
 
 

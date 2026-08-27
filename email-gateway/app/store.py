@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,7 +38,15 @@ def load() -> None:
 
 def _persist() -> None:
     payload = {"next_id": _next_id, "tickets": _tickets}
-    _tickets_path().write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    target = _tickets_path()
+    # Write to a sibling temp file then rename so a crash mid-write never
+    # leaves a partially-written tickets.json.
+    with tempfile.NamedTemporaryFile(
+        "w", dir=target.parent, suffix=".tmp", delete=False, encoding="utf-8"
+    ) as fh:
+        json.dump(payload, fh, indent=2)
+        tmp = Path(fh.name)
+    tmp.replace(target)
 
 
 def create_ticket(

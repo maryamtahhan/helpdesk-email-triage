@@ -11,9 +11,12 @@ podman login registry.redhat.io
 # 2. Create the model cache directory
 mkdir -p ~/rhaii-cache
 
-# 3. Store your Hugging Face token
+# 3. Store secrets (Hugging Face token + vault auth secret)
 mkdir -p ~/.config/helpdesk
-echo "HF_TOKEN=hf_your_token_here" > ~/.config/helpdesk/secrets.env
+cat > ~/.config/helpdesk/secrets.env <<'EOF'
+HF_TOKEN=hf_your_token_here
+VAULT_SECRET=change-me-before-deploy
+EOF
 chmod 600 ~/.config/helpdesk/secrets.env
 
 # 4. Copy sample emails to the watched directory

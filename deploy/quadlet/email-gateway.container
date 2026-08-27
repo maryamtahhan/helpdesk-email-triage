@@ -22,6 +22,7 @@ Environment=VLLM_ENDPOINT=http://rhaii-cpu-engine:8000/v1/chat/completions
 Environment=GATEWAY_MODE=FILE_WATCHER
 Environment=EMAIL_INPUT_DIR=/app/input_emails
 Environment=TICKET_DATA_DIR=/app/data
+EnvironmentFile=%h/.config/helpdesk/secrets.env
 Volume=%h/helpdesk/sample_emails:/app/input_emails:Z
 Volume=gateway-data.volume:/app/data:Z
 Network=helpdesk.network
