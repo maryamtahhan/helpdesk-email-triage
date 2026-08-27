@@ -222,7 +222,7 @@ Local demo processes started by `scripts/run-demo-local.sh` stop when you interr
 
 ## Technical details
 
-Classification uses the vLLM email gateway from `email-gateway/gateways/email_classification_gateway.py`. That filter is adapted from Michael Dawson's email classification gateway in `redhat-et/vllm-audio-demo`: it parses RFC-822, sends the `text/plain` body to an OpenAI-compatible endpoint (`responses.create`, with a `chat.completions` fallback), and expects JSON with `category`, `urgency`, and `sanitized_text`. You can still run it as a drop-in mail filter:
+Classification uses the vLLM email gateway from `email-gateway/gateways/email_classification_gateway.py`. That filter is adapted from Anton Ivanov's email classification gateway in `redhat-et/vllm-audio-demo`: it parses RFC-822, sends the `text/plain` body to an OpenAI-compatible endpoint (`responses.create`, with a `chat.completions` fallback), and expects JSON with `category`, `urgency`, and `sanitized_text`. You can still run it as a drop-in mail filter:
 
 ```bash
 python email-gateway/gateways/email_classification_gateway.py \
@@ -260,7 +260,6 @@ Sample messages use fictional reserved values (Visa test PAN `4111-1111-1111-111
 
 ## Authors
 
-- Michael Dawson, [midawson@redhat.com](mailto:midawson@redhat.com)
 - Maryam Tahhan, [mtahhan@redhat.com](mailto:mtahhan@redhat.com)
 - Anton Ivanov, [anivanov@redhat.com](mailto:anivanov@redhat.com)
 

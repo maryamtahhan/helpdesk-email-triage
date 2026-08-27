@@ -4,7 +4,7 @@
 
 Adapted from:
   https://github.com/redhat-et/vllm-audio-demo/blob/main/gateways/email_classification_gateway.py
-  Copyright 2024 Michael Dawson <midawson@redhat.com>
+  Copyright 2024 Anton Ivanov <anivanov@redhat.com>
   Licensed under the Apache License, Version 2.0
 
 Extensions in this file (beyond the original):
@@ -23,6 +23,7 @@ from email.message import EmailMessage
 import sys
 import os
 from argparse import ArgumentParser
+from pathlib import Path
 from types import SimpleNamespace
 
 from openai import OpenAI
@@ -54,6 +55,31 @@ Return a JSON object with these exact keys:
 - 'summary' (one sentence, max 20 words, using tokens only — no raw PII,
   no new names introduced)
 '''
+
+
+def _tokenize_payload(text: str) -> tuple:
+    """Tokenize structured PII before sending to RHAII.
+
+    Tries importing app.tokenizer directly (works when the module is on
+    sys.path), then adds the email-gateway package root to sys.path and
+    retries. Raises RuntimeError rather than silently classifying raw mail.
+    """
+    try:
+        from app.tokenizer import tokenize_structured_pii
+        return tokenize_structured_pii(text)
+    except ImportError:
+        pass
+
+    pkg_root = Path(__file__).parent.parent
+    if str(pkg_root) not in sys.path:
+        sys.path.insert(0, str(pkg_root))
+    try:
+        from app.tokenizer import tokenize_structured_pii  # noqa: F811
+        return tokenize_structured_pii(text)
+    except ImportError:
+        raise RuntimeError(
+            "tokenizer required; do not classify unsanitized mail"
+        )
 
 
 class VLLMEmailGateway():
@@ -102,11 +128,7 @@ class VLLMEmailGateway():
             if part.get_content_type() == "text/plain":
                 payload = part.get_payload(decode=True).decode("utf-8")
                 # Tokenize structured PII so raw values never reach RHAII logs.
-                try:
-                    from app.tokenizer import tokenize_structured_pii
-                    payload, _vault = tokenize_structured_pii(payload)
-                except ImportError:
-                    pass  # standalone use without the app package
+                payload, _vault = _tokenize_payload(payload)
                 self.response = self._classify(payload)
                 break
 
