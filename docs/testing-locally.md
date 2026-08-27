@@ -83,6 +83,14 @@ chmod +x scripts/run-demo-local.sh
 
 The script creates a `.venv`, installs dependencies, starts mock inference on port 8000 and the email gateway on port 8080, then opens the Streamlit dashboard. Stop everything with **Ctrl-C**.
 
+If you lose the terminal or processes are still running after Ctrl-C:
+
+```bash
+pkill -f "uvicorn server:app"   # mock inference
+pkill -f "uvicorn app.main:app" # email gateway
+pkill -f "streamlit run"        # dashboard
+```
+
 ## Differences from the production stack
 
 | | Mock stack | Production (RHAII) |
