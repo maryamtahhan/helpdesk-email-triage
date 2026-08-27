@@ -4,6 +4,18 @@ The **email gateway** is the reusable building block in this quickstart. It inge
 
 The Streamlit dashboard (`agent-dashboard/`) is a **demo inbox** only. Production adopters typically poll the ticket API, receive push delivery via `TICKET_SINK` webhooks, or import `process_parsed_email()` directly.
 
+## What's included
+
+| Component | Path | Description |
+|---|---|---|
+| **TriageResult** | `email-gateway/app/triage_result.py` | Typed public JSON contract (no vault fields) |
+| **Ticket store** | `email-gateway/app/store.py` | Persistence + `GET /tickets` API |
+| **Webhook sink** | `email-gateway/app/sink.py` | `TICKET_SINK` env — push `TriageResult` after triage |
+| **Pipeline** | `email-gateway/app/pipeline.py` | `process_parsed_email()` / `process_raw_email()` entry points |
+| **Gateway-only compose** | `compose.gateway-only.yml` | Inference + gateway, no Streamlit |
+| **Integration guide** | `docs/integration.md` | This document |
+| **Webhook test scripts** | `scripts/webhook-receiver.py`, `scripts/test-webhook-sink.sh` | Local receiver + `make test-webhook` |
+
 ## Quick start (gateway only)
 
 Run inference + gateway without the UI:
@@ -128,6 +140,43 @@ def verify(body: bytes, secret: str, header: str) -> bool:
 ```
 
 For local testing, set `TICKET_SINK_SYNC=1` so delivery runs inline (used in unit tests).
+
+### Scripts
+
+| Script | Purpose |
+|---|---|
+| `make test-webhook` | Self-contained check: receiver + one triaged ticket (no compose) |
+| `make webhook-receiver` | Start the local receiver until Ctrl-C |
+| `./scripts/webhook-receiver.py` | Standalone receiver — `--port`, `--secret`, `--once` flags |
+| `./scripts/test-webhook-sink.sh` | Orchestrates receiver + in-process triage (called by `make test-webhook`) |
+| `./scripts/demo-webhook-with-compose.sh` | Receiver + `compose.gateway-only.yml` with `TICKET_SINK` wired |
+
+Quick self-test (no containers):
+
+```bash
+make test-webhook
+```
+
+Manual flow with the full gateway stack:
+
+```bash
+# Terminal 1
+make webhook-receiver
+
+# Terminal 2 — gateway in compose (macOS/Podman: host.containers.internal)
+export TICKET_SINK=webhook:http://host.containers.internal:9999/hook
+export TICKET_SINK_SECRET=demo-secret
+make gateway-only
+
+# Terminal 3
+./scripts/ingest-sample.sh
+```
+
+Or use the bundled helper:
+
+```bash
+./scripts/demo-webhook-with-compose.sh
+```
 
 ## Public ticket API (`TriageResult`)
 

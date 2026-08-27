@@ -105,3 +105,19 @@ pkill -f "streamlit run"        # dashboard
 | Classification quality | Fixed responses | Real LLM — output varies |
 
 The tokenization and vault logic, the API surface, and the entire dashboard are identical between the two stacks.
+
+## Test webhook delivery
+
+Verify `TICKET_SINK` without starting the full compose stack:
+
+```bash
+make test-webhook
+```
+
+This runs `scripts/test-webhook-sink.sh`, which:
+
+1. Starts `scripts/webhook-receiver.py` on a random local port
+2. Triages one sample message through the pipeline (mock inference)
+3. Verifies the receiver gets a signed `TriageResult` JSON payload
+
+To test against a running gateway in compose, see [integration.md — Webhook delivery](integration.md#webhook-delivery-ticket_sink).

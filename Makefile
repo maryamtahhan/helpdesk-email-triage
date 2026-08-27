@@ -1,4 +1,11 @@
-.PHONY: demo up down logs ingest test demo-local gateway-only
+.PHONY: demo up down logs ingest test demo-local gateway-only test-webhook webhook-receiver
+
+# demo          — mock inference + gateway + Streamlit UI
+# gateway-only  — mock inference + gateway (integrator path, no UI)
+# ingest        — POST sample_emails/01-billing-double-charge.eml
+# test          — unit tests (email-gateway/tests)
+# test-webhook  — self-contained TICKET_SINK e2e (no compose)
+# webhook-receiver — local webhook listener for manual testing
 
 demo:
 	podman compose -f compose.mock.demo.yml up --build
@@ -27,3 +34,11 @@ test:
 
 demo-local:
 	./scripts/run-demo-local.sh
+
+test-webhook:
+	chmod +x scripts/test-webhook-sink.sh scripts/webhook-receiver.py
+	./scripts/test-webhook-sink.sh
+
+webhook-receiver:
+	chmod +x scripts/webhook-receiver.py
+	./scripts/webhook-receiver.py --secret $${TICKET_SINK_SECRET:-demo-secret}

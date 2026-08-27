@@ -28,6 +28,7 @@ Ingest customer support emails on RHEL, classify topic and urgency, and replace 
   - [Load testing](#load-testing)
   - [What you've accomplished](#what-youve-accomplished)
   - [Delete](#delete)
+- [Integrator building blocks](#integrator-building-blocks)
 - [Repository structure](#repository-structure)
 - [References](#references)
 - [Technical details](#technical-details)
@@ -300,6 +301,78 @@ podman compose -f compose.gateway-only.yml down -v
 
 Local demo processes started by `scripts/run-demo-local.sh` stop when you interrupt that script (Ctrl+C). You can also remove `./data` and `./.venv`.
 
+## Integrator building blocks
+
+The classify-and-redact pipeline in `email-gateway/` is reusable without Streamlit. These additions support downstream adopters (case-management systems, queue workers, CRM adapters).
+
+### `TriageResult` — public output contract
+
+Every ingest path (`SMTP`, `POST /ingest`, `POST /ingest/raw`, `process_parsed_email()`) returns the same **public** JSON shape:
+
+| Module | Role |
+|---|---|
+| `email-gateway/app/triage_result.py` | Typed `TriageResult` model (Pydantic) — no vault, no `original_text` |
+| `email-gateway/app/store.py` | `GET /tickets` and `GET /tickets/{id}` expose `TriageResult` |
+| Dashboard **📤 What downstream systems see** | Live preview of the same JSON in the demo UI |
+
+Fields: `id`, `sender`, `subject`, `category`, `urgency`, `summary`, `sanitized_text`, `token_count`, `classification_ms`, `model`, `source`, `created_at`.
+
+### `TICKET_SINK` — push delivery (webhook)
+
+After each ticket is stored, the gateway can **push** a `TriageResult` to external systems (no polling required).
+
+| Module | Role |
+|---|---|
+| `email-gateway/app/sink.py` | Parses `TICKET_SINK`, dispatches async, retries, HMAC signing |
+
+```bash
+export TICKET_SINK=webhook:https://case-mgmt.example.com/api/triage
+export TICKET_SINK_SECRET=your-hmac-secret   # optional; sets X-Ticket-Signature header
+```
+
+Sinks are comma-separated (`log`, `webhook:https://…`). Tickets are always persisted locally; webhooks run in a background thread so ingest is not blocked.
+
+Full API details, signature verification, and env vars: [docs/integration.md](docs/integration.md).
+
+### Gateway-only compose (no Streamlit)
+
+```bash
+make gateway-only
+# or: podman compose -f compose.gateway-only.yml up --build
+```
+
+Runs mock inference + `email-gateway` only — for integrators wiring their own consumer against `:8080` (HTTP) and `:3025` (SMTP).
+
+### Scripts and Make targets
+
+| Command / script | Purpose |
+|---|---|
+| `make demo` | Full mock stack (inference + gateway + Streamlit UI) |
+| `make gateway-only` | Inference + gateway only |
+| `make ingest` | Post a sample `.eml` to the running gateway |
+| `make test` | Unit tests (`email-gateway/tests/`, includes webhook sink tests) |
+| `make test-webhook` | Self-contained webhook e2e (receiver + one triaged ticket, no compose) |
+| `make webhook-receiver` | Start local webhook receiver until Ctrl-C |
+| `scripts/ingest-sample.sh` | `curl` a sample `.eml` to `POST /ingest` |
+| `scripts/run-demo-local.sh` | Native Python demo (no Podman) |
+| `scripts/webhook-receiver.py` | Local receiver — verifies HMAC, pretty-prints `TriageResult` |
+| `scripts/test-webhook-sink.sh` | Used by `make test-webhook` |
+| `scripts/demo-webhook-with-compose.sh` | Receiver + gateway-only compose with `TICKET_SINK` wired |
+
+**Try the webhook path:**
+
+```bash
+make test-webhook
+```
+
+### Demo UI additions (agent workflow)
+
+| Feature | Location |
+|---|---|
+| Downstream JSON panel | Ticket detail → **📤 What downstream systems see** |
+| Vault rehydration | **🔓 View original PII vault** |
+| Agent reply | After vault open → **Open in Gmail** / **Open mail app** / **Copy address** |
+
 ## Repository structure
 
 ```
@@ -308,11 +381,20 @@ Local demo processes started by `scripts/run-demo-local.sh` stop when you interr
 ├── compose.mock.demo.yml       # Mock inference + gateway + UI
 ├── compose.gateway-only.yml    # Mock inference + gateway (no UI)
 ├── email-gateway/              # SMTP/file ingest, tokenization, ticket API
+│   ├── app/
+│   │   ├── pipeline.py         # End-to-end triage (parse → tokenize → infer → store)
+│   │   ├── triage_result.py    # TriageResult public contract
+│   │   └── sink.py             # TICKET_SINK webhook / log dispatch
 │   └── gateways/               # Reused vLLM MIME filter (stdin/stdout)
 ├── agent-dashboard/            # Streamlit helpdesk inbox (demo UI)
 ├── inference-mock/             # OpenAI-compatible mock for laptops
 ├── sample_emails/              # RFC-822 examples with fictional PII
-├── scripts/                    # Local demo and ingest helpers
+├── scripts/
+│   ├── ingest-sample.sh        # POST a sample .eml to the gateway
+│   ├── run-demo-local.sh       # Native Python demo (no containers)
+│   ├── webhook-receiver.py     # Local TICKET_SINK receiver for testing
+│   ├── test-webhook-sink.sh    # Self-contained webhook e2e test
+│   └── demo-webhook-with-compose.sh  # Receiver + gateway-only compose
 ├── docs/
 │   ├── integration.md          # SMTP / HTTP / library adoption guide
 │   ├── testing-locally.md      # Laptop demo without RHEL subscription
