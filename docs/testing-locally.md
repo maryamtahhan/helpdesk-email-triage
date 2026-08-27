@@ -4,10 +4,10 @@ This guide lets you walk the full helpdesk-triage UI on a laptop without any Red
 
 ## Prerequisites
 
-- Python 3.11 or later (`python3 --version`)
+- Podman 4.9+ with the Compose plugin (`podman compose`), **or** Docker with `docker compose`
 - Git
 
-That's it. No Podman, no Docker, no cloud account.
+No Red Hat subscription, no registry login, no GPU, no Hugging Face token.
 
 ## Quick start
 
@@ -15,22 +15,21 @@ That's it. No Podman, no Docker, no cloud account.
 git clone <repo-url>
 cd helpdesk-email-triage
 
-chmod +x scripts/run-demo-local.sh
-./scripts/run-demo-local.sh
+podman compose -f compose.mock.demo.yml up --build
+# or: docker compose -f compose.mock.demo.yml up --build
 ```
 
-The script:
-1. Creates a `.venv` and installs dependencies
-2. Starts the mock inference server on port 8000
-3. Starts the email gateway on port 8080
-4. Ingests the sample `.eml` files from `sample_emails/`
-5. Opens the Streamlit dashboard at [http://127.0.0.1:8501](http://127.0.0.1:8501) in your browser
+Open [http://127.0.0.1:8501](http://127.0.0.1:8501). The queue will already contain tickets auto-ingested from `sample_emails/`.
 
-Stop everything with **Ctrl-C**.
+Stop and remove volumes with:
+
+```bash
+podman compose -f compose.mock.demo.yml down -v
+```
 
 ## What you'll see
 
-When the dashboard opens, the queue on the left should already contain several tickets auto-ingested from `sample_emails/`. The **Model** field in the sidebar shows `mock-triage`.
+The **Model** field in the sidebar shows `mock-triage`. The queue on the left should contain several tickets auto-ingested from `sample_emails/`.
 
 | Sample email | Category | Urgency |
 |---|---|---|
@@ -73,21 +72,16 @@ Copy any RFC-822 `.eml` file into `sample_emails/`. The file watcher picks it up
 
 Click a ticket, then click **🔓 View original PII vault**. The left panel shows the original body with raw PII highlighted in red; the right panel shows the sanitized version with blue tokens. The token map table below lists exactly which token maps to which original value. Click **🔒 Close vault** — the state resets independently for each ticket.
 
-## Containerised mock stack (optional)
+## Native process fallback (no container runtime)
 
-If you have Podman or Docker and prefer containers:
-
-```bash
-podman compose -f compose.mock.demo.yml up --build
-# or
-docker compose -f compose.mock.demo.yml up --build
-```
-
-Then open [http://127.0.0.1:8501](http://127.0.0.1:8501). Tear down with:
+If you don't have Podman or Docker, you can run the three processes directly with Python 3.11+:
 
 ```bash
-podman compose -f compose.mock.demo.yml down -v
+chmod +x scripts/run-demo-local.sh
+./scripts/run-demo-local.sh
 ```
+
+The script creates a `.venv`, installs dependencies, starts mock inference on port 8000 and the email gateway on port 8080, then opens the Streamlit dashboard. Stop everything with **Ctrl-C**.
 
 ## Differences from the production stack
 
