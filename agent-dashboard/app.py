@@ -8,12 +8,14 @@ import os
 import pathlib
 import re
 import smtplib
+import urllib.parse
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 import httpx
 import streamlit as st
+import streamlit.components.v1 as components
 
 GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://127.0.0.1:8080").rstrip("/")
 SMTP_HOST = os.environ.get("SMTP_HOST", "127.0.0.1")
@@ -299,7 +301,8 @@ with st.expander("ℹ️ How to use this demo", expanded=False):
 |---|---|
 | **Queue (left column)** | Filtered list of tickets, newest first.  Click a ticket to open it. |
 | **Ticket detail (right column)** | Shows category, urgency, SLA ms, and the sanitized body with PII tokens highlighted in blue. |
-| **Authorized rehydration** | Click **🔓 View original PII vault** to see original body (PII highlighted red) vs sanitized body (tokens in blue) side by side. Click 🔒 to close. State resets when you switch tickets. |
+| **Downstream payload** | Expand **📤 What downstream systems see** to view the exact `GET /tickets/{id}` JSON — the contract for queues, webhooks, and CRM adapters. |
+| **Authorized rehydration** | Click **🔓 View original PII vault** to see original body (PII highlighted red) vs sanitized body (tokens in blue) side by side. After the vault is open, use **Reply via email** to launch a `mailto:` draft to the original sender. Click 🔒 to close. State resets when you switch tickets. |
 | **Filters (sidebar)** | Narrow the queue by category or urgency. |
 | **Quick demo scenarios (sidebar)** | One-click triage of 4 pre-built emails covering Billing, Account Access, Tech Support, and General. No command line needed. |
 | **Custom message (sidebar)** | Type any sender / subject / body and click **Triage →** to see a live classification. |
@@ -355,6 +358,91 @@ def fetch_vault(ticket_id: str) -> dict | None:
         return r.json()
     except httpx.HTTPError:
         return None
+
+
+def reply_recipient(original_sender: str) -> str:
+    """Extract the bare email address from a From header."""
+    match = re.search(r"<([^>]+)>", original_sender)
+    return match.group(1) if match else original_sender.strip()
+
+
+def reply_subject(subject: str) -> str:
+    return subject if re.match(r"^re:\s", subject, re.I) else f"Re: {subject}"
+
+
+def mailto_reply_url(recipient: str, subject: str) -> str:
+    """Build a mailto: link for replying to the customer after vault open."""
+    subj = reply_subject(subject)
+    return f"mailto:{recipient}?{urllib.parse.urlencode({'subject': subj})}"
+
+
+def gmail_compose_url(recipient: str, subject: str) -> str:
+    """Gmail web compose — works in Chrome without a mailto: OS handler."""
+    subj = reply_subject(subject)
+    params = urllib.parse.urlencode({"view": "cm", "fs": "1", "to": recipient, "su": subj})
+    return f"https://mail.google.com/mail/?{params}"
+
+
+def render_reply_actions(recipient: str, subject: str) -> None:
+    """Offer mailto, Gmail web compose, and copy — Chrome often ignores mailto:."""
+    subj = reply_subject(subject)
+    mailto = mailto_reply_url(recipient, subject)
+    gmail = gmail_compose_url(recipient, subject)
+    components.html(
+        f"""
+        <div style="font-family: 'Source Sans Pro', sans-serif; margin-top: 0.75rem;">
+          <p style="margin: 0 0 0.6rem; color: #6a6e73; font-size: 0.85rem;">
+            Reply to <strong style="color:#151515">{html.escape(recipient)}</strong>
+            · subject <em>{html.escape(subj)}</em>
+          </p>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button id="gmail-btn" style="
+              background:#0066CC;color:#fff;border:none;border-radius:0.25rem;
+              padding:0.45rem 0.9rem;font-size:0.9rem;cursor:pointer;">
+              Open in Gmail
+            </button>
+            <button id="mailto-btn" style="
+              background:#f0f0f0;color:#151515;border:1px solid #d2d2d2;border-radius:0.25rem;
+              padding:0.45rem 0.9rem;font-size:0.9rem;cursor:pointer;">
+              Open mail app
+            </button>
+            <button id="copy-btn" style="
+              background:#f0f0f0;color:#151515;border:1px solid #d2d2d2;border-radius:0.25rem;
+              padding:0.45rem 0.9rem;font-size:0.9rem;cursor:pointer;">
+              Copy address
+            </button>
+          </div>
+          <p style="margin:0.5rem 0 0;color:#6a6e73;font-size:0.78rem;">
+            In Chrome, use <strong>Open in Gmail</strong> (no mail app required).
+            <code>mailto:</code> only works if Chrome has a handler at
+            <code>chrome://settings/handlers</code>.
+          </p>
+          <script>
+            const mailto = {json.dumps(mailto)};
+            const gmail = {json.dumps(gmail)};
+            const addr = {json.dumps(recipient)};
+            document.getElementById('gmail-btn').onclick = () => {{
+              window.open(gmail, '_blank', 'noopener,noreferrer');
+            }};
+            document.getElementById('mailto-btn').onclick = () => {{
+              const topWin = window.top || window.parent || window;
+              topWin.location.href = mailto;
+            }};
+            document.getElementById('copy-btn').onclick = async () => {{
+              const btn = document.getElementById('copy-btn');
+              try {{
+                await navigator.clipboard.writeText(addr);
+                btn.textContent = 'Copied!';
+                setTimeout(() => {{ btn.textContent = 'Copy address'; }}, 2000);
+              }} catch (e) {{
+                window.prompt('Copy email address:', addr);
+              }}
+            }};
+          </script>
+        </div>
+        """,
+        height=145,
+    )
 
 
 def ingest_text(sender: str, subject: str, body: str) -> dict:
@@ -811,5 +899,12 @@ def inbox_panel() -> None:
                             unsafe_allow_html=True,
                         )
 
-
+                    original_sender = vault_data.get(
+                        "original_sender", vault_data.get("sender", "")
+                    )
+                    if original_sender:
+                        render_reply_actions(
+                            reply_recipient(original_sender),
+                            selected.get("subject", ""),
+                        )
 inbox_panel()

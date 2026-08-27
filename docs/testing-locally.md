@@ -27,6 +27,8 @@ Stop and remove volumes with:
 podman compose -f compose.mock.demo.yml down -v
 ```
 
+For gateway + inference without the UI, see [integration.md](integration.md) and `compose.gateway-only.yml`.
+
 ## What you'll see
 
 The **Model** field in the sidebar shows `mock-triage`. The queue on the left should contain several tickets auto-ingested from `sample_emails/`.

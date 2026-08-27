@@ -1,7 +1,10 @@
-.PHONY: demo up down logs ingest test demo-local
+.PHONY: demo up down logs ingest test demo-local gateway-only
 
 demo:
 	podman compose -f compose.mock.demo.yml up --build
+
+gateway-only:
+	podman compose -f compose.gateway-only.yml up --build
 
 up:
 	podman compose -f compose.yml up --build -d
@@ -9,6 +12,7 @@ up:
 down:
 	podman compose -f compose.yml down -v || true
 	podman compose -f compose.mock.demo.yml down -v || true
+	podman compose -f compose.gateway-only.yml down -v || true
 
 logs:
 	podman compose -f compose.mock.demo.yml logs -f

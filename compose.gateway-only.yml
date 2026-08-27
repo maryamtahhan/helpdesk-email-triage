@@ -1,0 +1,61 @@
+version: "3.8"
+
+# Gateway + inference only — no Streamlit UI.
+# Use this when wiring your own consumer (ServiceNow, Salesforce, a custom queue)
+# against the ticket API. See docs/integration.md.
+#
+#   podman compose -f compose.gateway-only.yml up --build
+#
+# For Red Hat AI Inference instead of the mock, start only the gateway services
+# from the full stack:
+#   podman compose -f compose.yml up --build rhaii-cpu-engine email-gateway
+
+services:
+  rhaii-cpu-engine:
+    build:
+      context: ./inference-mock
+    image: localhost/helpdesk-inference-mock:dev
+    container_name: rhaii-cpu-engine
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/models', timeout=3)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  email-gateway:
+    build:
+      context: ./email-gateway
+    image: localhost/helpdesk-email-gateway:dev
+    container_name: rhaii-email-gateway
+    restart: unless-stopped
+    depends_on:
+      rhaii-cpu-engine:
+        condition: service_healthy
+    ports:
+      - "3025:3025"
+      - "8080:8080"
+    environment:
+      VLLM_BASE_URL: http://rhaii-cpu-engine:8000/v1
+      VLLM_ENDPOINT: http://rhaii-cpu-engine:8000/v1/chat/completions
+      MODEL_NAME: mock-triage
+      GATEWAY_MODE: ${GATEWAY_MODE:-FILE_WATCHER}
+      EMAIL_INPUT_DIR: /app/input_emails
+      TICKET_DATA_DIR: /app/data
+      SMTP_BIND: "0.0.0.0"
+      VAULT_SECRET: ${VAULT_SECRET:-helpdesk-demo-secret}
+      DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN:-http://localhost:8501}
+    volumes:
+      - ./sample_emails:/app/input_emails:Z
+      - gateway-data:/app/data:Z
+
+volumes:
+  gateway-data:

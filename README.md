@@ -21,6 +21,12 @@ Ingest customer support emails on RHEL, classify topic and urgency, and replace 
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Validating the deployment](#validating-the-deployment)
+  - [Submit support tickets](#submit-support-tickets)
+  - [Review classified and redacted emails](#review-classified-and-redacted-emails)
+  - [Review classification speed](#review-classification-speed)
+  - [Testing classification and redaction quality](#testing-classification-and-redaction-quality)
+  - [Load testing](#load-testing)
+  - [What you've accomplished](#what-youve-accomplished)
   - [Delete](#delete)
 - [Repository structure](#repository-structure)
 - [References](#references)
@@ -188,11 +194,108 @@ curl -sS http://127.0.0.1:8080/health
 
 5. Optional: send a message to the mock SMTP listener on port 3025.
 
+### Submit support tickets
+
+You can feed the gateway in three ways. See [docs/integration.md](docs/integration.md) for full API details and a gateway-only compose file.
+
+**Sidebar (demo UI)** — use the seven quick demo scenario buttons or type a custom sender, subject, and body under **Custom message**, then click **Triage →**.
+
+**HTTP** — post a sample `.eml` or JSON body:
+
+```bash
+./scripts/ingest-sample.sh
+curl -sS -X POST http://127.0.0.1:8080/ingest/raw \
+  -H "Content-Type: application/json" \
+  -d '{"sender":"demo@example.com","subject":"VPN down","body":"Cannot connect from home."}'
+```
+
+**SMTP** — deliver mail to port 3025 (the gateway returns `250` immediately and classifies in the background).
+
+New tickets appear in `GET /tickets` within a few seconds. The Streamlit queue auto-refreshes every 10 seconds.
+
+### Review classified and redacted emails
+
+Open the agent inbox at [http://127.0.0.1:8501](http://127.0.0.1:8501).
+
+#### Step 1: Review inboxes by classification
+
+1. Use the **Category** filter in the sidebar (`Billing`, `Tech Support`, `Account Access`, `General`, or `All`).
+2. Click a ticket in the left queue. The detail pane shows **category**, **urgency**, and an **X-Classification-Time** SLA tag.
+3. Compare several sample tickets — for example `01-billing-double-charge.eml` should land under **Billing** with **High** urgency, while a thank-you note should be **General** / **Low**.
+
+Category and urgency are **AI-generated**. Treat them as suggestions until you validate quality on your own mail.
+
+#### Step 2: Check redaction
+
+1. Read the **sanitized body** — structured PII should appear as tokens (`[CARD_LAST4_1]`, `[PHONE_1]`, `[EMAIL_1]`, `[NAME_1]`), not raw values.
+2. Expand **📤 What downstream systems see** to inspect the exact public JSON (`GET /tickets/{id}`). This is what queues, analytics, and lower-trust tiers should receive.
+3. Click **🔓 View original PII vault** to compare the original body (PII highlighted) with the tokenized version and the token map.
+4. After the vault is open, click **✉️ Reply via email** to open a `mailto:` draft to the original sender (demo convenience only).
+
+Redaction is best-effort. Always verify before routing a real ticket to a downstream system.
+
+### Review classification speed
+
+Each ticket shows **classification_ms** — wall-clock time from ingest through regex tokenization and inference.
+
+On the mock stack, expect sub-second responses. On Red Hat AI Inference 3.5 with `Qwen/Qwen2.5-1.5B-Instruct` on CPU, typical values are a few hundred milliseconds to a couple of seconds depending on host size and cold start.
+
+If the inference endpoint is unavailable, the gateway still ingests mail using **heuristic-fallback** (keyword triage on already-tokenized text). The `model` field in the ticket JSON reflects which path ran.
+
+### Testing classification and redaction quality
+
+**Structured PII (regex)** — deterministic. Send card numbers that pass Luhn (`4111-1111-1111-1111`), NANP phones (`+1-212-555-0199`), and SSN patterns; confirm they never appear raw in `sanitized_text` or the downstream JSON panel.
+
+**Residual names (RHAII)** — non-deterministic. Try messages with informal names ("please call John") and verify `[NAME_N]` tokens appear without leaking the raw name in the public payload.
+
+**Summary field** — should use tokens only. If the model echoes raw vault values, the gateway clears the summary.
+
+**Merge safety** — if RHAII drops a structured token or reintroduces raw PII, the stored body falls back to the regex-sanitized text while category and urgency are still taken from the model.
+
+Run the unit suite from the repository root:
+
+```bash
+make test
+```
+
+Add your own `.eml` files under `sample_emails/` (with fictional PII only) and restart the stack to exercise the file watcher.
+
+### Load testing
+
+For throughput experiments against the OpenAI-compatible inference endpoint, use [GuideLLM](https://github.com/vllm-project/guidellm):
+
+```bash
+pip install guidellm
+guidellm benchmark \
+  --target http://127.0.0.1:8000/v1 \
+  --model mock-triage \
+  --rate-type concurrent \
+  --rate 4 \
+  --max-seconds 60
+```
+
+On the RHAII path, substitute `--model Qwen/Qwen2.5-1.5B-Instruct` and tune `--rate` to your CPU capacity. Review latency percentiles and error rate before sizing production hosts.
+
+For end-to-end gateway load, drive `POST /ingest/raw` or SMTP concurrently and watch `classification_ms` on `GET /tickets`. Start with `compose.gateway-only.yml` if you do not need the Streamlit UI.
+
+### What you've accomplished
+
+You deployed a helpdesk triage pipeline on RHEL (or a laptop mock) that:
+
+- Ingests support email over SMTP, HTTP, or `.eml` drop
+- Replaces structured PII with reversible tokens before inference
+- Classifies topic and urgency with Red Hat AI Inference on CPU (or a mock)
+- Exposes a **public ticket API** safe for downstream queues
+- Gates original PII behind an authorized vault for agent reply
+
+The classify-and-redact logic lives in `email-gateway/` and is reusable without Streamlit. Wire your own consumer against [docs/integration.md](docs/integration.md), or run `podman compose -f compose.gateway-only.yml up --build` for gateway + inference only.
+
 ### Delete
 
 ```bash
 podman compose -f compose.yml down -v
 podman compose -f compose.mock.demo.yml down -v
+podman compose -f compose.gateway-only.yml down -v
 ```
 
 Local demo processes started by `scripts/run-demo-local.sh` stop when you interrupt that script (Ctrl+C). You can also remove `./data` and `./.venv`.
@@ -202,19 +305,24 @@ Local demo processes started by `scripts/run-demo-local.sh` stop when you interr
 ```
 .
 ├── compose.yml                 # Red Hat AI Inference 3.5 + gateway + UI
-├── compose.mock.demo.yml            # Mock inference + gateway + UI
+├── compose.mock.demo.yml       # Mock inference + gateway + UI
+├── compose.gateway-only.yml    # Mock inference + gateway (no UI)
 ├── email-gateway/              # SMTP/file ingest, tokenization, ticket API
 │   └── gateways/               # Reused vLLM MIME filter (stdin/stdout)
-├── agent-dashboard/            # Streamlit helpdesk inbox
+├── agent-dashboard/            # Streamlit helpdesk inbox (demo UI)
 ├── inference-mock/             # OpenAI-compatible mock for laptops
 ├── sample_emails/              # RFC-822 examples with fictional PII
 ├── scripts/                    # Local demo and ingest helpers
-├── docs/images/                # Architecture diagram
+├── docs/
+│   ├── integration.md          # SMTP / HTTP / library adoption guide
+│   ├── testing-locally.md      # Laptop demo without RHEL subscription
+│   └── images/                 # Architecture diagram
 └── README.md
 ```
 
 ## References
 
+- [Integrating the email gateway](docs/integration.md) — SMTP, HTTP, Python library, and public API schema
 - [Inference language models on x86_64 CPUs — Red Hat AI Inference 3.5](https://docs.redhat.com/en/documentation/red_hat_ai_inference/3.5/html/getting_started/about-cpu-inference_getting-started)
 - [AI quickstart catalog](https://docs.redhat.com/en/learn/ai-quickstarts)
 - [Contributor guide for AI quickstarts](https://github.com/rh-ai-quickstart/ai-quickstart-contrib/blob/main/CONTRIBUTING.md)
