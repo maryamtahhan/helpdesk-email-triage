@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import json
 import os
 import pathlib
 import re
@@ -703,6 +704,40 @@ def inbox_panel() -> None:
             if summary:
                 st.markdown("**AI summary** *(AI-generated)*")
                 st.info(summary)
+
+            # ── Downstream payload panel ──────────────────────────
+            with st.expander(
+                f"📤 What downstream systems see — `GET /tickets/{selected['id']}`",
+                expanded=False,
+            ):
+                st.caption(
+                    "This is the exact JSON any downstream consumer receives: "
+                    "category, urgency, summary, and sanitized text with tokens. "
+                    "No raw PII crosses this boundary. "
+                    "The sender address is present as a routing key; "
+                    "in an enterprise deployment it would map to a CRM record keyed by the ticket ID."
+                )
+                downstream_payload = {
+                    "id": selected["id"],
+                    "sender": selected.get("sender", ""),
+                    "subject": selected.get("subject", ""),
+                    "category": selected["category"],
+                    "urgency": selected.get("urgency", ""),
+                    "summary": selected.get("summary", ""),
+                    "sanitized_text": selected.get("sanitized_text", ""),
+                    "token_count": selected.get("token_count", 0),
+                    "classification_ms": selected.get("classification_ms"),
+                    "model": selected.get("model", ""),
+                    "created_at": selected.get("created_at", ""),
+                }
+                st.code(
+                    json.dumps(downstream_payload, indent=2, ensure_ascii=False),
+                    language="json",
+                )
+                st.caption(
+                    "`GET /tickets/{id}/vault` is a separate, gated endpoint — "
+                    "it returns the original body and full token map only to authorized agents."
+                )
 
             st.markdown("---")
 
