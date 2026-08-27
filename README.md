@@ -362,7 +362,7 @@ RHAII receives text where structured tokens (`[PHONE_1]`, `[CARD_LAST4_1]`, etc.
 
 The prompt (`INSTR` in `email-gateway/gateways/email_classification_gateway.py`) reflects this boundary explicitly.
 
-Ticket IDs start at `TICKET-8921`. Public ticket APIs omit the original body. `GET /tickets/{id}/vault` returns the original text and token map for the authorized-agent view in the dashboard. Classification latency is stored as `classification_ms` and shown as an `X-Classification-Time` SLA tag.
+Ticket IDs start at `TICKET-8921`. Public ticket APIs omit the original body and expose a typed **`TriageResult`** JSON contract (see [docs/integration.md](docs/integration.md)). Set `TICKET_SINK=webhook:https://…` to push each result to a downstream queue adapter; optional `TICKET_SINK_SECRET` signs payloads with `X-Ticket-Signature`. `GET /tickets/{id}/vault` returns the original text and token map for the authorized-agent view in the dashboard. Classification latency is stored as `classification_ms` and shown as an `X-Classification-Time` SLA tag.
 
 Sample messages use fictional reserved values (Visa test PAN `4111-1111-1111-1111`, `+1-212-555-01xx` numbers, and `000-00-0000`). Do not treat model output as a complete redaction guarantee.
 

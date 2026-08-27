@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .triage_result import TriageResult
+
 _lock = threading.Lock()
 _tickets: list[dict[str, Any]] = []
 _next_id = 8921
@@ -108,17 +110,4 @@ def get_ticket(ticket_id: str, include_vault: bool = False) -> dict[str, Any] | 
 
 
 def _public(ticket: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "id": ticket["id"],
-        "sender": ticket["sender"],
-        "subject": ticket["subject"],
-        "sanitized_text": ticket["sanitized_text"],
-        "summary": ticket.get("summary", ""),
-        "category": ticket["category"],
-        "urgency": ticket["urgency"],
-        "classification_ms": ticket["classification_ms"],
-        "source": ticket["source"],
-        "model": ticket["model"],
-        "created_at": ticket["created_at"],
-        "token_count": len(ticket.get("vault") or {}),
-    }
+    return TriageResult.from_ticket(ticket).to_dict()

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 
-from . import inference, store
+from . import inference, sink, store
 from .email_parser import parse_raw_email
 from .tokenizer import (
     TokenVault,
@@ -15,6 +15,7 @@ from .tokenizer import (
     tokenize_from_header,
     tokenize_structured_pii,
 )
+from .triage_result import TriageResult
 
 logger = logging.getLogger(__name__)
 
@@ -89,4 +90,7 @@ def process_parsed_email(
         source=source,
         model=model_used,
     )
-    return store.get_ticket(ticket["id"]) or ticket
+    result = TriageResult.from_ticket(ticket)
+    sink.dispatch(result)
+    public = store.get_ticket(ticket["id"])
+    return public if public is not None else result.to_dict()

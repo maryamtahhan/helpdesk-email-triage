@@ -2,7 +2,7 @@
 
 The **email gateway** is the reusable building block in this quickstart. It ingests RFC-822 mail, regex-tokenizes structured PII into a local vault, calls Red Hat AI Inference (or a mock) for category, urgency, summary, and residual name redaction, and exposes sanitized tickets over HTTP and SMTP.
 
-The Streamlit dashboard (`agent-dashboard/`) is a **demo inbox** only. Production adopters typically poll the ticket API, subscribe to a future webhook sink, or import `process_parsed_email()` directly.
+The Streamlit dashboard (`agent-dashboard/`) is a **demo inbox** only. Production adopters typically poll the ticket API, receive push delivery via `TICKET_SINK` webhooks, or import `process_parsed_email()` directly.
 
 ## Quick start (gateway only)
 
@@ -66,7 +66,7 @@ curl -sS -X POST http://127.0.0.1:8080/ingest/raw \
   }'
 ```
 
-Both endpoints return the **public** ticket object (see schema below).
+Both endpoints return a **`TriageResult`** — the same public ticket object as `GET /tickets/{id}`.
 
 ### 3. Python library
 
@@ -89,9 +89,49 @@ ticket = process_raw_email(open("message.eml", "rb").read(), source="batch:001")
 
 Run with `PYTHONPATH=email-gateway` or install `email-gateway/` as a package in your environment. The function returns the same public fields as `GET /tickets/{id}`.
 
-## Public ticket API
+## Webhook delivery (`TICKET_SINK`)
 
-These fields are safe to forward to downstream queues, analytics, or lower-trust tiers. They never include the original body or vault map.
+After each message is triaged and stored, the gateway can **push** the public `TriageResult` JSON to your case-management system or queue adapter.
+
+Set on the `email-gateway` service:
+
+```bash
+export TICKET_SINK=webhook:https://case-mgmt.example.com/api/triage
+export TICKET_SINK_SECRET=your-hmac-secret   # optional but recommended
+```
+
+Multiple sinks are comma-separated:
+
+```bash
+export TICKET_SINK=log,webhook:https://case-mgmt.example.com/api/triage
+```
+
+**Delivery behavior:**
+- Runs in a background thread so SMTP/HTTP ingest is not blocked
+- Retries failed webhook `POST`s three times with exponential backoff
+- Tickets are always persisted to the local store (polling still works)
+
+**Webhook request:**
+- Method: `POST`
+- Header: `Content-Type: application/json`
+- Header: `X-Ticket-Signature: sha256=<hmac>` when `TICKET_SINK_SECRET` is set (HMAC-SHA256 over the raw JSON body)
+- Body: `TriageResult` JSON (no vault, no `original_text`)
+
+Verify signatures on your receiver:
+
+```python
+import hashlib, hmac
+
+def verify(body: bytes, secret: str, header: str) -> bool:
+    expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, header)
+```
+
+For local testing, set `TICKET_SINK_SYNC=1` so delivery runs inline (used in unit tests).
+
+## Public ticket API (`TriageResult`)
+
+These fields define the **`TriageResult`** contract — safe to forward to downstream queues, webhooks, analytics, or lower-trust tiers. They never include the original body or vault map.
 
 | Field | Type | Description |
 |---|---|---|
@@ -162,6 +202,9 @@ Do not expose this endpoint to untrusted consumers. The demo Streamlit UI gates 
 | `GATEWAY_MODE` | `FILE_WATCHER` | Set to `SMTP_ONLY` to disable `.eml` watcher |
 | `EMAIL_INPUT_DIR` | `/app/input_emails` | Directory watched for `.eml` drops |
 | `TICKET_DATA_DIR` | `/app/data` | JSON persistence for tickets |
+| `TICKET_SINK` | *(unset)* | Comma-separated sinks: `log`, `webhook:https://…` |
+| `TICKET_SINK_SECRET` | *(unset)* | HMAC secret for webhook `X-Ticket-Signature` |
+| `TICKET_SINK_SYNC` | *(unset)* | Set to `1` for inline delivery (tests/debug) |
 | `DASHBOARD_ORIGIN` | `http://localhost:8501` | CORS origin (only needed if a browser UI calls the API) |
 
 ## Compose files
@@ -188,4 +231,3 @@ That path classifies and sanitizes a single message but does not maintain the ti
 
 - **Demo UI** — `podman compose -f compose.mock.demo.yml up --build` and open [http://127.0.0.1:8501](http://127.0.0.1:8501) to see the public JSON payload panel and agent vault workflow.
 - **Quality testing** — see [Testing locally](testing-locally.md) and the README walkthrough sections on classification quality and load testing.
-- **Webhook sink** — not implemented in this release; poll `GET /tickets` or import the Python pipeline until a push-based sink is added.
