@@ -101,6 +101,64 @@ ticket = process_raw_email(open("message.eml", "rb").read(), source="batch:001")
 
 Run with `PYTHONPATH=email-gateway` or install `email-gateway/` as a package in your environment. The function returns the same public fields as `GET /tickets/{id}`.
 
+## Pull vs push: what the sink actually does
+
+Every triaged email produces one **`TriageResult`** — a public JSON object with category, urgency, summary, and tokenized text. No vault, no `original_text`, no raw PII.
+
+Downstream systems can consume that payload in two ways:
+
+| | **Pull** (default) | **Push** (`TICKET_SINK`) |
+|---|---|---|
+| **Mechanism** | `GET /tickets` or `GET /tickets/{id}` | Gateway `POST`s JSON to your webhook URL |
+| **When** | When your consumer polls | Right after each ingest (async background thread) |
+| **Configuration** | None | `TICKET_SINK=webhook:https://your-system/hook` |
+| **Where you see it** | Your HTTP client; ingest response body | Your webhook handler; or gateway logs if `log` sink |
+| **In the demo UI?** | Yes — expand **📤 What downstream systems see** on any ticket | **No** — the sink is backend-only and does not change the dashboard |
+
+**The JSON is the same in both cases.** The dashboard panel exists so agents and builders can *inspect* the contract during the demo. The sink exists so production integrators can *receive* that contract automatically without polling.
+
+```
+  Ingest (SMTP / HTTP / .eml)
+           │
+           ▼
+    ┌──────────────┐
+    │ email-gateway │  tokenize → classify → store
+    └──────────────┘
+           │
+           ├──► TriageResult stored  ──► GET /tickets/{id}     (pull)
+           │
+           └──► TICKET_SINK dispatch ──► POST your-webhook-url  (push)
+```
+
+### What each sink shows
+
+| `TICKET_SINK` value | What appears |
+|---|---|
+| *(unset)* | Nothing extra — use pull (`GET /tickets`) |
+| `log` | One `TriageResult` JSON line per ticket in **gateway container logs** |
+| `webhook:https://…` | HTTP `POST` to your URL; body is the `TriageResult` JSON below |
+
+Example payload (push and pull return the same shape):
+
+```json
+{
+  "id": "TICKET-8921",
+  "sender": "[NAME_1] <[EMAIL_1]>",
+  "subject": "VPN drops every 10 minutes",
+  "sanitized_text": "My VPN drops. Please call [NAME_1] at [PHONE_1].",
+  "summary": "Customer reports frequent VPN disconnects.",
+  "category": "Tech Support",
+  "urgency": "High",
+  "token_count": 3,
+  "classification_ms": 42.5,
+  "model": "mock-triage",
+  "source": "smtp",
+  "created_at": "2026-08-27T19:13:57+00:00"
+}
+```
+
+Run `make test-webhook` to see this end-to-end: a local receiver stands in for your case-management system and prints the `POST` body the gateway would send.
+
 ## Webhook delivery (`TICKET_SINK`)
 
 After each message is triaged and stored, the gateway can **push** the public `TriageResult` JSON to your case-management system or queue adapter.

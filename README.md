@@ -317,6 +317,22 @@ Every ingest path (`SMTP`, `POST /ingest`, `POST /ingest/raw`, `process_parsed_e
 
 Fields: `id`, `sender`, `subject`, `category`, `urgency`, `summary`, `sanitized_text`, `token_count`, `classification_ms`, `model`, `source`, `created_at`.
 
+### Pull vs push — what the sink actually does
+
+Downstream systems can get a `TriageResult` in two ways. **The JSON is identical**; only the delivery mechanism differs.
+
+| | **Pull** (default) | **Push** (`TICKET_SINK`) |
+|---|---|---|
+| How it works | Your system calls `GET /tickets` or `GET /tickets/{id}` | Gateway `POST`s JSON to your URL after each triage |
+| When data arrives | When you poll | Immediately after ingest (background thread) |
+| Where you see it | Your API client, or the dashboard **📤 What downstream systems see** panel | Your webhook endpoint, or gateway logs (`log` sink) |
+| Config needed | None | `TICKET_SINK=webhook:https://…` |
+| Shows in Streamlit UI? | Yes — the JSON panel previews this contract | **No** — sink is backend-only |
+
+The dashboard panel is a **demo preview** of the pull contract (“this is what a queue adapter would receive”). The sink is the **production delivery** of that same payload to your system — so you do not have to poll.
+
+`make test-webhook` simulates a real integrator: it starts a fake receiver, triages one message, and prints the `POST` body your case-management endpoint would get.
+
 ### `TICKET_SINK` — push delivery (webhook)
 
 After each ticket is stored, the gateway can **push** a `TriageResult` to external systems (no polling required).
@@ -330,9 +346,7 @@ export TICKET_SINK=webhook:https://case-mgmt.example.com/api/triage
 export TICKET_SINK_SECRET=your-hmac-secret   # optional; sets X-Ticket-Signature header
 ```
 
-Sinks are comma-separated (`log`, `webhook:https://…`). Tickets are always persisted locally; webhooks run in a background thread so ingest is not blocked.
-
-Full API details, signature verification, and env vars: [docs/integration.md](docs/integration.md).
+Sinks are comma-separated (`log`, `webhook:https://…`). Tickets are always persisted locally; webhooks run in a background thread so ingest is not blocked. The sink never displays anything in the Streamlit UI — see [docs/integration.md — Pull vs push](docs/integration.md#pull-vs-push-what-the-sink-actually-does).
 
 ### Gateway-only compose (no Streamlit)
 
@@ -369,7 +383,7 @@ make test-webhook
 
 | Feature | Location |
 |---|---|
-| Downstream JSON panel | Ticket detail → **📤 What downstream systems see** |
+| Downstream JSON panel | Ticket detail → **📤 What downstream systems see** — previews the **pull** API contract (same JSON the sink would push) |
 | Vault rehydration | **🔓 View original PII vault** |
 | Agent reply | After vault open → **Open in Gmail** / **Open mail app** / **Copy address** |
 

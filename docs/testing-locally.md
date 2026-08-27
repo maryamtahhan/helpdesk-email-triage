@@ -108,7 +108,7 @@ The tokenization and vault logic, the API surface, and the entire dashboard are 
 
 ## Test webhook delivery
 
-Verify `TICKET_SINK` without starting the full compose stack:
+Verify **push** delivery (`TICKET_SINK`) without starting the full compose stack. This does not open the dashboard — it prints the JSON your webhook endpoint would receive:
 
 ```bash
 make test-webhook
@@ -116,8 +116,10 @@ make test-webhook
 
 This runs `scripts/test-webhook-sink.sh`, which:
 
-1. Starts `scripts/webhook-receiver.py` on a random local port
+1. Starts `scripts/webhook-receiver.py` on a random local port (simulates your case-management system)
 2. Triages one sample message through the pipeline (mock inference)
-3. Verifies the receiver gets a signed `TriageResult` JSON payload
+3. Prints the signed `TriageResult` JSON that the gateway would `POST` to a webhook
 
-To test against a running gateway in compose, see [integration.md — Webhook delivery](integration.md#webhook-delivery-ticket_sink).
+Compare with **pull**: open the demo UI, click a ticket, and expand **📤 What downstream systems see** — same JSON shape, but fetched via `GET /tickets/{id}` instead of pushed.
+
+To test push against a running gateway in compose, see [integration.md — Webhook delivery](integration.md#webhook-delivery-ticket_sink).
