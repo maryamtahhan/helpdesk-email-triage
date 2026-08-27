@@ -3,10 +3,21 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
+
+# Simple name patterns — mirrors app/tokenizer.py regexes for demo parity
+_NAME_INTRO = re.compile(
+    r"\b(?:[Mm]y name is|[Ii](?: am|'m)|[Tt]his is)"
+    r"\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)"
+)
+_SIGNOFF = re.compile(
+    r"(?:^|\n)\s*(?:[Tt]hanks|[Tt]hank you|[Rr]egards|[Bb]est|[Cc]heers)"
+    r"[,]?\s*\n\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*$"
+)
 
 app = FastAPI(title="Helpdesk triage mock inference")
 
@@ -37,6 +48,33 @@ def _user_text(messages: list[ChatMessage]) -> str:
     return ""
 
 
+def _redact_names(text: str) -> str:
+    """Apply a residual name pass so the mock exercises the same contract as RHAII."""
+    name_map: dict[str, str] = {}
+    existing = re.findall(r"\[NAME_(\d+)\]", text)
+    next_n = max((int(n) for n in existing), default=0) + 1
+
+    def _sub(match: re.Match) -> str:
+        nonlocal next_n
+        full, name = match.group(0), match.group(1)
+        if name not in name_map:
+            name_map[name] = f"[NAME_{next_n}]"
+            next_n += 1
+        return full.replace(name, name_map[name])
+
+    text = _NAME_INTRO.sub(_sub, text)
+    text = _SIGNOFF.sub(_sub, text)
+    return text
+
+
+_SUMMARIES = {
+    "Billing": "Billing issue reported; review account charges and respond.",
+    "Account Access": "Account access blocked; restore credentials for customer.",
+    "Tech Support": "Technical issue reported; investigate and provide resolution.",
+    "General": "General inquiry received; no immediate action required.",
+}
+
+
 def _classify(text: str) -> dict[str, str]:
     lowered = text.lower()
     if "no action needed" in lowered or (
@@ -51,7 +89,9 @@ def _classify(text: str) -> dict[str, str]:
         )
     ):
         category = "Billing"
-    elif any(word in lowered for word in ("password", "lock", "mfa", "2fa", "reset")):
+    elif any(
+        word in lowered for word in ("password", "lock", "mfa", "2fa", "reset")
+    ):
         category = "Account Access"
     elif any(
         word in lowered
@@ -78,15 +118,18 @@ def _classify(text: str) -> dict[str, str]:
     else:
         urgency = "Medium"
 
-    # The gateway already regex-tokenizes structured PII. Echo the input email
-    # section so the UI still shows tokens the regex layer produced.
+    # Echo the body (structured PII already tokenized by the pipeline) and
+    # apply a residual name pass so the mock exercises the same RHAII contract.
     marker = "Input Email:"
-    sanitized = text.split(marker, 1)[-1].strip() if marker in text else text
+    body = text.split(marker, 1)[-1].strip() if marker in text else text
+    sanitized = _redact_names(body)
+    summary = _SUMMARIES.get(category, "Inquiry received.")
     return {
         "category": category,
         "urgency": urgency,
         "sanitized_text": sanitized,
         "redacted_text": sanitized,
+        "summary": summary,
     }
 
 

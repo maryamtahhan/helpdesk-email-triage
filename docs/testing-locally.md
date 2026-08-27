@@ -36,7 +36,7 @@ When the dashboard opens, the queue on the left should already contain several t
 |---|---|---|
 | Double charge on card | Billing | High |
 | MFA lockout | Account Access | High |
-| VPN dropping | Tech Support | High |
+| VPN dropping | Tech Support | Medium |
 | GDPR erasure request | General | Low |
 | Healthcare ER bill | Billing | High |
 | HR payroll dispute | Billing | High |
@@ -91,7 +91,7 @@ podman compose -f compose.mock.demo.yml down -v
 
 ## Differences from the production stack
 
-| | Mock stack | Production (RHAIIS) |
+| | Mock stack | Production (RHAII) |
 |---|---|---|
 | Inference | Deterministic mock — always returns plausible JSON | `Qwen/Qwen2.5-1.5B-Instruct` on CPU via Red Hat AI Inference 3.5 |
 | Registry login | Not required | `podman login registry.redhat.io` |

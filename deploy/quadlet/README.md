@@ -1,6 +1,6 @@
-# Podman Quadlet deployment
+# RHEL Quadlet deploy path
 
-Quadlet runs each container as a rootless systemd service. This is the recommended production deployment on RHEL 9.4+ instead of `podman compose`.
+Quadlet runs each container as a rootless systemd service on RHEL 9.4+. Use this path instead of `podman compose` when you want containers managed by systemd (auto-restart, journal logging, boot integration).
 
 ## Prerequisites
 
@@ -14,7 +14,9 @@ mkdir -p ~/rhaii-cache
 # 3. Store secrets (Hugging Face token + vault auth secret)
 mkdir -p ~/.config/helpdesk
 cat > ~/.config/helpdesk/secrets.env <<'EOF'
-HF_TOKEN=hf_your_token_here
+# Hugging Face token — vLLM reads HUGGING_FACE_HUB_TOKEN from the container env
+HUGGING_FACE_HUB_TOKEN=hf_your_token_here
+# Vault auth secret — the gateway rejects /vault requests without this header value
 VAULT_SECRET=change-me-before-deploy
 EOF
 chmod 600 ~/.config/helpdesk/secrets.env

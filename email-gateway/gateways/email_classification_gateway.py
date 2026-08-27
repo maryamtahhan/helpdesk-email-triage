@@ -42,12 +42,17 @@ structured PII replaced with tokens by a deterministic regex pipeline:
   [PHONE_N], [CARD_LAST4_N], [EMAIL_N], [ACCOUNT_ID_N], [SSN_N]
 
 Do not re-tokenize or alter those tokens — treat them as opaque literals.
+If the input already contains [NAME_1], the next new person name you redact
+becomes [NAME_2], and so on.
 
 Return a JSON object with these exact keys:
 - 'category' (Billing, Tech Support, Account Access, General)
 - 'urgency' (Low, Medium, High)
-- 'sanitized_text' (copy of the input with any remaining full names replaced:
-  each unique full name → [NAME_N] where N starts at 1 and increments per unique name)
+- 'sanitized_text' (copy of the input with any remaining full person names
+  replaced: each unique full name → [NAME_N] continuing from the highest N
+  already present in the input)
+- 'summary' (one sentence, max 20 words, using tokens only — no raw PII,
+  no new names introduced)
 '''
 
 
@@ -63,6 +68,9 @@ class VLLMEmailGateway():
         self.client = OpenAI(
             base_url=self.config["base_url"],
             api_key="EMPTY",
+            timeout=float(
+                self.config.get("timeout", os.environ.get("VLLM_TIMEOUT", "30"))
+            ),
         )
         self.response = None
         self.reply_address = None
@@ -84,10 +92,21 @@ class VLLMEmailGateway():
         self.message.policy = email.policy.default
 
     def execute(self):
-        '''Execute instructions'''
+        '''Execute instructions — tokenizes PII before sending to RHAII.
+
+        Used by the CLI path (main()) and classify_raw_email(). The HTTP
+        pipeline path calls _classify() directly with already-tokenized text
+        via classify_and_sanitize() in app/inference.py.
+        '''
         for part in self.message.walk():
             if part.get_content_type() == "text/plain":
                 payload = part.get_payload(decode=True).decode("utf-8")
+                # Tokenize structured PII so raw values never reach RHAII logs.
+                try:
+                    from app.tokenizer import tokenize_structured_pii
+                    payload, _vault = tokenize_structured_pii(payload)
+                except ImportError:
+                    pass  # standalone use without the app package
                 self.response = self._classify(payload)
                 break
 

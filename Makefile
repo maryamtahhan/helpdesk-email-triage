@@ -17,8 +17,9 @@ ingest:
 	./scripts/ingest-sample.sh
 
 test:
-	python3 -m pip install -q -r email-gateway/requirements.txt pytest
-	PYTHONPATH=email-gateway python3 -m pytest email-gateway/tests -q
+	test -d .venv || python3 -m venv .venv
+	.venv/bin/pip install -q -r email-gateway/requirements.txt pytest
+	PYTHONPATH=email-gateway .venv/bin/python -m pytest email-gateway/tests -q
 
 demo-local:
 	./scripts/run-demo-local.sh

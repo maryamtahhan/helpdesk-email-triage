@@ -59,11 +59,13 @@ Category, urgency, and sanitized text are labeled **AI-generated** in the UI; ve
 | Stage | Component | What it does |
 |---|---|---|
 | 1 — Ingestion | SMTP listener / file watcher | Accepts RFC-822 email from a mailbox or `.eml` drop |
-| 2 — Email gateway | `email-gateway` container | Parses headers and body; **regex-tokenizes PII** (cards, phones, SSNs, emails, account IDs) into a local vault keyed by ticket ID |
-| 3 — Local CPU AI | Red Hat AI Inference 3.5 (vLLM CPU) | Receives **pre-sanitized** text and returns `category`, `urgency`, and any residual name redaction — never sees raw PII |
-| 4 — Agent inbox | Streamlit dashboard | Displays tokenized queues; authorized agents rehydrate originals from the vault |
+| 2 — Email gateway | `email-gateway` container | Parses headers and body; **regex-tokenizes PII** (cards, phones, SSNs, emails, account IDs) into a local vault keyed by ticket ID; the original sender address and contact details are stored in that vault under the same ticket ID |
+| 3 — Local CPU AI | Red Hat AI Inference 3.5 (vLLM CPU) | Acts as a **stateless preprocessing node**: receives pre-sanitized text (tokens only, never raw PII) and returns `category`, `urgency`, and any residual name redaction. The sanitized output is safe to route to secondary tiers, cloud-based analytics, or lower-trust queues without leaking PII across compliance boundaries |
+| 4 — Agent inbox | Streamlit dashboard | Displays tokenized queues. The **ticket ID** is the secure link back to all original contact details in the vault (and, in enterprise deployments, to the CRM record in Salesforce, ServiceNow, etc.). Authorized agents rehydrate the original body and sender details through the vault — downstream systems never see raw PII |
 
-Support mail never has to leave the host. The email gateway holds all raw PII in a vault keyed by ticket ID. Downstream systems — including RHAII — receive only tokenized text. Authorized agents can open the original body from that vault.
+**How an agent knows who to respond to:** The sanitized body is intentionally stripped of identifying details so it can flow through untrusted channels. The agent does not read the sender from the sanitized text — they read it from the ticket envelope (the `From:` header stored in the vault under the ticket ID). In an enterprise pipeline, the ticket ID maps directly to a CRM record that already holds the customer's contact details. Tokenization (`[NAME_1]`, `[PHONE_1]`) rather than total deletion means authorized agents can re-attach the original values from the vault without the raw data ever appearing in downstream logs.
+
+Support mail never has to leave the host. The email gateway holds all raw PII in a vault keyed by ticket ID. Downstream systems — including RHAII — receive only tokenized text. Authorized agents can open the original body and contact details from that vault.
 
 ## Requirements
 
@@ -228,7 +230,7 @@ python email-gateway/gateways/email_classification_gateway.py \
   --file sample_emails/01-billing-double-charge.eml
 ```
 
-The HTTP gateway regex-tokenizes high-confidence structured PII (cards that pass a Luhn check, NANP phone numbers, emails, SSNs, and `ACC-*` account IDs) into a local vault so authorized agents can rehydrate a ticket. Model `sanitized_text` is shown in the inbox. If the inference endpoint is down or returns invalid JSON, ingest falls back to keyword triage so mail is not dropped.
+The HTTP gateway regex-tokenizes high-confidence structured PII (cards that pass a Luhn check, NANP phone numbers, emails, SSNs, RFC-822 display names, and `ACC-*` account IDs) into a local vault so authorized agents can rehydrate a ticket. RHAII then classifies the pre-sanitized text, redacts any residual person names (`[NAME_N]`), and returns a one-line summary. A safety merge verifies that RHAII's output preserves all structured tokens and introduces no raw PII before it is stored; if the check fails, the regex-sanitized text is kept and the RHAII category and urgency are still used. If the inference endpoint is down or returns invalid JSON, ingest falls back to keyword triage so mail is not dropped.
 
 ### Why regex handles structured PII and the model handles only names
 
@@ -240,11 +242,17 @@ This split is a deliberate security and compliance decision, not a convenience s
 - *Raw high-risk PII never reaches the inference engine.* vLLM logs request payloads by default. Sending raw card numbers or SSNs to the model creates a log-exposure surface even on a fully local CPU deployment.
 - *Resilient fallback.* If the model returns malformed JSON or the inference endpoint is down, the pipeline falls back to keyword triage operating on already regex-sanitized text. Structured PII stays redacted regardless of inference health.
 
-**Model for names only:**
+**RHAII for classification, summary, and residual names:**
 
-Full names cannot be caught reliably by regex across arbitrary prose ("please call John", "regards, Sarah Chen", "my husband Mike"). The model handles this residual category. Importantly, the model receives text where structured tokens (`[PHONE_1]`, `[CARD_LAST4_1]`, etc.) are already in place, so it treats them as opaque literals and does not attempt to re-tokenize them.
+Full names cannot be caught reliably by regex across arbitrary prose ("please call John", "regards, Sarah Chen"). RHAII handles this residual category and also produces:
 
-The prompt sent to the model (`INSTR` in `email-gateway/gateways/email_classification_gateway.py`) reflects this boundary explicitly.
+- `category` and `urgency` — the primary AI output.
+- `sanitized_text` — the regex-tokenized body with any remaining person names replaced by `[NAME_N]` tokens, continuing the numbering that regex already started.
+- `summary` — a one-line summary of the ticket using tokens only, safe for downstream queues.
+
+RHAII receives text where structured tokens (`[PHONE_1]`, `[CARD_LAST4_1]`, etc.) are already in place, so it treats them as opaque literals. A merge step verifies the model output before it is stored: if RHAII drops a structured token or reintroduces raw PII, the regex-sanitized text is kept as a floor. Category and urgency are always taken from RHAII regardless.
+
+The prompt (`INSTR` in `email-gateway/gateways/email_classification_gateway.py`) reflects this boundary explicitly.
 
 Ticket IDs start at `TICKET-8921`. Public ticket APIs omit the original body. `GET /tickets/{id}/vault` returns the original text and token map for the authorized-agent view in the dashboard. Classification latency is stored as `classification_ms` and shown as an `X-Classification-Time` SLA tag.
 

@@ -283,9 +283,12 @@ with st.expander("ℹ️ How to use this demo", expanded=False):
 #### The pipeline (what happens to every email)
 
 1. **Ingest** — an email arrives via the file watcher, SMTP (port 3025), or the sidebar form.
-2. **Regex tokenization** — high-confidence PII (card numbers, phone numbers, SSNs, email addresses, account IDs, names) is immediately replaced with structured tokens: `[NAME_1]`, `[CARD_LAST4_1]`, `[PHONE_1]`, etc.  The originals go into a private vault keyed by ticket ID.
-3. **AI classification** — the tokenized body is sent to Red Hat AI Inference 3.5 (vLLM on CPU, or the local mock) which returns `category` and `urgency` as structured JSON.
-4. **Ticket created** — the sanitized body + AI labels appear in the queue. Downstream systems only ever see the tokenized text.
+2. **Regex tokenization** — structured PII (card numbers, phone numbers, SSNs, email addresses, account IDs, and RFC-822 display names) is immediately replaced with tokens: `[CARD_LAST4_1]`, `[PHONE_1]`, `[EMAIL_1]`, etc. The originals go into a private vault keyed by ticket ID. Regex is used here because GDPR/HIPAA/GLBA require deterministic, auditable controls.
+3. **RHAII classification** — the *regex-tokenized* body is sent to Red Hat AI Inference 3.5 (vLLM on CPU, or the local mock). RHAII returns `category`, `urgency`, a one-line `summary`, and `sanitized_text` with any residual person names replaced (`[NAME_1]`, `[NAME_2]`, …). A safety merge verifies that RHAII didn't drop any structured token or reintroduce raw PII before using its output. Because the model only ever receives pre-tokenized text, its output is safe to route to secondary tiers or cloud analytics without leaking PII.
+4. **Ticket created** — the sanitized body + AI labels appear in the queue under a **Ticket ID**. That ticket ID is the secure link back to all original contact details in the vault. Downstream systems only ever see the tokenized text; authorized agents rehydrate the sender and body from the vault when they need to reply.
+
+> **How does an agent know who to respond to?**
+> The sanitized body is stripped of identifying details so it can flow through untrusted channels safely. An agent reads the sender from the ticket envelope (the `From:` header, shown in the ticket detail above the body), not from the sanitized text. The vault maps each `[TOKEN]` back to the original value, so an authorized representative can recover the full context — name, phone, card tail — without raw PII ever appearing in downstream logs. In an enterprise deployment the ticket ID maps directly to a CRM record (e.g. Salesforce, ServiceNow) that already holds the customer's contact details.
 
 ---
 
@@ -653,10 +656,12 @@ def inbox_panel() -> None:
             )
             d3.markdown(f"**SLA**  \n`{ms_disp}`")
 
-            # Envelope fields
+            # Envelope fields — escape user-supplied strings before HTML injection
+            sender_esc = html.escape(selected.get("sender", ""))
+            subject_esc = html.escape(selected.get("subject", ""))
             st.markdown(
-                f"**From:** {selected.get('sender', '')} &nbsp;"
-                f"**·** &nbsp; **Subject:** {selected.get('subject', '')}",
+                f"**From:** {sender_esc} &nbsp;"
+                f"**·** &nbsp; **Subject:** {subject_esc}",
                 unsafe_allow_html=True,
             )
             st.markdown("---")
@@ -693,6 +698,12 @@ def inbox_panel() -> None:
                 "replaced · downstream queues receive only this payload."
             )
 
+            # AI-generated one-line summary (RHAII output)
+            summary = selected.get("summary", "")
+            if summary:
+                st.markdown("**AI summary** *(AI-generated)*")
+                st.info(summary)
+
             st.markdown("---")
 
             # ── Authorized rehydration ─────────────────────────────
@@ -700,9 +711,12 @@ def inbox_panel() -> None:
             st.markdown(
                 '<div class="vault-warning">'
                 "<strong>Authorized rehydration.</strong> "
-                "Original PII is stored server-side in a vault keyed by ticket ID. "
-                "Only authorized agents should access it — "
-                "raw data must never appear in downstream cloud logs."
+                "Original PII — including the sender's contact details — is stored server-side "
+                "in a vault keyed by the ticket ID above. "
+                "The sanitized body uses tokens (<code>[NAME_1]</code>, <code>[PHONE_1]</code>, …) "
+                "rather than blanks, so authorized agents can recover the full context "
+                "from the vault when they need to reply. "
+                "Raw data must never appear in downstream cloud logs."
                 "</div>",
                 unsafe_allow_html=True,
             )

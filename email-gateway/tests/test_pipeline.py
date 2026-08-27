@@ -1,6 +1,7 @@
 import importlib
-import sys
 from unittest.mock import patch
+
+import pytest
 
 from app.email_parser import parse_raw_email
 from app.inference import extract_json_object
@@ -40,6 +41,9 @@ def test_tokenize_replaces_card_phone_account_and_name():
     assert "[NAME_1]" in sanitized
     assert vault.mapping["[PHONE_1]"] == "+1-212-555-0100"
     assert "Jane Martinez" in vault.mapping.values()
+    # Card vault value must be last-4 mask only — never the full PAN.
+    assert vault.mapping.get("[CARD_LAST4_1]", "").endswith("-1111")
+    assert "4111111111111111" not in vault.mapping.values()
 
 
 def test_locked_out_is_not_treated_as_a_name():
@@ -82,6 +86,7 @@ def test_normalize_maps_redacted_text():
     )
     assert result["sanitized_text"] == "call [REDACTED]"
     assert result["model"] == "mock-triage"
+    assert "summary" in result
 
 
 def test_gateway_parse_bytes_reads_plain_text():
@@ -98,18 +103,18 @@ def test_gateway_parse_bytes_reads_plain_text():
 # ── Pipeline tests ────────────────────────────────────────────────────
 
 
-def test_pipeline_uses_regex_body_not_model_text(tmp_path, monkeypatch):
-    """Sanitized body stored must be the regex output, not the model's text."""
+def test_pipeline_rejects_model_pan(tmp_path, monkeypatch):
+    """Merge must reject model output that reintroduces a Luhn-valid PAN."""
     monkeypatch.setenv("TICKET_DATA_DIR", str(tmp_path))
 
-    # Reload store so it picks up the temp data dir.
     import app.store as store_mod
     importlib.reload(store_mod)
 
     fake_result = {
         "category": "Billing",
         "urgency": "High",
-        "sanitized_text": "model replaced EVERYTHING including 4111-1111-1111-1111",
+        "sanitized_text": "model echoed the raw PAN 4111-1111-1111-1111 back",
+        "summary": "Billing issue reported.",
         "model": "mock-triage",
     }
     with patch("app.pipeline.inference.classify_and_sanitize", return_value=fake_result):
@@ -122,35 +127,80 @@ def test_pipeline_uses_regex_body_not_model_text(tmp_path, monkeypatch):
             source="test",
         )
 
-    # The full card number must NOT appear in the stored sanitized body.
+    # Full PAN must not appear in stored sanitized body.
     assert "4111-1111-1111-1111" not in ticket["sanitized_text"]
-    # The model's echo of the raw card number must not have been used.
-    assert "model replaced EVERYTHING" not in ticket["sanitized_text"]
+    # Model text must not have been used as-is.
+    assert "model echoed" not in ticket["sanitized_text"]
+    # Category and urgency still come from the model.
     assert ticket["category"] == "Billing"
     assert ticket["urgency"] == "High"
 
 
-def test_pipeline_heuristic_fallback_on_inference_error(tmp_path, monkeypatch):
-    """When inference raises, the pipeline falls back to keyword triage."""
+def test_pipeline_accepts_model_names(tmp_path, monkeypatch):
+    """Model replacing an unstructured name gets recorded in the vault."""
     monkeypatch.setenv("TICKET_DATA_DIR", str(tmp_path))
 
     import app.store as store_mod
     importlib.reload(store_mod)
 
-    with patch("app.pipeline.inference.classify_and_sanitize", side_effect=RuntimeError("down")):
+    # Body has a name the regex won't catch (no intro phrase, no signoff).
+    body = "Hello, Alex Rivera wants a refund for ACC-12345."
+    # After regex tokenization: ACC-12345 → [ACCOUNT_ID_1]; name stays raw.
+
+    fake_result = {
+        "category": "Billing",
+        "urgency": "Low",
+        "sanitized_text": "Hello, [NAME_1] wants a refund for [ACCOUNT_ID_1].",
+        "summary": "Billing refund request received.",
+        "model": "mock-triage",
+    }
+
+    with patch("app.pipeline.inference.classify_and_sanitize", return_value=fake_result):
+        from app.pipeline import process_parsed_email
+
+        ticket = process_parsed_email(
+            sender="a@example.com",
+            subject="Refund",
+            body=body,
+            source="test",
+        )
+
+    # Model output accepted: name token present, raw name absent.
+    assert "[NAME_1]" in ticket["sanitized_text"]
+    assert "[ACCOUNT_ID_1]" in ticket["sanitized_text"]
+    assert "Alex Rivera" not in ticket["sanitized_text"]
+
+
+def test_heuristic_fallback_uses_tokenized_text(tmp_path, monkeypatch):
+    """When inference raises, fallback runs on regex-sanitized text, not raw body."""
+    monkeypatch.setenv("TICKET_DATA_DIR", str(tmp_path))
+
+    import app.store as store_mod
+    importlib.reload(store_mod)
+
+    with patch(
+        "app.pipeline.inference.classify_and_sanitize",
+        side_effect=RuntimeError("down"),
+    ):
         from app.pipeline import process_parsed_email
 
         ticket = process_parsed_email(
             sender="user@example.com",
             subject="Charged twice",
-            body="I was charged twice on my billing statement urgently.",
+            body="Card 4111-1111-1111-1111 was charged twice urgently.",
             source="test",
         )
 
     assert ticket["model"] == "heuristic-fallback"
     assert ticket["category"] == "Billing"
     assert ticket["urgency"] == "High"
-    assert "4111" not in ticket.get("sanitized_text", "")
+    # Raw PAN must not appear in the stored body even on the fallback path.
+    assert "4111-1111-1111-1111" not in ticket["sanitized_text"]
+
+
+def test_pipeline_heuristic_fallback_on_inference_error(tmp_path, monkeypatch):
+    """Alias kept for backward compatibility with previous test name."""
+    test_heuristic_fallback_uses_tokenized_text(tmp_path, monkeypatch)
 
 
 # ── Store tests ───────────────────────────────────────────────────────
@@ -171,6 +221,7 @@ def test_store_public_omits_vault_and_original(tmp_path, monkeypatch):
         sanitized_text="sanitized body with [CARD_LAST4_1]",
         category="Billing",
         urgency="High",
+        summary="Billing issue reported.",
         vault={"[CARD_LAST4_1]": "****-1111"},
         classification_ms=42.0,
         source="test",
@@ -182,6 +233,47 @@ def test_store_public_omits_vault_and_original(tmp_path, monkeypatch):
     assert "original_text" not in public
     assert public["token_count"] == 1
     assert public["sanitized_text"] == "sanitized body with [CARD_LAST4_1]"
+    assert public.get("summary") == "Billing issue reported."
+
+
+def test_vault_requires_secret(tmp_path, monkeypatch):
+    """GET /vault returns 401 without secret, 200 with correct X-Vault-Secret."""
+    monkeypatch.setenv("TICKET_DATA_DIR", str(tmp_path))
+
+    import app.store as store_mod
+    importlib.reload(store_mod)
+    store_mod.load()
+
+    ticket = store_mod.create_ticket(
+        sender="[EMAIL_1]",
+        subject="test",
+        original_text="raw",
+        sanitized_text="safe [EMAIL_1]",
+        category="General",
+        urgency="Low",
+        summary="",
+        vault={"[EMAIL_1]": "a@b.com"},
+        classification_ms=1.0,
+        source="test",
+        model="mock",
+    )
+
+    import app.main as main_mod
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(main_mod, "VAULT_SECRET", "my-secret")
+    monkeypatch.setattr(main_mod, "store", store_mod)
+
+    # Wrong secret → 401
+    with pytest.raises(HTTPException) as exc_info:
+        main_mod.get_vault(ticket["id"], x_vault_secret="wrong")
+    assert exc_info.value.status_code == 401
+
+    # Correct secret → 200
+    result = main_mod.get_vault(ticket["id"], x_vault_secret="my-secret")
+    assert result["id"] == ticket["id"]
+    assert "vault" in result
+    assert "original_text" in result
 
 
 def test_tokenize_shared_vault_deduplicates_across_fields():
@@ -192,3 +284,47 @@ def test_tokenize_shared_vault_deduplicates_across_fields():
     )
     assert sanitized.count("[EMAIL_1]") == 1
     assert len([k for k in vault.mapping if k.startswith("[EMAIL_")]) == 1
+
+
+def test_tokenize_from_header_handles_display_name():
+    """RFC-822 From header with a person display name produces NAME + EMAIL tokens."""
+    from app.tokenizer import TokenVault, tokenize_from_header
+
+    vault = TokenVault()
+    result = tokenize_from_header("Jane Martinez <jane@example.com>", vault)
+    assert "[NAME_1]" in result
+    assert "[EMAIL_1]" in result
+    assert vault.mapping["[NAME_1]"] == "Jane Martinez"
+    assert vault.mapping["[EMAIL_1]"] == "jane@example.com"
+
+
+def test_merge_model_sanitization_rejects_dropped_token():
+    """merge_model_sanitization returns regex_text when a token is dropped."""
+    from app.tokenizer import TokenVault, merge_model_sanitization
+
+    vault = TokenVault()
+    vault.mapping["[PHONE_1]"] = "+1-212-555-0100"
+    vault._counts["PHONE"] = 1
+
+    regex_text = "Call [PHONE_1] urgently."
+    model_text = "Call (212) 555-0100 urgently."  # token dropped
+
+    result = merge_model_sanitization(regex_text, model_text, vault)
+    assert result == regex_text
+
+
+def test_merge_model_sanitization_accepts_new_name_token():
+    """merge_model_sanitization accepts model output with a new NAME token."""
+    from app.tokenizer import TokenVault, merge_model_sanitization
+
+    vault = TokenVault()
+    vault.mapping["[ACCOUNT_ID_1]"] = "ACC-12345"
+    vault._counts["ACCOUNT_ID"] = 1
+
+    regex_text = "Alex Rivera requests refund for [ACCOUNT_ID_1]."
+    model_text = "[NAME_1] requests refund for [ACCOUNT_ID_1]."
+
+    result = merge_model_sanitization(regex_text, model_text, vault)
+    assert result == model_text
+    # Name token should be recorded in vault
+    assert vault.mapping.get("[NAME_1]") == "Alex Rivera"

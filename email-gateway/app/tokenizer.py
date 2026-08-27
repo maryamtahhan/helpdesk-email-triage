@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import email.utils
+import logging
 import re
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 TOKEN_TYPES = ("CARD_LAST4", "PHONE", "EMAIL", "ACCOUNT_ID", "SSN", "NAME")
 
@@ -104,6 +108,103 @@ def tokenize_structured_pii(
     sanitized = _NAME_INTRO_RE.sub(_sub_name, sanitized)
     sanitized = _SIGNOFF_RE.sub(_sub_name, sanitized)
     return sanitized, vault
+
+
+_PERSON_NAME_RE = re.compile(r"^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+$")
+_TOKEN_RE = re.compile(r"\[[A-Z_]+_\d+\]")
+_LUHN_CANDIDATE_RE = re.compile(r"\d[\d \-]{11,17}\d")
+_NAME_SPAN_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b")
+
+
+def tokenize_from_header(raw_from: str, vault: TokenVault) -> str:
+    """Tokenize an RFC-822 From header, handling display names.
+
+    "Jane Martinez <jane@example.com>" → "[NAME_1] <[EMAIL_1]>"
+    "jane@example.com" → "[EMAIL_1]"
+
+    Only display names matching a person-name pattern (2+ Title Case words)
+    are treated as NAME tokens; generic labels like "Helpdesk" are kept as-is.
+    The vault is mutated in place.
+    """
+    display_name, addr = email.utils.parseaddr(raw_from)
+    if addr:
+        email_token = vault.add("EMAIL", addr)
+        display_name = display_name.strip()
+        if _PERSON_NAME_RE.match(display_name):
+            name_token = vault.add("NAME", display_name)
+            return f"{name_token} <{email_token}>"
+        if display_name:
+            safe = re.sub(r'[<>"]', "", display_name)
+            return f"{safe} <{email_token}>"
+        return email_token
+    # No recognized email address — fall back to standard tokenizer
+    result, _ = tokenize_structured_pii(raw_from, vault=vault)
+    return result
+
+
+def merge_model_sanitization(
+    regex_text: str,
+    model_text: str,
+    vault: TokenVault,
+) -> str:
+    """Return model_text if it passes safety checks; otherwise return regex_text.
+
+    RHAII is trusted for residual name redaction. The merge is rejected when:
+    - The model drops a structured token that regex_text contained
+    - The model output contains a Luhn-valid card number or raw SSN pattern
+    - The model output contains a raw vault value (except last-4 card masks)
+
+    When accepted, new [NAME_N] tokens introduced by the model are recorded in
+    the vault (best-effort: matched by position against candidate spans in
+    regex_text).
+    """
+    existing_tokens = set(_TOKEN_RE.findall(regex_text))
+    model_tokens = set(_TOKEN_RE.findall(model_text))
+
+    missing = existing_tokens - model_tokens
+    if missing:
+        logger.warning("RHAII dropped tokens %s — using regex output", missing)
+        return regex_text
+
+    for candidate in _LUHN_CANDIDATE_RE.findall(model_text):
+        digits = re.sub(r"\D", "", candidate)
+        if 13 <= len(digits) <= 19 and _luhn_ok(digits):
+            logger.warning("RHAII reintroduced a Luhn-valid PAN — using regex output")
+            return regex_text
+
+    if _SSN_RE.search(model_text):
+        logger.warning("RHAII reintroduced an SSN pattern — using regex output")
+        return regex_text
+
+    for token, raw_value in vault.mapping.items():
+        if token.startswith("[CARD_LAST4_"):
+            continue
+        if len(raw_value) >= 6 and raw_value in model_text:
+            logger.warning(
+                "RHAII output contains raw vault value for %s — using regex output",
+                token,
+            )
+            return regex_text
+
+    # Record new NAME tokens introduced by the model (best-effort)
+    new_name_tokens = sorted(
+        {t for t in model_tokens if t.startswith("[NAME_") and t not in vault.mapping},
+        key=lambda t: int(t.split("_")[-1].rstrip("]")),
+    )
+    if new_name_tokens:
+        already_tokenized = set(vault.mapping.values())
+        candidates = [
+            m.group(1)
+            for m in _NAME_SPAN_RE.finditer(regex_text)
+            if m.group(1) not in already_tokenized
+        ]
+        for tok, span in zip(new_name_tokens, candidates):
+            vault.mapping[tok] = span
+            n = int(tok.split("_")[-1].rstrip("]"))
+            if vault._counts.get("NAME", 0) < n:
+                vault._counts["NAME"] = n
+
+    return model_text
 
 
 CATEGORIES = ("Billing", "Tech Support", "Account Access", "General")

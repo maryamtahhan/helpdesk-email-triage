@@ -9,7 +9,7 @@ version: "3.8"
 
 services:
   rhaii-cpu-engine:
-    image: ${RHAIIS_IMAGE:-registry.redhat.io/rhaii/vllm-cpu-rhel9:3.5.0-1786546771}
+    image: ${RHAII_IMAGE:-registry.redhat.io/rhaii/vllm-cpu-rhel9:3.5.0-1786546771}
     container_name: rhaii-cpu-engine
     restart: unless-stopped
     ports:
@@ -64,6 +64,9 @@ services:
       GATEWAY_MODE: ${GATEWAY_MODE:-FILE_WATCHER}
       EMAIL_INPUT_DIR: /app/input_emails
       TICKET_DATA_DIR: /app/data
+      SMTP_BIND: "0.0.0.0"
+      VAULT_SECRET: ${VAULT_SECRET:-helpdesk-demo-secret}
+      DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN:-http://localhost:8501}
     volumes:
       - ./sample_emails:/app/input_emails:Z
       - gateway-data:/app/data:Z
@@ -81,6 +84,7 @@ services:
     environment:
       GATEWAY_URL: http://email-gateway:8080
       SMTP_HOST: email-gateway
+      VAULT_SECRET: ${VAULT_SECRET:-helpdesk-demo-secret}
     volumes:
       - ./docs:/app/docs:ro,Z
 

@@ -20,6 +20,10 @@ export MODEL_NAME="mock-triage"
 export GATEWAY_MODE="FILE_WATCHER"
 export GATEWAY_URL="http://127.0.0.1:8080"
 export SMTP_PORT="3025"
+export SMTP_BIND="127.0.0.1"
+# Demo-only vault secret — change before any real deployment
+export VAULT_SECRET="${VAULT_SECRET:-helpdesk-demo-secret}"
+export DASHBOARD_ORIGIN="http://127.0.0.1:8501"
 mkdir -p "$TICKET_DATA_DIR"
 
 cleanup() {

@@ -61,6 +61,8 @@ def create_ticket(
     classification_ms: float,
     source: str,
     model: str,
+    summary: str = "",
+    original_sender: str = "",
 ) -> dict[str, Any]:
     global _next_id
     with _lock:
@@ -71,7 +73,9 @@ def create_ticket(
             "sender": sender,
             "subject": subject,
             "original_text": original_text,
+            "original_sender": original_sender or sender,
             "sanitized_text": sanitized_text,
+            "summary": summary,
             "category": category,
             "urgency": urgency,
             "vault": vault,
@@ -109,6 +113,7 @@ def _public(ticket: dict[str, Any]) -> dict[str, Any]:
         "sender": ticket["sender"],
         "subject": ticket["subject"],
         "sanitized_text": ticket["sanitized_text"],
+        "summary": ticket.get("summary", ""),
         "category": ticket["category"],
         "urgency": ticket["urgency"],
         "classification_ms": ticket["classification_ms"],

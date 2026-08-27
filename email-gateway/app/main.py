@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "3025"))
-SMTP_BIND = os.environ.get("SMTP_BIND", "0.0.0.0")
+SMTP_BIND = os.environ.get("SMTP_BIND", "127.0.0.1")
 INPUT_DIR = Path(os.environ.get("EMAIL_INPUT_DIR", "/app/input_emails"))
 WATCH_INTERVAL = float(os.environ.get("WATCH_INTERVAL_SECONDS", "2"))
 # Set VAULT_SECRET in the environment to require an X-Vault-Secret header on
@@ -37,10 +37,20 @@ class _SmtpHandler:
         peer = getattr(session, "peer", "?")
         # Run classification in a thread so inference latency doesn't block
         # the aiosmtpd event loop and hold up subsequent SMTP connections.
-        asyncio.get_event_loop().run_in_executor(
+        loop = asyncio.get_event_loop()
+        fut = loop.run_in_executor(
             None, process_raw_email, envelope.content, "smtp"
         )
-        logger.info("Accepted SMTP message from %s (processing in background)", peer)
+
+        def _log_exc(f: "asyncio.Future") -> None:
+            exc = f.exception()
+            if exc:
+                logger.error(
+                    "SMTP ingest failed for message from %s: %s", peer, exc
+                )
+
+        fut.add_done_callback(_log_exc)
+        logger.info("Accepted SMTP from %s (processing in background)", peer)
         return "250 Message accepted"
 
 
@@ -58,7 +68,7 @@ def _watch_loop() -> None:
                 continue
             try:
                 process_raw_email(path.read_bytes(), source=source)
-                seen.add(key)
+                seen.add(source)
                 logger.info("Ingested %s", path.name)
             except Exception:
                 logger.exception("Failed to ingest %s", path)
@@ -139,12 +149,18 @@ def get_vault(
         "original_text": ticket["original_text"],
         "vault": ticket["vault"],
         "sender": ticket["sender"],
+        "original_sender": ticket.get("original_sender", ticket["sender"]),
     }
+
+
+_MAX_UPLOAD_BYTES = 1024 * 1024  # 1 MiB
 
 
 @app.post("/ingest")
 async def ingest_upload(file: UploadFile = File(...)) -> dict:
-    raw = await file.read()
+    raw = await file.read(_MAX_UPLOAD_BYTES + 1)
+    if len(raw) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Email too large (max 1 MiB)")
     return process_raw_email(raw, source=f"upload:{file.filename or 'message.eml'}")
 
 

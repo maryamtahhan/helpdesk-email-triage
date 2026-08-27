@@ -6,7 +6,6 @@ import json
 import os
 import re
 import sys
-from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +56,7 @@ def _normalize(parsed: dict[str, Any], fallback_text: str, model: str) -> dict[s
     sanitized = str(
         parsed.get("sanitized_text") or parsed.get("redacted_text") or fallback_text
     ).strip()
+    summary = str(parsed.get("summary", "")).strip()
     if category not in CATEGORIES:
         category = "General"
     if urgency not in URGENCIES:
@@ -65,26 +65,23 @@ def _normalize(parsed: dict[str, Any], fallback_text: str, model: str) -> dict[s
         "category": category,
         "urgency": urgency,
         "sanitized_text": sanitized,
+        "summary": summary,
         "model": model,
     }
 
 
-def classify_raw_email(raw_email_bytes: bytes) -> dict[str, Any]:
-    """Run the original MIME-to-vLLM gateway against an RFC-822 payload."""
+def classify_and_sanitize(body: str) -> dict[str, Any]:
+    """Classify a pre-tokenized plain text body via RHAII.
+
+    Calls the gateway's _classify method directly so the body (already
+    regex-sanitized by the pipeline) is not re-wrapped in MIME and
+    re-tokenized. The caller is responsible for ensuring no raw PII
+    is present in `body` before calling this function.
+    """
     config = env_config()
     gateway = VLLMEmailGateway(config)
-    gateway.parse_bytes(raw_email_bytes)
-    gateway.execute()
-    if gateway.response is None:
-        raise RuntimeError("No text/plain part found in message")
-    parsed = extract_json_object(gateway.response.output_text)
-    return _normalize(parsed, "", config["classify_model"])
-
-
-def classify_and_sanitize(body: str) -> dict[str, Any]:
-    """Wrap a plain body in MIME so the same gateway can classify API ingest."""
-    message = EmailMessage()
-    message["From"] = "ingest@local"
-    message["Subject"] = "Support message"
-    message.set_content(body)
-    return classify_raw_email(bytes(message))
+    response = gateway._classify(body)
+    if response is None:
+        raise RuntimeError("RHAII returned no response")
+    parsed = extract_json_object(response.output_text)
+    return _normalize(parsed, body, config["classify_model"])
