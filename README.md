@@ -232,7 +232,7 @@ python email-gateway/gateways/email_classification_gateway.py \
 
 The HTTP gateway regex-tokenizes high-confidence structured PII (cards that pass a Luhn check, NANP phone numbers, emails, SSNs, RFC-822 display names, and `ACC-*` account IDs) into a local vault so authorized agents can rehydrate a ticket. RHAII then classifies the pre-sanitized text, redacts any residual person names (`[NAME_N]`), and returns a one-line summary. A safety merge verifies that RHAII's output preserves all structured tokens and introduces no raw PII before it is stored; if the check fails, the regex-sanitized text is kept and the RHAII category and urgency are still used. If the inference endpoint is down or returns invalid JSON, ingest falls back to keyword triage so mail is not dropped.
 
-### Why regex handles structured PII and the model handles only names
+### Why regex handles structured PII and RHAII handles category, urgency, summary, and residual names
 
 This split is a deliberate security and compliance decision, not a convenience shortcut.
 
