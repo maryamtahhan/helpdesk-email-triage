@@ -328,3 +328,110 @@ def test_merge_model_sanitization_accepts_new_name_token():
     assert result == model_text
     # Name token should be recorded in vault
     assert vault.mapping.get("[NAME_1]") == "Alex Rivera"
+
+
+def test_merge_rejects_name_token_collision():
+    """merge_model_sanitization rejects model output that reuses [NAME_1] for a
+    different entity than the one already recorded in the vault."""
+    from app.tokenizer import TokenVault, merge_model_sanitization
+
+    vault = TokenVault()
+    vault.mapping["[NAME_1]"] = "Jane Martinez"
+    vault._counts["NAME"] = 1
+    vault.mapping["[PHONE_1]"] = "+1-212-555-0100"
+    vault._counts["PHONE"] = 1
+
+    # regex_text still has Alex Rivera raw; model wrongly maps Alex to [NAME_1]
+    regex_text = "Please refund Alex Rivera at [PHONE_1]."
+    model_text = "Please refund [NAME_1] at [PHONE_1]."
+
+    result = merge_model_sanitization(regex_text, model_text, vault)
+    assert result == regex_text
+    # Vault must not be corrupted — [NAME_1] stays Jane Martinez
+    assert vault.mapping["[NAME_1]"] == "Jane Martinez"
+
+
+def test_merge_accepts_continued_name_numbering():
+    """merge_model_sanitization accepts model output where [NAME_2] is used for
+    a new person while [NAME_1] already belongs to the sender."""
+    from app.tokenizer import TokenVault, merge_model_sanitization
+
+    vault = TokenVault()
+    vault.mapping["[NAME_1]"] = "Jane Martinez"
+    vault._counts["NAME"] = 1
+    vault.mapping["[PHONE_1]"] = "+1-212-555-0100"
+    vault._counts["PHONE"] = 1
+
+    regex_text = "Please refund Alex Rivera at [PHONE_1]."
+    model_text = "Please refund [NAME_2] at [PHONE_1]."
+
+    result = merge_model_sanitization(regex_text, model_text, vault)
+    assert result == model_text
+    assert vault.mapping.get("[NAME_2]") == "Alex Rivera"
+
+
+def test_pipeline_name_collision_with_from_header(tmp_path, monkeypatch):
+    """Model using [NAME_1] for a body name when [NAME_1] is the sender must be
+    rejected — vault [NAME_1] must remain the sender after merge."""
+    monkeypatch.setenv("TICKET_DATA_DIR", str(tmp_path))
+
+    import app.store as store_mod
+    importlib.reload(store_mod)
+
+    # Model incorrectly reuses [NAME_1] (Jane Martinez's token) for Alex Rivera
+    fake_result = {
+        "category": "Billing",
+        "urgency": "Medium",
+        "sanitized_text": "Please refund [NAME_1] on [ACCOUNT_ID_1].",
+        "summary": "Billing refund request.",
+        "model": "mock-triage",
+    }
+    with patch("app.pipeline.inference.classify_and_sanitize", return_value=fake_result):
+        from app.pipeline import process_parsed_email
+
+        ticket = process_parsed_email(
+            sender="Jane Martinez <jane@example.com>",
+            subject="Refund request",
+            body="Please refund Alex Rivera on ACC-12345.",
+            source="test",
+        )
+
+    # Merge must reject: [NAME_1] must not appear in sanitized body
+    sanitized = ticket["sanitized_text"]
+    assert "[NAME_1]" not in sanitized, "merge should have rejected the collision"
+    # Alex Rivera is still raw (regex fallback used)
+    assert "Alex Rivera" in sanitized
+    # Vault [NAME_1] must still map to Jane Martinez
+    full = store_mod.get_ticket(ticket["id"], include_vault=True)
+    assert full["vault"].get("[NAME_1]") == "Jane Martinez"
+
+
+def test_summary_sanitization_clears_raw_pan(tmp_path, monkeypatch):
+    """Public ticket summary must be cleared when the model returns raw PII."""
+    monkeypatch.setenv("TICKET_DATA_DIR", str(tmp_path))
+
+    import app.store as store_mod
+    importlib.reload(store_mod)
+
+    fake_result = {
+        "category": "Billing",
+        "urgency": "High",
+        "sanitized_text": "[CARD_LAST4_1] was charged twice.",
+        "summary": (
+            "Call Jane Martinez at +1-212-555-0100"
+            " about 4111-1111-1111-1111"
+        ),
+        "model": "mock-triage",
+    }
+    with patch("app.pipeline.inference.classify_and_sanitize", return_value=fake_result):
+        from app.pipeline import process_parsed_email
+
+        ticket = process_parsed_email(
+            sender="jane@example.com",
+            subject="Billing",
+            body="Card 4111-1111-1111-1111 was charged twice.",
+            source="test",
+        )
+
+    assert "4111-1111-1111-1111" not in ticket.get("summary", "")
+    assert ticket.get("summary", "") == ""

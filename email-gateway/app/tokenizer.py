@@ -114,6 +114,75 @@ _PERSON_NAME_RE = re.compile(r"^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+$")
 _TOKEN_RE = re.compile(r"\[[A-Z_]+_\d+\]")
 _LUHN_CANDIDATE_RE = re.compile(r"\d[\d \-]{11,17}\d")
 _NAME_SPAN_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b")
+_PERSON_SPAN_RE = re.compile(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+")
+
+_COMMON_PLACE_BIGRAMS: frozenset[str] = frozenset(
+    {
+        "New York",
+        "Los Angeles",
+        "San Francisco",
+        "Tech Support",
+        "Account Access",
+        "High Priority",
+    }
+)
+
+
+def _find_replaced_span(
+    regex_text: str,
+    model_text: str,
+    token: str,
+    already_tokenized: set[str],
+) -> str | None:
+    """Return raw span in regex_text replaced by token in model_text (best-effort).
+
+    Uses text anchors around the token position: the text after the last known
+    token in the prefix and the text before the first token in the suffix.
+    Returns None when the span cannot be determined or does not look like a
+    person name.
+    """
+    idx = model_text.find(token)
+    if idx < 0:
+        return None
+    prefix = model_text[:idx]
+    suffix = model_text[idx + len(token):]
+
+    # Anchor: text after the last token in the prefix
+    last_tok_in_prefix = None
+    for m in _TOKEN_RE.finditer(prefix):
+        last_tok_in_prefix = m
+    prefix_anchor = prefix[last_tok_in_prefix.end():] if last_tok_in_prefix else prefix
+
+    # Anchor: text before the first token in the suffix
+    first_tok_in_suffix = _TOKEN_RE.search(suffix)
+    suffix_anchor = suffix[: first_tok_in_suffix.start()] if first_tok_in_suffix else suffix
+
+    if prefix_anchor:
+        p_idx = regex_text.find(prefix_anchor)
+        if p_idx < 0:
+            return None
+        start = p_idx + len(prefix_anchor)
+    else:
+        start = 0
+
+    if suffix_anchor:
+        end = regex_text.find(suffix_anchor, start)
+        if end < 0:
+            return None
+    else:
+        end = len(regex_text)
+
+    if start >= end:
+        return None
+
+    span = regex_text[start:end].strip()
+    if not span:
+        return None
+    if not re.fullmatch(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+", span):
+        return None
+    if span in already_tokenized or span in _COMMON_PLACE_BIGRAMS:
+        return None
+    return span
 
 
 def tokenize_from_header(raw_from: str, vault: TokenVault) -> str:
@@ -186,25 +255,90 @@ def merge_model_sanitization(
             )
             return regex_text
 
-    # Record new NAME tokens introduced by the model (best-effort)
+    # Reject if the model reused an existing NAME token for a different entity.
+    for token in sorted(model_tokens):
+        if not token.startswith("[NAME_") or token not in vault.mapping:
+            continue
+        regex_count = regex_text.count(token)
+        model_count = model_text.count(token)
+        if model_count <= regex_count:
+            continue
+        # Model introduced extra uses — verify the raw value covers them.
+        raw_value = vault.mapping[token]
+        raw_occurrences = regex_text.count(raw_value) if raw_value else 0
+        if raw_occurrences < model_count - regex_count:
+            logger.warning(
+                "RHAII used existing %s for a different entity"
+                " — using regex output",
+                token,
+            )
+            return regex_text
+
+    # Record new NAME tokens introduced by the model (best-effort).
+    # Prefer span-extraction over positional zip to avoid mapping place
+    # names like "New York" or category labels into the vault.
     new_name_tokens = sorted(
         {t for t in model_tokens if t.startswith("[NAME_") and t not in vault.mapping},
         key=lambda t: int(t.split("_")[-1].rstrip("]")),
     )
     if new_name_tokens:
         already_tokenized = set(vault.mapping.values())
-        candidates = [
-            m.group(1)
-            for m in _NAME_SPAN_RE.finditer(regex_text)
-            if m.group(1) not in already_tokenized
-        ]
-        for tok, span in zip(new_name_tokens, candidates):
-            vault.mapping[tok] = span
-            n = int(tok.split("_")[-1].rstrip("]"))
-            if vault._counts.get("NAME", 0) < n:
-                vault._counts["NAME"] = n
+        used_spans: set[str] = set()
+        for tok in new_name_tokens:
+            span = _find_replaced_span(
+                regex_text, model_text, tok, already_tokenized | used_spans
+            )
+            if span is None:
+                # Fallback: first untokenized name span in regex_text order.
+                for m in _NAME_SPAN_RE.finditer(regex_text):
+                    candidate = m.group(1)
+                    if (
+                        candidate not in already_tokenized
+                        and candidate not in used_spans
+                        and candidate not in _COMMON_PLACE_BIGRAMS
+                    ):
+                        span = candidate
+                        break
+            if span is not None:
+                vault.mapping[tok] = span
+                n = int(tok.split("_")[-1].rstrip("]"))
+                if vault._counts.get("NAME", 0) < n:
+                    vault._counts["NAME"] = n
+                used_spans.add(span)
 
     return model_text
+
+
+def sanitize_model_summary(summary: str, vault: TokenVault) -> str:
+    """Return summary if it passes PII checks; return '' if it contains raw PII.
+
+    Checks: Luhn-valid card numbers, SSN patterns, raw vault values (len >= 6,
+    excluding CARD_LAST4 masks which are already redacted).
+    """
+    if not summary:
+        return summary
+
+    for candidate in _LUHN_CANDIDATE_RE.findall(summary):
+        digits = re.sub(r"\D", "", candidate)
+        if 13 <= len(digits) <= 19 and _luhn_ok(digits):
+            logger.warning("Summary contains Luhn-valid PAN — clearing summary")
+            return ""
+
+    if _SSN_RE.search(summary):
+        logger.warning("Summary contains SSN pattern — clearing summary")
+        return ""
+
+    for token, raw_value in vault.mapping.items():
+        if token.startswith("[CARD_LAST4_"):
+            continue
+        if len(raw_value) >= 6 and raw_value in summary:
+            logger.warning(
+                "Summary contains raw vault value for %s — clearing summary",
+                token,
+            )
+            return ""
+
+    return summary
 
 
 CATEGORIES = ("Billing", "Tech Support", "Account Access", "General")

@@ -11,6 +11,7 @@ from .tokenizer import (
     TokenVault,
     heuristic_triage,
     merge_model_sanitization,
+    sanitize_model_summary,
     tokenize_from_header,
     tokenize_structured_pii,
 )
@@ -55,7 +56,7 @@ def process_parsed_email(
         result = inference.classify_and_sanitize(regex_sanitized)
         category = result["category"]
         urgency = result["urgency"]
-        summary = result.get("summary", "")
+        summary = sanitize_model_summary(result.get("summary", ""), vault)
         model_used = result["model"]
         # Merge: use RHAII sanitized_text (which may contain residual name tokens)
         # only if it passes all safety checks. Category and urgency always come

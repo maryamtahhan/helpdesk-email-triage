@@ -93,7 +93,7 @@ pkill -f "streamlit run"        # dashboard
 
 ## Differences from the production stack
 
-| | Mock stack | Production (RHAII) |
+| | Mock stack | RHAII stack |
 |---|---|---|
 | Inference | Deterministic mock — always returns plausible JSON | `Qwen/Qwen2.5-1.5B-Instruct` on CPU via Red Hat AI Inference 3.5 |
 | Registry login | Not required | `podman login registry.redhat.io` |

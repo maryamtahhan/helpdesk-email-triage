@@ -1,6 +1,6 @@
 version: "3.8"
 
-# Production stack: Red Hat AI Inference 3.5 CPU engine + email gateway + Streamlit UI.
+# RHAII stack: Red Hat AI Inference 3.5 CPU engine + email gateway + Streamlit UI.
 # Requires: RHEL x86_64, Podman, registry.redhat.io login, Hugging Face token.
 #
 #   export HF_TOKEN=...

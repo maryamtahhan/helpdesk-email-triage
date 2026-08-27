@@ -18,6 +18,19 @@ _SIGNOFF = re.compile(
     r"(?:^|\n)\s*(?:[Tt]hanks|[Tt]hank you|[Rr]egards|[Bb]est|[Cc]heers)"
     r"[,]?\s*\n\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*$"
 )
+_TITLE_CASE_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b")
+_ANY_TOKEN_RE = re.compile(r"\[[A-Z_]+_\d+\]")
+# Place names and category labels that should not be treated as person names
+_MOCK_COMMON_BIGRAMS: frozenset[str] = frozenset(
+    {
+        "New York",
+        "Los Angeles",
+        "San Francisco",
+        "Tech Support",
+        "Account Access",
+        "High Priority",
+    }
+)
 
 app = FastAPI(title="Helpdesk triage mock inference")
 
@@ -49,12 +62,16 @@ def _user_text(messages: list[ChatMessage]) -> str:
 
 
 def _redact_names(text: str) -> str:
-    """Apply a residual name pass so the mock exercises the same contract as RHAII."""
+    """Apply a residual name pass so the mock exercises the same contract as RHAII.
+
+    Handles intro/sign-off patterns first (mirroring the regex pipeline), then
+    replaces remaining Title-Case name spans not already inside a token.
+    """
     name_map: dict[str, str] = {}
     existing = re.findall(r"\[NAME_(\d+)\]", text)
     next_n = max((int(n) for n in existing), default=0) + 1
 
-    def _sub(match: re.Match) -> str:
+    def _sub_pattern(match: re.Match) -> str:
         nonlocal next_n
         full, name = match.group(0), match.group(1)
         if name not in name_map:
@@ -62,9 +79,30 @@ def _redact_names(text: str) -> str:
             next_n += 1
         return full.replace(name, name_map[name])
 
-    text = _NAME_INTRO.sub(_sub, text)
-    text = _SIGNOFF.sub(_sub, text)
-    return text
+    text = _NAME_INTRO.sub(_sub_pattern, text)
+    text = _SIGNOFF.sub(_sub_pattern, text)
+
+    # Replace remaining Title-Case name spans that weren't caught above.
+    # Split on any token to avoid matching inside [NAME_N] etc.
+    def _sub_span(match: re.Match) -> str:
+        nonlocal next_n
+        name = match.group(0)
+        if name in _MOCK_COMMON_BIGRAMS:
+            return name
+        if name not in name_map:
+            name_map[name] = f"[NAME_{next_n}]"
+            next_n += 1
+        return name_map[name]
+
+    parts = _ANY_TOKEN_RE.split(text)
+    tokens_in_text = _ANY_TOKEN_RE.findall(text)
+    processed = [_TITLE_CASE_RE.sub(_sub_span, p) for p in parts]
+    result = ""
+    for i, part in enumerate(processed):
+        result += part
+        if i < len(tokens_in_text):
+            result += tokens_in_text[i]
+    return result
 
 
 _SUMMARIES = {
