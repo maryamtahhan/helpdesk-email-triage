@@ -404,7 +404,7 @@ Published application images (RHAII stays on `registry.redhat.io`):
 | `quay.io/mayamtahhan/helpdesk-triage-ui` | Streamlit demo inbox |
 | `quay.io/mayamtahhan/helpdesk-inference-mock` | Laptop mock inference |
 
-GitHub Actions secrets required for publish: `QUAY_USERNAME`, `QUAY_PASSWORD` (Quay robot account with write access to all three repos).
+GitHub Actions secrets required for publish: `REDHAT_REGISTRY_USERNAME`, `REDHAT_REGISTRY_PASSWORD` (Quay robot account with write access to all three repos).
 
 Override image names when running Compose:
 
