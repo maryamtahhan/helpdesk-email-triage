@@ -113,7 +113,6 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
           load: true
-          provenance: false
 
       - name: Test container image
         run: |
@@ -130,7 +129,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}
-          provenance: false
 
       - name: Display image info
         if: github.event_name != 'pull_request'
