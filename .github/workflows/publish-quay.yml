@@ -33,7 +33,7 @@ on:
 
 env:
   IMAGE_REGISTRY: quay.io
-  IMAGE_NAMESPACE: mayamtahhan
+  IMAGE_NAMESPACE: mtahhan
   IMAGE_TAG: latest
 
 jobs:
