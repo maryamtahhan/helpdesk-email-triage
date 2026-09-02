@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: Unit and webhook tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run unit tests
+        run: make test
+
+      - name: Run webhook sink e2e
+        run: make test-webhook
+
+  compose-config:
+    name: Validate Compose files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check compose.mock.demo.yml
+        run: docker compose -f compose.mock.demo.yml config > /dev/null
+
+      - name: Check compose.gateway-only.yml
+        run: docker compose -f compose.gateway-only.yml config > /dev/null
+
+      - name: Check compose.yml
+        run: docker compose -f compose.yml config > /dev/null

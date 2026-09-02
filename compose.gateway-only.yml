@@ -14,7 +14,7 @@ services:
   rhaii-cpu-engine:
     build:
       context: ./inference-mock
-    image: localhost/helpdesk-inference-mock:dev
+    image: ${MOCK_IMAGE:-quay.io/mayamtahhan/helpdesk-inference-mock:latest}
     container_name: rhaii-cpu-engine
     restart: unless-stopped
     ports:
@@ -34,7 +34,7 @@ services:
   email-gateway:
     build:
       context: ./email-gateway
-    image: localhost/helpdesk-email-gateway:dev
+    image: ${GATEWAY_IMAGE:-quay.io/mayamtahhan/helpdesk-email-gateway:latest}
     container_name: rhaii-email-gateway
     restart: unless-stopped
     depends_on:

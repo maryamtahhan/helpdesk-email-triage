@@ -85,15 +85,22 @@ chmod +x scripts/run-demo-local.sh
 
 The script creates a `.venv`, installs dependencies, starts mock inference on port 8000 and the email gateway on port 8080, then opens the Streamlit dashboard. Stop everything with **Ctrl-C**.
 
-If you lose the terminal or processes are still running after Ctrl-C:
+If you lose the terminal or processes are still running after Ctrl-C, stop them by PID or use Compose teardown — broad `pkill` patterns can hit unrelated processes on your machine:
 
 ```bash
-pkill -f "uvicorn server:app"   # mock inference
-pkill -f "uvicorn app.main:app" # email gateway
-pkill -f "streamlit run"        # dashboard
+podman compose -f compose.mock.demo.yml down
 ```
 
-## Differences from the production stack
+If you ran the native script instead:
+
+```bash
+# Prefer finding PIDs: lsof -i :8000 -i :8080 -i :8501
+pkill -f "uvicorn server:app"   # mock inference only
+pkill -f "uvicorn app.main:app" # email gateway only
+pkill -f "streamlit run app.py" # dashboard only
+```
+
+## Differences from the RHAII stack
 
 | | Mock stack | RHAII stack |
 |---|---|---|

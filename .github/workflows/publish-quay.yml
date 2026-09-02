@@ -18,6 +18,7 @@ on:
       - "agent-dashboard/**"
       - "inference-mock/**"
       - ".github/workflows/publish-quay.yml"
+      - ".github/workflows/ci.yml"
   workflow_dispatch:
   release:
     types: [published]
@@ -27,8 +28,27 @@ env:
   QUAY_NAMESPACE: mayamtahhan
 
 jobs:
+  test:
+    name: Tests before publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run unit tests
+        run: make test
+
+      - name: Run webhook sink e2e
+        run: make test-webhook
+
   build-and-push:
     name: ${{ matrix.image }}
+    needs: test
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -77,3 +97,30 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  scan:
+    name: Trivy — ${{ matrix.image }}
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - helpdesk-email-gateway
+          - helpdesk-triage-ui
+          - helpdesk-inference-mock
+    steps:
+      - name: Log in to Quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.QUAY_REGISTRY }}
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.QUAY_REGISTRY }}/${{ env.QUAY_NAMESPACE }}/${{ matrix.image }}:latest
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: "0"

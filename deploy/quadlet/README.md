@@ -2,6 +2,8 @@
 
 Quadlet runs each container as a rootless systemd service on RHEL 9.4+. Use this path instead of `podman compose` when you want containers managed by systemd (auto-restart, journal logging, boot integration).
 
+This is an **enterprise single-host** deploy path. Change default secrets, restrict published ports, and harden vault access before any real production use. Published Quay images (`quay.io/mayamtahhan/helpdesk-*`) can replace local `podman build` tags in the `.container` files when CI images are available.
+
 ## Prerequisites
 
 ```bash

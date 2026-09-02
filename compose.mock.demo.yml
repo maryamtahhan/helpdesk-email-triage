@@ -6,12 +6,15 @@ version: "3.8"
 #
 #   podman compose -f compose.mock.demo.yml up --build
 #   # or: docker compose -f compose.mock.demo.yml up --build
+#
+# Images default to quay.io/mayamtahhan/helpdesk-*:latest (see .env.example).
+# Use --build to rebuild locally; podman compose pull to fetch from Quay.
 
 services:
   rhaii-cpu-engine:
     build:
       context: ./inference-mock
-    image: localhost/helpdesk-inference-mock:dev
+    image: ${MOCK_IMAGE:-quay.io/mayamtahhan/helpdesk-inference-mock:latest}
     container_name: rhaii-cpu-engine
     restart: unless-stopped
     ports:
@@ -31,7 +34,7 @@ services:
   email-gateway:
     build:
       context: ./email-gateway
-    image: localhost/helpdesk-email-gateway:dev
+    image: ${GATEWAY_IMAGE:-quay.io/mayamtahhan/helpdesk-email-gateway:latest}
     container_name: rhaii-email-gateway
     restart: unless-stopped
     depends_on:
@@ -57,7 +60,7 @@ services:
   agent-dashboard-ui:
     build:
       context: ./agent-dashboard
-    image: localhost/helpdesk-triage-ui:dev
+    image: ${UI_IMAGE:-quay.io/mayamtahhan/helpdesk-triage-ui:latest}
     container_name: rhaii-triage-ui
     restart: unless-stopped
     depends_on:

@@ -67,7 +67,7 @@ Category, urgency, and sanitized text are labeled **AI-generated** in the UI; ve
 |---|---|---|
 | 1 — Ingestion | SMTP listener / file watcher | Accepts RFC-822 email from a mailbox or `.eml` drop |
 | 2 — Email gateway | `email-gateway` container | Parses headers and body; **regex-tokenizes PII** (cards, phones, SSNs, emails, account IDs) into a local vault keyed by ticket ID; the original sender address and contact details are stored in that vault under the same ticket ID |
-| 3 — Local CPU AI | Red Hat AI Inference 3.5 (vLLM CPU) | Acts as a **stateless preprocessing node**: receives pre-sanitized text (tokens only, never raw PII) and returns `category`, `urgency`, and any residual name redaction. The sanitized output is safe to route to secondary tiers, cloud-based analytics, or lower-trust queues without leaking PII across compliance boundaries |
+| 3 — Local CPU AI | Red Hat AI Inference 3.5 (vLLM CPU) | Acts as a **stateless preprocessing node**: receives pre-sanitized text (tokens only, never raw PII) and returns `category`, `urgency`, and any residual name redaction. The public **`TriageResult`** JSON (after merge + summary gates) is intended for downstream queues — **AI-generated; verify before production routing** |
 | 4 — Agent inbox | Streamlit dashboard | Displays tokenized queues. The **ticket ID** is the secure link back to all original contact details in the vault (and, in enterprise deployments, to the CRM record in Salesforce, ServiceNow, etc.). Authorized agents rehydrate the original body and sender details through the vault — downstream systems never see raw PII |
 
 **How an agent knows who to respond to:** The sanitized body is intentionally stripped of identifying details so it can flow through untrusted channels. The agent does not read the sender from the sanitized text — they read it from the ticket envelope (the `From:` header stored in the vault under the ticket ID). In an enterprise pipeline, the ticket ID maps directly to a CRM record that already holds the customer's contact details. Tokenization (`[NAME_1]`, `[PHONE_1]`) rather than total deletion means authorized agents can re-attach the original values from the vault without the raw data ever appearing in downstream logs.
@@ -148,6 +148,8 @@ Use this to walk the UI and tokenization flow on a laptop:
 ```bash
 podman compose -f compose.mock.demo.yml up --build
 ```
+
+Images default to `quay.io/mayamtahhan/helpdesk-*:latest`. Use `--build` to rebuild locally, or `podman compose pull` first if you have Quay access.
 
 Without Podman, from the repository root:
 
@@ -387,6 +389,32 @@ make test-webhook
 | Vault rehydration | **🔓 View original PII vault** |
 | Agent reply | After vault open → **Open in Gmail** / **Open mail app** / **Copy address** |
 
+### CI/CD and published images
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Every PR and push to `main` | `make test`, `make test-webhook`, Compose config validation |
+| [`.github/workflows/publish-quay.yml`](.github/workflows/publish-quay.yml) | Push to `main` (image paths), manual, GitHub Release | Build + push to Quay, then Trivy scan (CRITICAL/HIGH, warn-only) |
+
+Published application images (RHAII stays on `registry.redhat.io`):
+
+| Image | Purpose |
+|---|---|
+| `quay.io/mayamtahhan/helpdesk-email-gateway` | SMTP/HTTP gateway |
+| `quay.io/mayamtahhan/helpdesk-triage-ui` | Streamlit demo inbox |
+| `quay.io/mayamtahhan/helpdesk-inference-mock` | Laptop mock inference |
+
+GitHub Actions secrets required for publish: `QUAY_USERNAME`, `QUAY_PASSWORD` (Quay robot account with write access to all three repos).
+
+Override image names when running Compose:
+
+```bash
+export GATEWAY_IMAGE=quay.io/mayamtahhan/helpdesk-email-gateway:latest
+export UI_IMAGE=quay.io/mayamtahhan/helpdesk-triage-ui:latest
+export MOCK_IMAGE=quay.io/mayamtahhan/helpdesk-inference-mock:latest
+podman compose -f compose.mock.demo.yml up
+```
+
 ## Repository structure
 
 ```
@@ -409,6 +437,9 @@ make test-webhook
 │   ├── webhook-receiver.py     # Local TICKET_SINK receiver for testing
 │   ├── test-webhook-sink.sh    # Self-contained webhook e2e test
 │   └── demo-webhook-with-compose.sh  # Receiver + gateway-only compose
+├── .github/workflows/
+│   ├── ci.yml                  # Tests + compose validation on PR/main
+│   └── publish-quay.yml        # Build/push images to quay.io/mayamtahhan
 ├── docs/
 │   ├── integration.md          # SMTP / HTTP / library adoption guide
 │   ├── testing-locally.md      # Laptop demo without RHEL subscription
@@ -452,7 +483,7 @@ Full names cannot be caught reliably by regex across arbitrary prose ("please ca
 
 - `category` and `urgency` — the primary AI output.
 - `sanitized_text` — the regex-tokenized body with any remaining person names replaced by `[NAME_N]` tokens, continuing the numbering that regex already started.
-- `summary` — a one-line summary of the ticket using tokens only, safe for downstream queues.
+- `summary` — a one-line summary of the ticket using tokens only. Cleared if raw PII is detected before it appears on `GET /tickets`.
 
 RHAII receives text where structured tokens (`[PHONE_1]`, `[CARD_LAST4_1]`, etc.) are already in place, so it treats them as opaque literals. A merge step verifies the model output before it is stored: if RHAII drops a structured token or reintroduces raw PII, the regex-sanitized text is kept as a floor. Category and urgency are always taken from RHAII regardless.
 
