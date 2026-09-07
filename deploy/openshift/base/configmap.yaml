@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: helpdesk-config
+  labels:
+    app.kubernetes.io/part-of: helpdesk-email-triage
+data:
+  MODEL_NAME: mock-triage
+  GATEWAY_MODE: FILE_WATCHER
+  EMAIL_INPUT_DIR: /app/input_emails
+  TICKET_DATA_DIR: /app/data
+  SMTP_BIND: "0.0.0.0"
+  SMTP_PORT: "3025"
+  VLLM_BASE_URL: http://inference-mock:8000/v1
+  VLLM_ENDPOINT: http://inference-mock:8000/v1/chat/completions
+  GATEWAY_URL: http://email-gateway:8080
+  SMTP_HOST: email-gateway

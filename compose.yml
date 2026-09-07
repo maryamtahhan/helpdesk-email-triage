@@ -48,7 +48,7 @@ services:
   email-gateway:
     build:
       context: ./email-gateway
-    image: ${GATEWAY_IMAGE:-quay.io/mayamtahhan/helpdesk-email-gateway:latest}
+    image: ${GATEWAY_IMAGE:-quay.io/mtahhan/helpdesk-email-gateway:latest}
     container_name: rhaii-email-gateway
     restart: unless-stopped
     depends_on:
@@ -74,7 +74,7 @@ services:
   agent-dashboard-ui:
     build:
       context: ./agent-dashboard
-    image: ${UI_IMAGE:-quay.io/mayamtahhan/helpdesk-triage-ui:latest}
+    image: ${UI_IMAGE:-quay.io/mtahhan/helpdesk-triage-ui:latest}
     container_name: rhaii-triage-ui
     restart: unless-stopped
     depends_on:

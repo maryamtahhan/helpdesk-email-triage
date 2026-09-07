@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - ../../components/routes
+
+patches:
+  - path: patch-remove-mock.yaml
+  - path: patch-external-inference.yaml
+  - path: patch-remove-dashboard.yaml
+  - path: patch-remove-dashboard-route.yaml
+
+# Point at your existing OpenAI-compatible inference Service (RHAII, vLLM, etc.).
+# Example:
+#   oc patch configmap helpdesk-config -n helpdesk-email-triage \
+#     --type merge -p '{"data":{"VLLM_BASE_URL":"http://rhaii.inference.svc:8000/v1"}}'

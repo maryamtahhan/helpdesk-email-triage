@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - ../../components/routes
+
+configMapGenerator:
+  - name: sample-emails
+    files:
+      - ../../../../sample_emails/01-billing-double-charge.eml
+      - ../../../../sample_emails/02-tech-support-vpn.eml
+      - ../../../../sample_emails/03-account-access-lockout.eml
+      - ../../../../sample_emails/04-general-feedback.eml
+      - ../../../../sample_emails/05-healthcare-billing.eml
+      - ../../../../sample_emails/06-hr-payroll.eml
+      - ../../../../sample_emails/07-gdpr-deletion.eml
+
+# Override image tags for your registry fork:
+# images:
+#   - name: quay.io/mayamtahhan/helpdesk-email-gateway
+#     newName: registry.example.com/acme/helpdesk-email-gateway
+#     newTag: v1.0.0

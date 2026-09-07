@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-dashboard
+  labels:
+    app.kubernetes.io/name: agent-dashboard
+    app.kubernetes.io/component: ui
+    app.kubernetes.io/part-of: helpdesk-email-triage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-dashboard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-dashboard
+        app.kubernetes.io/component: ui
+        app.kubernetes.io/part-of: helpdesk-email-triage
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent-dashboard
+          image: quay.io/mtahhan/helpdesk-triage-ui:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8501
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: helpdesk-config
+            - secretRef:
+                name: helpdesk-secrets
+          env:
+            - name: STREAMLIT_SERVER_ENABLE_CORS
+              value: "false"
+            - name: STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION
+              value: "false"
+            - name: STREAMLIT_BROWSER_SERVER_PORT
+              value: "443"
+            - name: STREAMLIT_BROWSER_SERVER_ADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: helpdesk-routes
+                  key: DASHBOARD_PUBLIC_HOST
+                  optional: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi

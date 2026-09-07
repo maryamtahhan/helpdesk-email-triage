@@ -1,0 +1,19 @@
+$patch: delete
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-dashboard
+
+---
+$patch: delete
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-dashboard
+
+---
+$patch: delete
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: agent-dashboard

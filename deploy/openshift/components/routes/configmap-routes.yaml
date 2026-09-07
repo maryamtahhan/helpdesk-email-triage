@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: helpdesk-routes
+  labels:
+    app.kubernetes.io/part-of: helpdesk-email-triage
+data:
+  # Public browser URL for CORS (gateway) and Streamlit websocket host (dashboard).
+  # Patch both after deploy with your Route hostnames:
+  #   oc patch configmap helpdesk-routes -n <ns> --type merge -p \
+  #     '{"data":{"DASHBOARD_ORIGIN":"https://agent-dashboard-<ns>.apps.example.com","DASHBOARD_PUBLIC_HOST":"agent-dashboard-<ns>.apps.example.com"}}'
+  DASHBOARD_ORIGIN: http://localhost:8501
+  DASHBOARD_PUBLIC_HOST: ""

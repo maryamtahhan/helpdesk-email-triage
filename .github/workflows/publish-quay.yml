@@ -162,3 +162,12 @@ jobs:
           username: ${{ secrets.REDHAT_REGISTRY_USERNAME }}
           password: ${{ secrets.REDHAT_REGISTRY_PASSWORD }}
 
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ env.IMAGE_TAG }}
+          format: table
+          exit-code: "0"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH

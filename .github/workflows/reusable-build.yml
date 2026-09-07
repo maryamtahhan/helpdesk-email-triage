@@ -1,0 +1,74 @@
+name: Reusable container build
+
+on:
+  workflow_call:
+    inputs:
+      image_registry:
+        description: Container registry hostname
+        required: false
+        type: string
+        default: quay.io
+      image_namespace:
+        description: Registry namespace / organization
+        required: true
+        type: string
+      image_tag:
+        description: Tag applied to all images
+        required: false
+        type: string
+        default: latest
+      push:
+        description: Push images after build
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      REGISTRY_USERNAME:
+        required: true
+      REGISTRY_PASSWORD:
+        required: true
+
+jobs:
+  build:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: helpdesk-email-gateway
+            context: email-gateway
+            smoke_test: python -c "import app.main"
+          - image: helpdesk-triage-ui
+            context: agent-dashboard
+            smoke_test: python -c "import streamlit"
+          - image: helpdesk-inference-mock
+            context: inference-mock
+            smoke_test: python -c "import server"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to registry
+        if: inputs.push
+        uses: redhat-actions/podman-login@v2
+        with:
+          registry: ${{ inputs.image_registry }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/Containerfile
+          push: ${{ inputs.push }}
+          tags: ${{ inputs.image_registry }}/${{ inputs.image_namespace }}/${{ matrix.image }}:${{ inputs.image_tag }}
+          load: ${{ ! inputs.push }}
+
+      - name: Smoke test
+        if: ${{ ! inputs.push }}
+        run: |
+          IMAGE="${{ inputs.image_registry }}/${{ inputs.image_namespace }}/${{ matrix.image }}:${{ inputs.image_tag }}"
+          docker run --rm "$IMAGE" ${{ matrix.smoke_test }}

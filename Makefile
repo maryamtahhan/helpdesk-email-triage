@@ -1,4 +1,5 @@
-.PHONY: demo up down logs ingest test demo-local gateway-only test-webhook webhook-receiver
+.PHONY: demo up down logs ingest test demo-local gateway-only test-webhook webhook-receiver \
+        validate-manifests compose-e2e build-images
 
 # demo          — mock inference + gateway + Streamlit UI
 # gateway-only  — mock inference + gateway (integrator path, no UI)
@@ -42,3 +43,16 @@ test-webhook:
 webhook-receiver:
 	chmod +x scripts/webhook-receiver.py
 	./scripts/webhook-receiver.py --secret $${TICKET_SINK_SECRET:-demo-secret}
+
+validate-manifests:
+	chmod +x scripts/validate-openshift-manifests.sh
+	./scripts/validate-openshift-manifests.sh
+
+compose-e2e:
+	chmod +x scripts/compose-e2e.sh scripts/ingest-sample.sh
+	./scripts/compose-e2e.sh
+
+build-images:
+	podman build -t localhost/helpdesk-email-gateway:local ./email-gateway
+	podman build -t localhost/helpdesk-triage-ui:local ./agent-dashboard
+	podman build -t localhost/helpdesk-inference-mock:local ./inference-mock

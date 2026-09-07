@@ -40,3 +40,51 @@ jobs:
 
       - name: Check compose.yml
         run: docker compose -f compose.yml config > /dev/null
+
+  validate-manifests:
+    name: Validate OpenShift manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kustomize
+        run: |
+          curl -sSL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Validate Kustomize overlays
+        run: make validate-manifests
+
+  build-containers:
+    name: Build container smoke test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - context: email-gateway
+            smoke_test: python -c "import app.main"
+          - context: agent-dashboard
+            smoke_test: python -c "import streamlit"
+          - context: inference-mock
+            smoke_test: python -c "import server"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -f "${{ matrix.context }}/Containerfile" -t "local/${{ matrix.context }}:ci" "${{ matrix.context }}"
+
+      - name: Smoke test
+        run: docker run --rm "local/${{ matrix.context }}:ci" ${{ matrix.smoke_test }}
+
+  compose-e2e:
+    name: Compose end-to-end smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run compose e2e
+        run: make compose-e2e

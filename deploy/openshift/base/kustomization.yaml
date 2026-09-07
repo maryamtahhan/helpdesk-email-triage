@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: helpdesk-email-triage
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - pvc.yaml
+  - inference-mock/deployment.yaml
+  - inference-mock/service.yaml
+  - email-gateway/deployment.yaml
+  - email-gateway/service.yaml
+  - agent-dashboard/deployment.yaml
+  - agent-dashboard/service.yaml
+
+images:
+  - name: quay.io/mtahhan/helpdesk-email-gateway
+    newTag: latest
+  - name: quay.io/mtahhan/helpdesk-triage-ui
+    newTag: latest
+  - name: quay.io/mtahhan/helpdesk-inference-mock
+    newTag: latest
+
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize
+    includeSelectors: false

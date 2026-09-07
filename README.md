@@ -1,463 +1,387 @@
 # Triage support email with tokenized PII on RHEL
 
-Ingest customer support emails on RHEL, classify topic and urgency, and replace PII with reversible tokens using Red Hat AI Inference on CPU.
+Ingest customer support email, classify topic and urgency, and replace PII with reversible tokens — on a laptop, a single RHEL host, or OpenShift — using Red Hat AI Inference on CPU (or a built-in mock).
 
-**Authors:**
-- Michael Dawson ([midawson@redhat.com](mailto:midawson@redhat.com))
-- Maryam Tahhan ([mtahhan@redhat.com](mailto:mtahhan@redhat.com))
-- Anton Ivanov ([anivanov@redhat.com](mailto:anivanov@redhat.com))
+**Authors:** Michael Dawson ([midawson@redhat.com](mailto:midawson@redhat.com)) · Maryam Tahhan ([mtahhan@redhat.com](mailto:mtahhan@redhat.com)) · Anton Ivanov ([anivanov@redhat.com](mailto:anivanov@redhat.com))
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Detailed description](#detailed-description)
-  - [See it in action](#see-it-in-action)
-  - [Architecture diagrams](#architecture-diagrams)
+- [At a glance](#at-a-glance)
+- [What you'll see](#what-youll-see)
+- [Architecture](#architecture)
 - [Requirements](#requirements)
-  - [Minimum hardware requirements](#minimum-hardware-requirements)
-  - [Minimum software requirements](#minimum-software-requirements)
-  - [Required user permissions](#required-user-permissions)
-- [Deploy](#deploy)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Validating the deployment](#validating-the-deployment)
-  - [Submit support tickets](#submit-support-tickets)
-  - [Review classified and redacted emails](#review-classified-and-redacted-emails)
-  - [Review classification speed](#review-classification-speed)
-  - [Testing classification and redaction quality](#testing-classification-and-redaction-quality)
-  - [Load testing](#load-testing)
-  - [What you've accomplished](#what-youve-accomplished)
-  - [Delete](#delete)
-- [Integrator building blocks](#integrator-building-blocks)
+- [Deploy — pick a path](#deploy--pick-a-path)
+- [Configure](#configure)
+- [Use the gateway](#use-the-gateway)
+- [Agent inbox (demo UI)](#agent-inbox-demo-ui)
+- [Integrate with your systems](#integrate-with-your-systems)
+- [Commands and scripts](#commands-and-scripts)
+- [CI/CD and customer pipelines](#cicd-and-customer-pipelines)
 - [Repository structure](#repository-structure)
-- [References](#references)
 - [Technical details](#technical-details)
-- [Authors](#authors)
-- [Tags](#tags)
+- [References](#references)
 
-## Overview
+---
 
-Helpdesk and customer-support teams receive unstructured email that mixes billing disputes, access lockouts, and technical failures with credit-card numbers, phone numbers, and names. This quickstart shows how to triage that mail on existing CPU infrastructure: ingest a message, classify topic and urgency, replace personally identifiable information with reversible tokens, and present a sanitized inbox to an agent.
+## At a glance
 
-After you deploy it, you can drop a `.eml` file (or send SMTP to port 3025), watch a ticket appear in a Streamlit inbox under Billing, Tech Support, Account Access, or General, and rehydrate the original PII only for an authorized view tied to the ticket ID.
+| | |
+|---|---|
+| **Problem** | Support mail mixes billing, access, and tech issues with card numbers, phones, and names. Downstream tools and logs should not see raw PII. |
+| **Solution** | An **email gateway** regex-tokenizes structured PII into a local vault, sends **tokenized text only** to inference for category/urgency/summary, and exposes a safe **`TriageResult` JSON** API. Agents rehydrate PII from the vault by ticket ID. |
+| **Reusable core** | `email-gateway/` — deploy without Streamlit; wire your own queue, CRM, or webhook consumer. |
+| **Demo UI** | `agent-dashboard/` — Streamlit inbox (optional; not required for production). |
+| **Inference** | Red Hat AI Inference 3.5 on CPU (production) or `inference-mock/` (laptop / CI). |
 
-## Detailed description
+### Deployment paths
 
-Enterprises must route support mail quickly without sending raw card numbers, phone numbers, or names into downstream logs, cloud queues, or lower-tier tools. Regulations such as GDPR, HIPAA, and GLBA make that split explicit: automation can see a token; only the agent of record should see the customer.
+Pick **one** path — they share the same containers, env vars, and API contract.
 
-This AI quickstart deploys a three-service Podman Compose stack on Red Hat Enterprise Linux. An email gateway holds the original RFC-822 payload in memory, writes structured tokens such as `[NAME_1]`, `[PHONE_1]`, and `[CARD_LAST4_1]` into a local vault, and asks Red Hat AI Inference 3.5 (vLLM on CPU) for category, urgency, and remaining name redaction. A Streamlit dashboard then shows tokenized queues with `X-Classification-Time` SLA tags. No GPU is required.
+| Path | Best for | What runs | Entry point |
+|---|---|---|---|
+| **Demo stack** | Laptop walkthrough, UI + tokenization | Mock inference + gateway + Streamlit | `make demo` or `compose.mock.demo.yml` |
+| **Production RHEL** | On-prem CPU inference with RHAII | RHAII + gateway + Streamlit | `compose.yml` |
+| **Gateway only** | ServiceNow, Salesforce, custom queue | Inference + gateway (no UI) | `make gateway-only` or `compose.gateway-only.yml` |
+| **OpenShift** | Cluster deploy, customer GitOps | Kustomize overlays (mock, gateway-only, external RHAII) | `deploy/openshift/overlays/*` |
+| **Quadlet** | Single RHEL host, systemd | Podman user units | `deploy/quadlet/` |
+| **No containers** | Quick local hack | Native Python | `scripts/run-demo-local.sh` |
+| **Your CI pipeline** | Fork + your registry | Same Containerfiles, your namespace | [docs/customer-ci.md](docs/customer-ci.md) |
 
-Use it as a pattern for on-premise helpdesk automation: keep inference on the same host as the mailbox, give downstream systems only sanitized text, and let an authorized representative recover the original metadata from the ticket vault.
+### Ports and endpoints (defaults)
 
-### See it in action
+| Service | Port | Purpose |
+|---|---|---|
+| Email gateway (HTTP) | **8080** | `GET /health`, `GET /tickets`, `POST /ingest`, `POST /ingest/raw` |
+| Email gateway (SMTP) | **3025** | Accept RFC-822 mail (returns `250`, classifies in background) |
+| Inference (mock or RHAII) | **8000** | OpenAI-compatible `/v1` API |
+| Agent dashboard | **8501** | Streamlit demo inbox |
 
-After the stack is up, the dashboard opens automatically (local script) or navigate to [http://127.0.0.1:8501](http://127.0.0.1:8501).
+Vault rehydration (authorized agents only): `GET /tickets/{id}/vault` with header `X-Vault-Secret: <VAULT_SECRET>`.
 
-Seven **quick demo scenario** buttons in the sidebar let you triage a pre-built email instantly — a billing double-charge, an MFA lockout, a VPN failure, a healthcare ER bill, an HR payroll dispute, a GDPR erasure request, and a low-urgency thank-you note — without touching the command line. Each submission classifies the email, replaces PII with structured tokens (`[NAME_1]`, `[CARD_LAST4_1]`, `[PHONE_1]`), and adds a ticket to the queue within a couple of seconds.
+### Published container images
 
-The sample `.eml` files in `sample_emails/` are also ingested automatically by the file watcher when the stack starts. The queue refreshes every 10 seconds without a browser reload.
+Built by GitHub Actions and pushed to Quay (RHAII stays on `registry.redhat.io`):
 
-Category, urgency, and sanitized text are labeled **AI-generated** in the UI; verify them before you route a real ticket.
+| Image | Purpose |
+|---|---|
+| `quay.io/mtahhan/helpdesk-email-gateway` | SMTP/HTTP gateway, tokenization, ticket API |
+| `quay.io/mtahhan/helpdesk-triage-ui` | Streamlit demo inbox |
+| `quay.io/mtahhan/helpdesk-inference-mock` | OpenAI-compatible mock for laptops and CI |
 
-### Architecture diagrams
+Override in Compose with `GATEWAY_IMAGE`, `UI_IMAGE`, `MOCK_IMAGE`, or in OpenShift overlays via Kustomize `images:`.
+
+---
+
+## What you'll see
+
+The demo is designed to be self-explanatory once the stack is running — no command-line steps required for the main walkthrough.
+
+**Agent inbox** ([http://127.0.0.1:8501](http://127.0.0.1:8501) when using Compose):
+
+- **Seven quick demo scenarios** in the sidebar (billing double-charge, MFA lockout, VPN failure, healthcare bill, HR payroll, GDPR erasure, thank-you note) — each triages instantly and adds a ticket to the queue.
+- **Category filter** — `Billing`, `Tech Support`, `Account Access`, `General`.
+- **Ticket detail** — AI-generated **category**, **urgency**, **X-Classification-Time** SLA tag, and **sanitized body** with tokens (`[NAME_1]`, `[CARD_LAST4_1]`, `[PHONE_1]`) instead of raw values.
+- **📤 What downstream systems see** — live preview of the public `TriageResult` JSON (same payload a webhook would push).
+- **🔓 View original PII vault** — authorized rehydration of original body + token map (requires `VAULT_SECRET`).
+- **Reply helpers** — open mail client / copy sender after vault is open.
+
+**Automatic ingest:** Sample `.eml` files in `sample_emails/` are picked up by the file watcher on start. The queue refreshes every 10 seconds.
+
+Category, urgency, and sanitized text are **AI-generated** — verify before routing real tickets.
+
+---
+
+## Architecture
 
 ![Four-stage pipeline: email ingestion → email gateway regex-tokenizes PII into a local vault → Red Hat AI Inference 3.5 on CPU classifies category and urgency on pre-sanitized text → Streamlit agent inbox](docs/images/architecture-overview.svg)
 
 | Stage | Component | What it does |
 |---|---|---|
-| 1 — Ingestion | SMTP listener / file watcher | Accepts RFC-822 email from a mailbox or `.eml` drop |
-| 2 — Email gateway | `email-gateway` container | Parses headers and body; **regex-tokenizes PII** (cards, phones, SSNs, emails, account IDs) into a local vault keyed by ticket ID; the original sender address and contact details are stored in that vault under the same ticket ID |
-| 3 — Local CPU AI | Red Hat AI Inference 3.5 (vLLM CPU) | Acts as a **stateless preprocessing node**: receives pre-sanitized text (tokens only, never raw PII) and returns `category`, `urgency`, and any residual name redaction. The public **`TriageResult`** JSON (after merge + summary gates) is intended for downstream queues — **AI-generated; verify before production routing** |
-| 4 — Agent inbox | Streamlit dashboard | Displays tokenized queues. The **ticket ID** is the secure link back to all original contact details in the vault (and, in enterprise deployments, to the CRM record in Salesforce, ServiceNow, etc.). Authorized agents rehydrate the original body and sender details through the vault — downstream systems never see raw PII |
+| 1 — Ingestion | SMTP listener / file watcher / HTTP | Accepts RFC-822 email from a mailbox, `.eml` drop, or REST |
+| 2 — Email gateway | `email-gateway` | Regex-tokenizes PII (cards, phones, SSNs, emails, account IDs) into a vault keyed by ticket ID |
+| 3 — Inference | RHAII or mock | Receives **tokenized text only**; returns category, urgency, residual name redaction, summary |
+| 4 — Agent inbox | Streamlit (optional) | Tokenized queues; ticket ID links back to vault / CRM record |
 
-**How an agent knows who to respond to:** The sanitized body is intentionally stripped of identifying details so it can flow through untrusted channels. The agent does not read the sender from the sanitized text — they read it from the ticket envelope (the `From:` header stored in the vault under the ticket ID). In an enterprise pipeline, the ticket ID maps directly to a CRM record that already holds the customer's contact details. Tokenization (`[NAME_1]`, `[PHONE_1]`) rather than total deletion means authorized agents can re-attach the original values from the vault without the raw data ever appearing in downstream logs.
+**Agent workflow:** The sanitized body intentionally omits identifying details for untrusted channels. The agent reads the sender from the ticket envelope (stored in the vault), not from sanitized text. In enterprise deployments, the ticket ID maps to a CRM record (Salesforce, ServiceNow, etc.).
 
-Support mail never has to leave the host. The email gateway holds all raw PII in a vault keyed by ticket ID. Downstream systems — including RHAII — receive only tokenized text. Authorized agents can open the original body and contact details from that vault.
+**Security split:** Regex handles structured PII (deterministic, auditable); inference handles category, urgency, summary, and residual names. Raw card numbers and SSNs never reach the model. See [Technical details](#technical-details).
+
+---
 
 ## Requirements
 
-### Minimum hardware requirements
+### Hardware
 
-**Demo path (mock inference, laptop or RHEL):**
-- CPU: 2 vCPU
-- Memory: 4 GiB
-- Storage: 2 GiB
-- Architecture: x86_64 or aarch64
+| Profile | CPU | Memory | Storage | Notes |
+|---|---|---|---|---|
+| Demo (mock) | 2 vCPU | 4 GiB | 2 GiB | Laptop or RHEL; x86_64 or aarch64 |
+| Gateway + UI | 1 vCPU | 1 GiB | — | Application only |
+| RHAII + `Qwen2.5-1.5B` | 8 vCPU | 16 GiB (32 GiB rec.) | 20 GiB cache | x86_64 only |
+| RHAII + `Qwen2.5-7B` | 16+ vCPU | 32+ GiB | — | Set `VLLM_CPU_KVCACHE_SPACE=10` |
 
-**Application (email gateway + Streamlit UI):**
-- CPU: 1 vCPU
-- Memory: 1 GiB
+For high throughput or large models, use GPU-backed Red Hat AI Inference instead of CPU.
 
-**Red Hat AI Inference 3.5 CPU engine with `Qwen/Qwen2.5-1.5B-Instruct` (default):**
-- CPU: 8 vCPU (Intel Xeon or AMD EPYC with AVX2 minimum; AVX-512 or Intel AMX preferred)
-- Memory: 16 GiB (32 GiB recommended)
-- Storage: 20 GiB for the model cache
-- Architecture: x86_64 only
+### Software
 
-**Optional larger model `Qwen/Qwen2.5-7B-Instruct`:**
-- CPU: 16 vCPU or more
-- Memory: 32 GiB or more
-- `VLLM_CPU_KVCACHE_SPACE=10` or higher
+- **RHEL path:** RHEL 9.4+, Podman 4.9+ with Compose, `registry.redhat.io` login, Hugging Face token
+- **Demo path:** Podman or Docker Compose — mock replaces RHAII; no `registry.redhat.io` needed
+- **OpenShift:** 4.x + `kustomize` / `oc`; see [docs/deploy-openshift.md](docs/deploy-openshift.md)
+- **Local Python demo:** Python 3.11+ only
 
-CPU inference is intended for smaller models. For high throughput or models above a few billion parameters, use GPU-backed Red Hat AI Inference instead.
+Rootless Podman is sufficient. Bind ports 8000, 3025, 8080, 8501 (or use OpenShift Routes).
 
-### Minimum software requirements
+---
 
-- Red Hat Enterprise Linux 9.4 or later (x86_64) for the Red Hat AI Inference path
-- Podman 4.9 or later with the Compose plugin (`podman compose`)
-- Red Hat AI Inference 3.5 CPU container image (`registry.redhat.io/rhaii/vllm-cpu-rhel9:3.5.0-1786546771`)
-- A Hugging Face account and access token (to download the instruct model)
-- Python 3.11 or later (only for the local no-container demo)
+## Deploy — pick a path
 
-The demo compose file (`compose.mock.demo.yml`) runs a mock OpenAI-compatible endpoint instead of the Red Hat AI Inference image, so you can exercise the gateway and UI without `registry.redhat.io`.
+All paths use the same gateway API. Copy env defaults once: `cp .env.example .env`.
 
-### Required user permissions
+### Demo stack (mock inference + gateway + UI)
 
-A regular local user can deploy this quickstart with rootless Podman. You need:
+```bash
+make demo
+# equivalent: podman compose -f compose.mock.demo.yml up --build
+```
 
-- Permission to run Podman and bind to ports 8000, 3025, 8080, and 8501
-- Permission to log in to `registry.redhat.io` (Red Hat AI Inference path only)
-- No cluster-admin or root access beyond what your site already uses for Podman
+Open [http://127.0.0.1:8501](http://127.0.0.1:8501). No Hugging Face token or Red Hat registry required.
 
-## Deploy
+**Without Podman:** `./scripts/run-demo-local.sh`
 
-### Prerequisites
-
-1. Clone this repository.
-2. For the Red Hat AI Inference path, log in to the registry and export a Hugging Face token:
+### Production RHEL (Red Hat AI Inference 3.5 + gateway + UI)
 
 ```bash
 podman login registry.redhat.io
 export HF_TOKEN="your_huggingface_token"
 export RHEL_CACHE_DIR="$HOME/rhaii-cache"
 mkdir -p "$RHEL_CACHE_DIR"
-```
-
-3. Copy the example environment file:
-
-```bash
-cp .env.example .env
-```
-
-### Installation
-
-**Option A — Demo stack (mock inference)**
-
-Use this to walk the UI and tokenization flow on a laptop:
-
-```bash
-podman compose -f compose.mock.demo.yml up --build
-```
-
-Images default to `quay.io/mayamtahhan/helpdesk-*:latest`. Use `--build` to rebuild locally, or `podman compose pull` first if you have Quay access.
-
-Without Podman, from the repository root:
-
-```bash
-chmod +x scripts/run-demo-local.sh
-./scripts/run-demo-local.sh
-```
-
-**Option B — Red Hat AI Inference 3.5 on RHEL CPUs**
-
-```bash
 podman compose -f compose.yml up --build -d
 ```
 
-To serve the larger 7B instruct model on a well-provisioned host:
+First start downloads model weights (several minutes). Larger model:
 
 ```bash
 MODEL_NAME=Qwen/Qwen2.5-7B-Instruct VLLM_CPU_KVCACHE_SPACE=10 \
   podman compose -f compose.yml up --build -d
 ```
 
-The first start downloads model weights into `RHEL_CACHE_DIR` and can take several minutes.
-
-### Validating the deployment
-
-1. Confirm the three containers are running:
+### Gateway only (integrator — no Streamlit)
 
 ```bash
-podman compose -f compose.mock.demo.yml ps
+make gateway-only
+# equivalent: podman compose -f compose.gateway-only.yml up --build
 ```
 
-2. Check gateway health:
+Wire your consumer to `:8080` (HTTP) and `:3025` (SMTP). Same stack used by `make compose-e2e` in CI.
+
+### OpenShift / Kubernetes
+
+| Overlay | Use when |
+|---|---|
+| `deploy/openshift/overlays/mock-demo` | Full demo stack in a cluster |
+| `deploy/openshift/overlays/gateway-only` | API/SMTP only; no UI |
+| `deploy/openshift/overlays/external-inference` | Gateway pointed at existing RHAII / vLLM Service |
 
 ```bash
-curl -sS http://127.0.0.1:8080/health
+kustomize build --load-restrictor LoadRestrictionsNone \
+  deploy/openshift/overlays/mock-demo | oc apply -f -
 ```
 
-3. Open the agent inbox at [http://127.0.0.1:8501](http://127.0.0.1:8501). You should see tickets from `sample_emails/` with AI-generated category and urgency labels and a sanitized body that uses tokens instead of raw card and phone values.
+Details: [deploy/openshift/README.md](deploy/openshift/README.md) · [docs/deploy-openshift.md](docs/deploy-openshift.md)
 
-4. Optional: ingest another sample over HTTP:
+### RHEL systemd (Quadlet)
 
-```bash
-./scripts/ingest-sample.sh
-```
+Single-host enterprise deploy without Compose: copy units from `deploy/quadlet/` to `~/.config/containers/systemd/`. See [deploy/quadlet/README.md](deploy/quadlet/README.md).
 
-5. Optional: send a message to the mock SMTP listener on port 3025.
-
-### Submit support tickets
-
-You can feed the gateway in three ways. See [docs/integration.md](docs/integration.md) for full API details and a gateway-only compose file.
-
-**Sidebar (demo UI)** — use the seven quick demo scenario buttons or type a custom sender, subject, and body under **Custom message**, then click **Triage →**.
-
-**HTTP** — post a sample `.eml` or JSON body:
+### Tear down
 
 ```bash
-./scripts/ingest-sample.sh
-curl -sS -X POST http://127.0.0.1:8080/ingest/raw \
-  -H "Content-Type: application/json" \
-  -d '{"sender":"demo@example.com","subject":"VPN down","body":"Cannot connect from home."}'
-```
-
-**SMTP** — deliver mail to port 3025 (the gateway returns `250` immediately and classifies in the background).
-
-New tickets appear in `GET /tickets` within a few seconds. The Streamlit queue auto-refreshes every 10 seconds.
-
-### Review classified and redacted emails
-
-Open the agent inbox at [http://127.0.0.1:8501](http://127.0.0.1:8501).
-
-#### Step 1: Review inboxes by classification
-
-1. Use the **Category** filter in the sidebar (`Billing`, `Tech Support`, `Account Access`, `General`, or `All`).
-2. Click a ticket in the left queue. The detail pane shows **category**, **urgency**, and an **X-Classification-Time** SLA tag.
-3. Compare several sample tickets — for example `01-billing-double-charge.eml` should land under **Billing** with **High** urgency, while a thank-you note should be **General** / **Low**.
-
-Category and urgency are **AI-generated**. Treat them as suggestions until you validate quality on your own mail.
-
-#### Step 2: Check redaction
-
-1. Read the **sanitized body** — structured PII should appear as tokens (`[CARD_LAST4_1]`, `[PHONE_1]`, `[EMAIL_1]`, `[NAME_1]`), not raw values.
-2. Expand **📤 What downstream systems see** to inspect the exact public JSON (`GET /tickets/{id}`). This is what queues, analytics, and lower-trust tiers should receive.
-3. Click **🔓 View original PII vault** to compare the original body (PII highlighted) with the tokenized version and the token map.
-4. After the vault is open, click **✉️ Reply via email** to open a `mailto:` draft to the original sender (demo convenience only).
-
-Redaction is best-effort. Always verify before routing a real ticket to a downstream system.
-
-### Review classification speed
-
-Each ticket shows **classification_ms** — wall-clock time from ingest through regex tokenization and inference.
-
-On the mock stack, expect sub-second responses. On Red Hat AI Inference 3.5 with `Qwen/Qwen2.5-1.5B-Instruct` on CPU, typical values are a few hundred milliseconds to a couple of seconds depending on host size and cold start.
-
-If the inference endpoint is unavailable, the gateway still ingests mail using **heuristic-fallback** (keyword triage on already-tokenized text). The `model` field in the ticket JSON reflects which path ran.
-
-### Testing classification and redaction quality
-
-**Structured PII (regex)** — deterministic. Send card numbers that pass Luhn (`4111-1111-1111-1111`), NANP phones (`+1-212-555-0199`), and SSN patterns; confirm they never appear raw in `sanitized_text` or the downstream JSON panel.
-
-**Residual names (RHAII)** — non-deterministic. Try messages with informal names ("please call John") and verify `[NAME_N]` tokens appear without leaking the raw name in the public payload.
-
-**Summary field** — should use tokens only. If the model echoes raw vault values, the gateway clears the summary.
-
-**Merge safety** — if RHAII drops a structured token or reintroduces raw PII, the stored body falls back to the regex-sanitized text while category and urgency are still taken from the model.
-
-Run the unit suite from the repository root:
-
-```bash
-make test
-```
-
-Add your own `.eml` files under `sample_emails/` (with fictional PII only) and restart the stack to exercise the file watcher.
-
-### Load testing
-
-For throughput experiments against the OpenAI-compatible inference endpoint, use [GuideLLM](https://github.com/vllm-project/guidellm):
-
-```bash
-pip install guidellm
-guidellm benchmark \
-  --target http://127.0.0.1:8000/v1 \
-  --model mock-triage \
-  --rate-type concurrent \
-  --rate 4 \
-  --max-seconds 60
-```
-
-On the RHAII path, substitute `--model Qwen/Qwen2.5-1.5B-Instruct` and tune `--rate` to your CPU capacity. Review latency percentiles and error rate before sizing production hosts.
-
-For end-to-end gateway load, drive `POST /ingest/raw` or SMTP concurrently and watch `classification_ms` on `GET /tickets`. Start with `compose.gateway-only.yml` if you do not need the Streamlit UI.
-
-### What you've accomplished
-
-You deployed a helpdesk triage pipeline on RHEL (or a laptop mock) that:
-
-- Ingests support email over SMTP, HTTP, or `.eml` drop
-- Replaces structured PII with reversible tokens before inference
-- Classifies topic and urgency with Red Hat AI Inference on CPU (or a mock)
-- Exposes a **public ticket API** safe for downstream queues
-- Gates original PII behind an authorized vault for agent reply
-
-The classify-and-redact logic lives in `email-gateway/` and is reusable without Streamlit. Wire your own consumer against [docs/integration.md](docs/integration.md), or run `podman compose -f compose.gateway-only.yml up --build` for gateway + inference only.
-
-### Delete
-
-```bash
+make down
+# or individually:
 podman compose -f compose.yml down -v
 podman compose -f compose.mock.demo.yml down -v
 podman compose -f compose.gateway-only.yml down -v
 ```
 
-Local demo processes started by `scripts/run-demo-local.sh` stop when you interrupt that script (Ctrl+C). You can also remove `./data` and `./.venv`.
+OpenShift: `oc delete namespace helpdesk-email-triage`
 
-## Integrator building blocks
+---
 
-The classify-and-redact pipeline in `email-gateway/` is reusable without Streamlit. These additions support downstream adopters (case-management systems, queue workers, CRM adapters).
+## Configure
 
-### `TriageResult` — public output contract
+Key environment variables (full list in `.env.example`):
 
-Every ingest path (`SMTP`, `POST /ingest`, `POST /ingest/raw`, `process_parsed_email()`) returns the same **public** JSON shape:
+| Variable | Default | Purpose |
+|---|---|---|
+| `VLLM_BASE_URL` | `http://rhaii-cpu-engine:8000/v1` | OpenAI-compatible inference base URL |
+| `MODEL_NAME` | `Qwen/Qwen2.5-1.5B-Instruct` (prod) / `mock-triage` (demo) | Model ID sent to inference |
+| `GATEWAY_MODE` | `FILE_WATCHER` | `FILE_WATCHER` watches `EMAIL_INPUT_DIR`; use `SMTP_ONLY` on OpenShift gateway-only |
+| `VAULT_SECRET` | `helpdesk-demo-secret` | **Change before production** — gates `/vault` and dashboard |
+| `DASHBOARD_ORIGIN` | `http://localhost:8501` | CORS origin for browser UI |
+| `TICKET_SINK` | (empty) | Push delivery: `webhook:https://…` or `log` |
+| `TICKET_SINK_SECRET` | (empty) | HMAC signing for webhook payloads |
+| `GATEWAY_IMAGE` / `UI_IMAGE` / `MOCK_IMAGE` | `quay.io/mtahhan/helpdesk-*` | Override published images |
 
-| Module | Role |
+---
+
+## Use the gateway
+
+Three ingest paths — all produce the same `TriageResult`. Full API: [docs/integration.md](docs/integration.md).
+
+| Method | How |
 |---|---|
-| `email-gateway/app/triage_result.py` | Typed `TriageResult` model (Pydantic) — no vault, no `original_text` |
-| `email-gateway/app/store.py` | `GET /tickets` and `GET /tickets/{id}` expose `TriageResult` |
-| Dashboard **📤 What downstream systems see** | Live preview of the same JSON in the demo UI |
+| **HTTP (.eml)** | `POST /ingest` with multipart file — `./scripts/ingest-sample.sh` |
+| **HTTP (JSON)** | `POST /ingest/raw` with `sender`, `subject`, `body` |
+| **SMTP** | Deliver mail to port **3025** — gateway returns `250` immediately |
+| **File drop** | Place `.eml` in `sample_emails/` when `GATEWAY_MODE=FILE_WATCHER` |
 
-Fields: `id`, `sender`, `subject`, `category`, `urgency`, `summary`, `sanitized_text`, `token_count`, `classification_ms`, `model`, `source`, `created_at`.
+**Health check:** `GET http://127.0.0.1:8080/health` → `{"status":"ok"}`
 
-### Pull vs push — what the sink actually does
+**List tickets:** `GET http://127.0.0.1:8080/tickets`
 
-Downstream systems can get a `TriageResult` in two ways. **The JSON is identical**; only the delivery mechanism differs.
+**Example JSON ingest:**
+
+```bash
+curl -sS -X POST http://127.0.0.1:8080/ingest/raw \
+  -H "Content-Type: application/json" \
+  -d '{"sender":"demo@example.com","subject":"VPN down","body":"Cannot connect from home."}'
+```
+
+**Pull vs push:** Poll `GET /tickets` (default), or set `TICKET_SINK=webhook:https://…` for push delivery after each triage. Same JSON either way.
+
+**Tests (no running stack required for unit tests):**
+
+```bash
+make test          # unit tests
+make test-webhook  # webhook sink e2e
+make compose-e2e   # full stack smoke test (gateway-only compose)
+```
+
+---
+
+## Agent inbox (demo UI)
+
+| Feature | What it shows |
+|---|---|
+| Category sidebar | Filter by Billing, Tech Support, Account Access, General |
+| Ticket queue | Click a ticket for category, urgency, SLA tag, sanitized body |
+| 📤 Downstream JSON | Exact public API payload (`TriageResult`) |
+| 🔓 Vault | Original body + token map (requires correct `VAULT_SECRET`) |
+| ✉️ Reply | Mail client shortcuts after vault is open |
+
+**Sample expectations** (fictional PII in `sample_emails/`):
+
+- `01-billing-double-charge.eml` → **Billing** / **High**
+- Thank-you / feedback → **General** / **Low**
+- Structured PII appears as tokens in sanitized text, never raw card or phone values
+
+**Classification speed:** Each ticket includes `classification_ms`. Mock stack: sub-second. RHAII on CPU: typically hundreds of ms to a few seconds. If inference is down, keyword fallback still ingests mail on already-tokenized text.
+
+---
+
+## Integrate with your systems
+
+The gateway in `email-gateway/` is the reusable product. Streamlit is optional.
+
+### `TriageResult` — public JSON contract
+
+Returned by every ingest path; exposed at `GET /tickets` and `GET /tickets/{id}`:
+
+`id`, `sender`, `subject`, `category`, `urgency`, `summary`, `sanitized_text`, `token_count`, `classification_ms`, `model`, `source`, `created_at`
+
+Defined in `email-gateway/app/triage_result.py`. **No vault fields** in the public API.
+
+### Pull vs push
 
 | | **Pull** (default) | **Push** (`TICKET_SINK`) |
 |---|---|---|
-| How it works | Your system calls `GET /tickets` or `GET /tickets/{id}` | Gateway `POST`s JSON to your URL after each triage |
-| When data arrives | When you poll | Immediately after ingest (background thread) |
-| Where you see it | Your API client, or the dashboard **📤 What downstream systems see** panel | Your webhook endpoint, or gateway logs (`log` sink) |
-| Config needed | None | `TICKET_SINK=webhook:https://…` |
-| Shows in Streamlit UI? | Yes — the JSON panel previews this contract | **No** — sink is backend-only |
-
-The dashboard panel is a **demo preview** of the pull contract (“this is what a queue adapter would receive”). The sink is the **production delivery** of that same payload to your system — so you do not have to poll.
-
-`make test-webhook` simulates a real integrator: it starts a fake receiver, triages one message, and prints the `POST` body your case-management endpoint would get.
-
-### `TICKET_SINK` — push delivery (webhook)
-
-After each ticket is stored, the gateway can **push** a `TriageResult` to external systems (no polling required).
-
-| Module | Role |
-|---|---|
-| `email-gateway/app/sink.py` | Parses `TICKET_SINK`, dispatches async, retries, HMAC signing |
+| Delivery | Your system calls `GET /tickets` | Gateway `POST`s to your URL |
+| Config | None | `TICKET_SINK=webhook:https://…` |
+| UI preview | Dashboard **📤** panel shows pull contract | Sink is backend-only |
 
 ```bash
 export TICKET_SINK=webhook:https://case-mgmt.example.com/api/triage
-export TICKET_SINK_SECRET=your-hmac-secret   # optional; sets X-Ticket-Signature header
+export TICKET_SINK_SECRET=your-hmac-secret   # optional; X-Ticket-Signature header
 ```
 
-Sinks are comma-separated (`log`, `webhook:https://…`). Tickets are always persisted locally; webhooks run in a background thread so ingest is not blocked. The sink never displays anything in the Streamlit UI — see [docs/integration.md — Pull vs push](docs/integration.md#pull-vs-push-what-the-sink-actually-does).
+`make test-webhook` runs a self-contained push simulation (no Compose needed).
 
-### Gateway-only compose (no Streamlit)
+### Python library
 
-```bash
-make gateway-only
-# or: podman compose -f compose.gateway-only.yml up --build
+```python
+from app.pipeline import process_parsed_email  # PYTHONPATH=email-gateway
 ```
 
-Runs mock inference + `email-gateway` only — for integrators wiring their own consumer against `:8080` (HTTP) and `:3025` (SMTP).
+See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShift notes, and schema details.
 
-### Scripts and Make targets
+---
+
+## Commands and scripts
 
 | Command / script | Purpose |
 |---|---|
-| `make demo` | Full mock stack (inference + gateway + Streamlit UI) |
+| `make demo` | Full mock stack (inference + gateway + UI) |
 | `make gateway-only` | Inference + gateway only |
-| `make ingest` | Post a sample `.eml` to the running gateway |
-| `make test` | Unit tests (`email-gateway/tests/`, includes webhook sink tests) |
-| `make test-webhook` | Self-contained webhook e2e (receiver + one triaged ticket, no compose) |
-| `make webhook-receiver` | Start local webhook receiver until Ctrl-C |
-| `scripts/ingest-sample.sh` | `curl` a sample `.eml` to `POST /ingest` |
-| `scripts/run-demo-local.sh` | Native Python demo (no Podman) |
-| `scripts/webhook-receiver.py` | Local receiver — verifies HMAC, pretty-prints `TriageResult` |
-| `scripts/test-webhook-sink.sh` | Used by `make test-webhook` |
-| `scripts/demo-webhook-with-compose.sh` | Receiver + gateway-only compose with `TICKET_SINK` wired |
+| `make down` | Stop all compose stacks |
+| `make ingest` | POST sample `.eml` to running gateway |
+| `make test` | Unit tests |
+| `make test-webhook` | Webhook sink e2e (no compose) |
+| `make validate-manifests` | Validate OpenShift Kustomize overlays |
+| `make compose-e2e` | Stack smoke test: health → ingest → ticket |
+| `make build-images` | Build all three Containerfiles with Podman |
+| `scripts/ingest-sample.sh` | Curl sample `.eml` to `POST /ingest` |
+| `scripts/run-demo-local.sh` | Native Python demo |
+| `scripts/webhook-receiver.py` | Local webhook listener for manual testing |
 
-**Try the webhook path:**
+---
 
-```bash
-make test-webhook
-```
-
-### Demo UI additions (agent workflow)
-
-| Feature | Location |
-|---|---|
-| Downstream JSON panel | Ticket detail → **📤 What downstream systems see** — previews the **pull** API contract (same JSON the sink would push) |
-| Vault rehydration | **🔓 View original PII vault** |
-| Agent reply | After vault open → **Open in Gmail** / **Open mail app** / **Copy address** |
-
-### CI/CD and published images
+## CI/CD and customer pipelines
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Every PR and push to `main` | `make test`, `make test-webhook`, Compose config validation |
-| [`.github/workflows/publish-quay.yml`](.github/workflows/publish-quay.yml) | Push to `main` (image paths), manual, GitHub Release | Build + push to Quay, then Trivy scan (CRITICAL/HIGH, warn-only) |
+| [ci.yml](.github/workflows/ci.yml) | PR + push to `main` | Tests, Compose validation, Kustomize validation, container builds, compose e2e |
+| [publish-quay.yml](.github/workflows/publish-quay.yml) | Push to `main` (image paths), release, manual | Build + push to Quay, Trivy scan (CRITICAL/HIGH, warn-only) |
+| [reusable-build.yml](.github/workflows/reusable-build.yml) | `workflow_call` from customer repos | Reusable build/push for all three images |
 
-Published application images (RHAII stays on `registry.redhat.io`):
+**Publish secrets:** `REDHAT_REGISTRY_USERNAME`, `REDHAT_REGISTRY_PASSWORD` (Quay robot with write access to all three repos).
 
-| Image | Purpose |
-|---|---|
-| `quay.io/mayamtahhan/helpdesk-email-gateway` | SMTP/HTTP gateway |
-| `quay.io/mayamtahhan/helpdesk-triage-ui` | Streamlit demo inbox |
-| `quay.io/mayamtahhan/helpdesk-inference-mock` | Laptop mock inference |
+**Fork and adopt:** Point `IMAGE_NAMESPACE` and Kustomize `images:` at your registry, enable the included workflows or call `reusable-build.yml`. Full guide: [docs/customer-ci.md](docs/customer-ci.md).
 
-GitHub Actions secrets required for publish: `REDHAT_REGISTRY_USERNAME`, `REDHAT_REGISTRY_PASSWORD` (Quay robot account with write access to all three repos).
-
-Override image names when running Compose:
+**Local CI parity:**
 
 ```bash
-export GATEWAY_IMAGE=quay.io/mayamtahhan/helpdesk-email-gateway:latest
-export UI_IMAGE=quay.io/mayamtahhan/helpdesk-triage-ui:latest
-export MOCK_IMAGE=quay.io/mayamtahhan/helpdesk-inference-mock:latest
-podman compose -f compose.mock.demo.yml up
+make test && make validate-manifests && make compose-e2e
 ```
+
+---
 
 ## Repository structure
 
 ```
 .
-├── compose.yml                 # Red Hat AI Inference 3.5 + gateway + UI
-├── compose.mock.demo.yml       # Mock inference + gateway + UI
-├── compose.gateway-only.yml    # Mock inference + gateway (no UI)
-├── email-gateway/              # SMTP/file ingest, tokenization, ticket API
-│   ├── app/
-│   │   ├── pipeline.py         # End-to-end triage (parse → tokenize → infer → store)
-│   │   ├── triage_result.py    # TriageResult public contract
-│   │   └── sink.py             # TICKET_SINK webhook / log dispatch
-│   └── gateways/               # Reused vLLM MIME filter (stdin/stdout)
-├── agent-dashboard/            # Streamlit helpdesk inbox (demo UI)
-├── inference-mock/             # OpenAI-compatible mock for laptops
-├── sample_emails/              # RFC-822 examples with fictional PII
-├── scripts/
-│   ├── ingest-sample.sh        # POST a sample .eml to the gateway
-│   ├── run-demo-local.sh       # Native Python demo (no containers)
-│   ├── webhook-receiver.py     # Local TICKET_SINK receiver for testing
-│   ├── test-webhook-sink.sh    # Self-contained webhook e2e test
-│   └── demo-webhook-with-compose.sh  # Receiver + gateway-only compose
-├── .github/workflows/
-│   ├── ci.yml                  # Tests + compose validation on PR/main
-│   └── publish-quay.yml        # Build/push images to quay.io/mayamtahhan
-├── docs/
-│   ├── integration.md          # SMTP / HTTP / library adoption guide
-│   ├── testing-locally.md      # Laptop demo without RHEL subscription
-│   └── images/                 # Architecture diagram
-└── README.md
+├── compose.yml                 # RHAII + gateway + UI
+├── compose.mock.demo.yml       # Mock + gateway + UI
+├── compose.gateway-only.yml    # Mock + gateway (integrator)
+├── deploy/
+│   ├── openshift/              # Kustomize base + overlays
+│   └── quadlet/                # Podman systemd units
+├── email-gateway/              # Reusable gateway (API, SMTP, tokenization)
+├── agent-dashboard/            # Streamlit demo UI
+├── inference-mock/             # OpenAI-compatible mock
+├── sample_emails/              # Demo .eml files (fictional PII)
+├── scripts/                    # Ingest, e2e, webhook testing
+├── .github/workflows/          # CI, publish, reusable build
+└── docs/
+    ├── integration.md          # API and adoption guide
+    ├── deploy-openshift.md     # Cluster runbook
+    ├── customer-ci.md          # Pipeline adoption
+    └── testing-locally.md      # Laptop demo without RHEL
 ```
 
-## References
-
-- [Integrating the email gateway](docs/integration.md) — SMTP, HTTP, Python library, and public API schema
-- [Inference language models on x86_64 CPUs — Red Hat AI Inference 3.5](https://docs.redhat.com/en/documentation/red_hat_ai_inference/3.5/html/getting_started/about-cpu-inference_getting-started)
-- [AI quickstart catalog](https://docs.redhat.com/en/learn/ai-quickstarts)
-- [Contributor guide for AI quickstarts](https://github.com/rh-ai-quickstart/ai-quickstart-contrib/blob/main/CONTRIBUTING.md)
-- [Qwen2.5 on Hugging Face](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct)
+---
 
 ## Technical details
 
-Classification uses the vLLM email gateway from `email-gateway/gateways/email_classification_gateway.py`. That filter is adapted from Anton Ivanov's email classification gateway in `redhat-et/vllm-audio-demo`: it parses RFC-822, sends the `text/plain` body to an OpenAI-compatible endpoint (`responses.create`, with a `chat.completions` fallback), and expects JSON with `category`, `urgency`, and `sanitized_text`. You can still run it as a drop-in mail filter:
+Classification uses the vLLM email gateway in `email-gateway/gateways/email_classification_gateway.py` (adapted from [redhat-et/vllm-audio-demo](https://github.com/redhat-et/vllm-audio-demo)). It can also run standalone:
 
 ```bash
 python email-gateway/gateways/email_classification_gateway.py \
@@ -465,46 +389,35 @@ python email-gateway/gateways/email_classification_gateway.py \
   --file sample_emails/01-billing-double-charge.eml
 ```
 
-The HTTP gateway regex-tokenizes high-confidence structured PII (cards that pass a Luhn check, NANP phone numbers, emails, SSNs, RFC-822 display names, and `ACC-*` account IDs) into a local vault so authorized agents can rehydrate a ticket. RHAII then classifies the pre-sanitized text, redacts any residual person names (`[NAME_N]`), and returns a one-line summary. A safety merge verifies that RHAII's output preserves all structured tokens and introduces no raw PII before it is stored; if the check fails, the regex-sanitized text is kept and the RHAII category and urgency are still used. If the inference endpoint is down or returns invalid JSON, ingest falls back to keyword triage so mail is not dropped.
+**Regex (structured PII):** Cards (Luhn-validated), NANP phones, emails, SSNs, display names, `ACC-*` IDs → vault tokens. Deterministic and auditable; raw values never sent to inference.
 
-### Why regex handles structured PII and RHAII handles category, urgency, summary, and residual names
+**RHAII (classification + residual names):** Category, urgency, `[NAME_N]` redaction, one-line summary using tokens only. Merge step verifies model output; falls back to regex-sanitized text if tokens are dropped or raw PII reappears.
 
-This split is a deliberate security and compliance decision, not a convenience shortcut.
+**Fallback:** If inference is unavailable, keyword triage on tokenized text still stores a ticket.
 
-**Regex for structured PII (card numbers, phone numbers, SSNs, email addresses, account IDs):**
+Ticket IDs start at `TICKET-8921`. Sample mail uses fictional test values (Visa `4111-1111-1111-1111`, `+1-212-555-01xx`, `000-00-0000`). Do not treat model output as a complete redaction guarantee.
 
-- *Deterministic and auditable.* A Luhn-validated card-number regex either matches or it does not. Regulations such as GDPR, HIPAA, and GLBA require controls that a compliance auditor can verify. An LLM cannot provide that guarantee — non-determinism is a fundamental property of the model, not a fixable bug.
-- *Raw high-risk PII never reaches the inference engine.* vLLM logs request payloads by default. Sending raw card numbers or SSNs to the model creates a log-exposure surface even on a fully local CPU deployment.
-- *Resilient fallback.* If the model returns malformed JSON or the inference endpoint is down, the pipeline falls back to keyword triage operating on already regex-sanitized text. Structured PII stays redacted regardless of inference health.
+**Load testing:** [GuideLLM](https://github.com/vllm-project/guidellm) against `:8000/v1`; drive `POST /ingest/raw` or SMTP for end-to-end gateway throughput.
 
-**RHAII for classification, summary, and residual names:**
+---
 
-Full names cannot be caught reliably by regex across arbitrary prose ("please call John", "regards, Sarah Chen"). RHAII handles this residual category and also produces:
+## References
 
-- `category` and `urgency` — the primary AI output.
-- `sanitized_text` — the regex-tokenized body with any remaining person names replaced by `[NAME_N]` tokens, continuing the numbering that regex already started.
-- `summary` — a one-line summary of the ticket using tokens only. Cleared if raw PII is detected before it appears on `GET /tickets`.
+- [Integrating the email gateway](docs/integration.md)
+- [Deploy on OpenShift](docs/deploy-openshift.md)
+- [Customer CI pipelines](docs/customer-ci.md)
+- [Testing locally without RHEL](docs/testing-locally.md)
+- [Red Hat AI Inference 3.5 — CPU inference](https://docs.redhat.com/en/documentation/red_hat_ai_inference/3.5/html/getting_started/about-cpu-inference_getting-started)
+- [AI quickstart catalog](https://docs.redhat.com/en/learn/ai-quickstarts)
+- [Qwen2.5-1.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct)
 
-RHAII receives text where structured tokens (`[PHONE_1]`, `[CARD_LAST4_1]`, etc.) are already in place, so it treats them as opaque literals. A merge step verifies the model output before it is stored: if RHAII drops a structured token or reintroduces raw PII, the regex-sanitized text is kept as a floor. Category and urgency are always taken from RHAII regardless.
-
-The prompt (`INSTR` in `email-gateway/gateways/email_classification_gateway.py`) reflects this boundary explicitly.
-
-Ticket IDs start at `TICKET-8921`. Public ticket APIs omit the original body and expose a typed **`TriageResult`** JSON contract (see [docs/integration.md](docs/integration.md)). Set `TICKET_SINK=webhook:https://…` to push each result to a downstream queue adapter; optional `TICKET_SINK_SECRET` signs payloads with `X-Ticket-Signature`. `GET /tickets/{id}/vault` returns the original text and token map for the authorized-agent view in the dashboard. Classification latency is stored as `classification_ms` and shown as an `X-Classification-Time` SLA tag.
-
-Sample messages use fictional reserved values (Visa test PAN `4111-1111-1111-1111`, `+1-212-555-01xx` numbers, and `000-00-0000`). Do not treat model output as a complete redaction guarantee.
-
-## Authors
-
-- Maryam Tahhan, [mtahhan@redhat.com](mailto:mtahhan@redhat.com)
-- Anton Ivanov, [anivanov@redhat.com](mailto:anivanov@redhat.com)
+---
 
 ## Tags
 
-- **Title:** Triage support email with tokenized PII on RHEL
-- **Description:** Ingest customer support emails on RHEL, classify topic and urgency, and replace PII with reversible tokens using Red Hat AI Inference on CPU.
-- **Industry:** Banking and securities
-- **Product:** Red Hat AI Inference
-- **Use case:** Helpdesk triage, data sanitization
-- **Author:** Michael Dawson (midawson@redhat.com)
-- **Partner:** N/A
-- **Contributor org:** Community
+| Field | Value |
+|---|---|
+| **Title** | Triage support email with tokenized PII on RHEL |
+| **Product** | Red Hat AI Inference |
+| **Use case** | Helpdesk triage, data sanitization |
+| **Industry** | Banking and securities |
