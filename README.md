@@ -2,7 +2,10 @@
 
 Ingest customer support email, classify topic and urgency, and replace PII with reversible tokens — on a laptop, a single RHEL host, or OpenShift — using Red Hat AI Inference on CPU (or a built-in mock).
 
-**Authors:** Michael Dawson ([midawson@redhat.com](mailto:midawson@redhat.com)) · Maryam Tahhan ([mtahhan@redhat.com](mailto:mtahhan@redhat.com)) · Anton Ivanov ([anivanov@redhat.com](mailto:anivanov@redhat.com))
+**Authors:**
+- Maryam Tahhan ([mtahhan@redhat.com](mailto:mtahhan@redhat.com))
+- Anton Ivanov ([anivanov@redhat.com](mailto:anivanov@redhat.com))
+- Michael Dawson ([midawson@redhat.com](mailto:midawson@redhat.com))
 
 ## Table of Contents
 
