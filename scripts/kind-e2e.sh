@@ -33,11 +33,20 @@ trap cleanup_e2e EXIT
 echo "==> Checking gateway health"
 curl -sf "${GATEWAY_URL}/health" >/dev/null
 
-echo "==> Ingesting sample email"
-"${ROOT}/scripts/ingest-sample.sh" "${ROOT}/sample_emails/01-billing-double-charge.eml" >/dev/null
+echo "==> Waiting for ticket (file watcher on sample_emails/)"
+if count="$("${ROOT}/scripts/wait-for-tickets.sh" 30 2)"; then
+  echo "==> Found ${count} ticket(s)"
+  kubectl get pods -n "$NAMESPACE"
+  exit 0
+fi
+
+echo "==> No file-watcher tickets yet; ingesting via /ingest/raw"
+curl -sf -X POST "${GATEWAY_URL}/ingest/raw" \
+  -H "Content-Type: application/json" \
+  -d '{"sender":"ci@example.com","subject":"CI smoke","body":"Charged twice on card ACC-998877."}' >/dev/null
 
 echo "==> Waiting for ticket"
-for _ in $(seq 1 30); do
+for _ in $(seq 1 15); do
   count="$(curl -sf "${GATEWAY_URL}/tickets" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
   if [[ "${count}" -ge 1 ]]; then
     echo "==> Found ${count} ticket(s)"

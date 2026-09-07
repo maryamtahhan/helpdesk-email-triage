@@ -158,10 +158,18 @@ _MAX_UPLOAD_BYTES = 1024 * 1024  # 1 MiB
 
 @app.post("/ingest")
 async def ingest_upload(file: UploadFile = File(...)) -> dict:
+    import asyncio
+
     raw = await file.read(_MAX_UPLOAD_BYTES + 1)
     if len(raw) > _MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Email too large (max 1 MiB)")
-    return process_raw_email(raw, source=f"upload:{file.filename or 'message.eml'}")
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None,
+        process_raw_email,
+        raw,
+        f"upload:{file.filename or 'message.eml'}",
+    )
 
 
 @app.post("/ingest/raw")

@@ -50,7 +50,7 @@ validate-manifests:
 	./scripts/validate-openshift-manifests.sh
 
 compose-e2e:
-	chmod +x scripts/compose-e2e.sh scripts/ingest-sample.sh
+	chmod +x scripts/compose-e2e.sh scripts/wait-for-tickets.sh
 	./scripts/compose-e2e.sh
 
 build-images:
@@ -75,5 +75,5 @@ destroy-kind:
 	./scripts/destroy-kind.sh
 
 kind-e2e:
-	chmod +x scripts/kind-e2e.sh scripts/kind-lib.sh scripts/destroy-kind.sh scripts/ingest-sample.sh
+	chmod +x scripts/kind-e2e.sh scripts/kind-lib.sh scripts/destroy-kind.sh scripts/wait-for-tickets.sh
 	./scripts/kind-e2e.sh

@@ -182,7 +182,7 @@ make gateway-only
 # equivalent: podman compose -f compose.gateway-only.yml up --build
 ```
 
-Wire your consumer to `:8080` (HTTP) and `:3025` (SMTP). Same stack used by `make compose-e2e` in CI.
+Wire your consumer to `:8080` (HTTP) and `:3025` (SMTP). CI runs `make compose-e2e` against **`compose.gateway-only.yml`** (mock inference), not `compose.yml` (real RHAII).
 
 #### Verify (gateway only)
 
@@ -430,7 +430,7 @@ See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShif
 | `make destroy-kind` | Delete the local kind cluster (`helpdesk-ci`) |
 | `make kind-e2e` | Deploy on kind, smoke test, then destroy cluster |
 | `make validate-manifests` | Validate OpenShift and Kind Kustomize overlays |
-| `make compose-e2e` | Stack smoke test: health → ingest → ticket |
+| `make compose-e2e` | Mock-stack smoke test: health → ticket (via file watcher or API) |
 | `make build-images` | Build all three Containerfiles with Podman |
 | `scripts/ingest-sample.sh` | Curl sample `.eml` to `POST /ingest` |
 | `scripts/run-demo-local.sh` | Native Python demo |
@@ -445,6 +445,8 @@ See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShif
 | [ci.yml](.github/workflows/ci.yml) | PR + push to `main` | Tests, Compose validation, Kustomize validation, container builds, compose e2e, **kind e2e** |
 | [publish-quay.yml](.github/workflows/publish-quay.yml) | Push to `main` (image paths), release, manual | Build, smoke-test, and push to Quay |
 | [reusable-build.yml](.github/workflows/reusable-build.yml) | `workflow_call` from customer repos | Reusable build/push for all three images |
+
+**CI uses the mock inference stack only.** `compose-e2e` and `kind-e2e` exercise `inference-mock`, not `registry.redhat.io/rhaii/...`. Real RHAII needs a subscribed RHEL host, `registry.redhat.io` login, an HF token, and minutes of model load time — run that path manually with `compose.yml` on your own hardware, not in GitHub Actions.
 
 **Publish secrets:** `REDHAT_REGISTRY_USERNAME`, `REDHAT_REGISTRY_PASSWORD` (Quay robot with write access to all three repos).
 

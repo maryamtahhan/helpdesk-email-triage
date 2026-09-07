@@ -95,6 +95,7 @@ jobs:
       - name: Run compose e2e
         env:
           COMPOSE_ENGINE: docker
+          COMPOSE_FILE: compose.gateway-only.yml
         run: make compose-e2e
 
   kind-e2e:

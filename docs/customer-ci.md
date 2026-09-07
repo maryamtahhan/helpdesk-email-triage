@@ -89,7 +89,7 @@ make test
 make validate-manifests
 # build & push images (podman or buildah)
 make kind-e2e      # Kubernetes mock stack (runs in GitHub Actions)
-make compose-e2e   # optional Podman/Docker compose gate
+make compose-e2e   # mock compose gate (not real RHAII / compose.yml)
 ```
 
 ### Verify after OpenShift deploy

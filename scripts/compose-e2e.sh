@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# End-to-end smoke test: compose stack up → health → ingest → ticket list → down.
+# End-to-end smoke test: compose stack up → health → ticket list → down.
+# Uses compose.gateway-only.yml (inference-mock), not compose.yml (real RHAII).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -46,18 +47,21 @@ for _ in $(seq 1 60); do
 done
 curl -sf "${GATEWAY_URL}/health" >/dev/null
 
-echo "==> Ingesting sample email"
-"${ROOT}/scripts/ingest-sample.sh" "${ROOT}/sample_emails/01-billing-double-charge.eml" >/dev/null
+echo "==> Waiting for ticket (file watcher on sample_emails/)"
+if count="$("${ROOT}/scripts/wait-for-tickets.sh" 30 2)"; then
+  echo "==> Found ${count} ticket(s)"
+  exit 0
+fi
 
-echo "==> Waiting for ticket"
-for _ in $(seq 1 30); do
-  count="$(curl -sf "${GATEWAY_URL}/tickets" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
-  if [[ "${count}" -ge 1 ]]; then
-    echo "==> Found ${count} ticket(s)"
-    exit 0
-  fi
-  sleep 2
-done
+echo "==> No file-watcher tickets yet; ingesting via /ingest/raw"
+curl -sf -X POST "${GATEWAY_URL}/ingest/raw" \
+  -H "Content-Type: application/json" \
+  -d '{"sender":"ci@example.com","subject":"CI smoke","body":"Charged twice on card ACC-998877."}' >/dev/null
+
+if count="$("${ROOT}/scripts/wait-for-tickets.sh" 15 2)"; then
+  echo "==> Found ${count} ticket(s)"
+  exit 0
+fi
 
 echo "No tickets appeared after ingest" >&2
 exit 1
