@@ -11,6 +11,7 @@ Ingest customer support email, classify topic and urgency, and replace PII with 
 - [Architecture](#architecture)
 - [Requirements](#requirements)
 - [Deploy — pick a path](#deploy--pick-a-path)
+- [Verify](#verify)
 - [Configure](#configure)
 - [Use the gateway](#use-the-gateway)
 - [Agent inbox (demo UI)](#agent-inbox-demo-ui)
@@ -45,6 +46,7 @@ Pick **one** path — they share the same containers, env vars, and API contract
 | **OpenShift** | Cluster deploy, customer GitOps | Kustomize overlays (mock, gateway-only, external RHAII) | `deploy/openshift/overlays/*` |
 | **Quadlet** | Single RHEL host, systemd | Podman user units | `deploy/quadlet/` |
 | **No containers** | Quick local hack | Native Python | `scripts/run-demo-local.sh` |
+| **Kind / CI** | GitHub Actions Kubernetes test | Mock stack on kind | `make kind-e2e` |
 | **Your CI pipeline** | Fork + your registry | Same Containerfiles, your namespace | [docs/customer-ci.md](docs/customer-ci.md) |
 
 ### Ports and endpoints (defaults)
@@ -147,6 +149,15 @@ Open [http://127.0.0.1:8501](http://127.0.0.1:8501). No Hugging Face token or Re
 
 **Without Podman:** `./scripts/run-demo-local.sh`
 
+#### Verify (Compose demo)
+
+```bash
+curl -sS http://127.0.0.1:8080/health
+curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
+```
+
+Open: [http://127.0.0.1:8501](http://127.0.0.1:8501)
+
 ### Production RHEL (Red Hat AI Inference 3.5 + gateway + UI)
 
 ```bash
@@ -173,18 +184,30 @@ make gateway-only
 
 Wire your consumer to `:8080` (HTTP) and `:3025` (SMTP). Same stack used by `make compose-e2e` in CI.
 
+#### Verify (gateway only)
+
+```bash
+curl -sS http://127.0.0.1:8080/health
+./scripts/ingest-sample.sh
+curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
+```
+
 ### OpenShift / Kubernetes
 
 | Overlay | Use when |
 |---|---|
-| `deploy/openshift/overlays/mock-demo` | Full demo stack in a cluster |
+| `deploy/openshift/overlays/helpdesk-email-triage` | **Recommended** — deploy into an existing project (`oc new-project`) |
+| `deploy/openshift/overlays/mock-demo` | Greenfield — Kustomize creates the Namespace resource |
 | `deploy/openshift/overlays/gateway-only` | API/SMTP only; no UI |
 | `deploy/openshift/overlays/external-inference` | Gateway pointed at existing RHAII / vLLM Service |
 
 ```bash
-kustomize build --load-restrictor LoadRestrictionsNone \
-  deploy/openshift/overlays/mock-demo | oc apply -f -
+oc new-project helpdesk-email-triage   # once
+oc label namespace helpdesk-email-triage opendatahub.io/dashboard=true   # optional
+make deploy-openshift
 ```
+
+Route hostnames, gateway CORS, and Streamlit WebSocket settings are discovered automatically at pod startup — no manual patching.
 
 Details: [deploy/openshift/README.md](deploy/openshift/README.md) · [docs/deploy-openshift.md](docs/deploy-openshift.md)
 
@@ -202,7 +225,68 @@ podman compose -f compose.mock.demo.yml down -v
 podman compose -f compose.gateway-only.yml down -v
 ```
 
-OpenShift: `oc delete namespace helpdesk-email-triage`
+OpenShift: `DELETE_NAMESPACE=1 make undeploy-openshift` or `oc delete project helpdesk-email-triage`
+
+---
+
+## Verify
+
+### OpenShift (`helpdesk-email-triage`)
+
+After `make deploy-openshift`, confirm pods and routes are up:
+
+```bash
+oc get pods,route -n helpdesk-email-triage
+```
+
+Check the gateway API and dashboard Route (example hostnames on `apps.alpha.modelarch.org`):
+
+```bash
+curl -sk https://email-gateway-helpdesk-email-triage.apps.alpha.modelarch.org/health
+curl -skI https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org | head -5
+```
+
+Open: [https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org](https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org)
+
+For another namespace or cluster, resolve hosts dynamically:
+
+```bash
+NS=helpdesk-email-triage
+GW=$(oc get route email-gateway -n "$NS" -o jsonpath='{.spec.host}')
+UI=$(oc get route agent-dashboard -n "$NS" -o jsonpath='{.spec.host}')
+curl -sk "https://${GW}/health"
+curl -skI "https://${UI}" | head -5
+echo "Dashboard: https://${UI}"
+```
+
+Optional ingest smoke test:
+
+```bash
+curl -sk -X POST "https://${GW}/ingest/raw" \
+  -H "Content-Type: application/json" \
+  -d '{"sender":"test@example.com","subject":"Verify deploy","body":"OpenShift smoke test."}'
+curl -sk "https://${GW}/tickets" | python3 -m json.tool | head -20
+```
+
+### Compose / laptop demo
+
+```bash
+curl -sS http://127.0.0.1:8080/health
+curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
+```
+
+Open: [http://127.0.0.1:8501](http://127.0.0.1:8501)
+
+### Kind / CI (`make kind-e2e`)
+
+The script verifies gateway health and ingest automatically. To inspect manually after `KEEP_CLUSTER=1 make kind-e2e`:
+
+```bash
+kubectl get pods -n helpdesk-kind-test
+kubectl port-forward -n helpdesk-kind-test svc/email-gateway 8080:8080 &
+curl -sS http://127.0.0.1:8080/health
+./scripts/ingest-sample.sh
+```
 
 ---
 
@@ -325,7 +409,10 @@ See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShif
 | `make ingest` | POST sample `.eml` to running gateway |
 | `make test` | Unit tests |
 | `make test-webhook` | Webhook sink e2e (no compose) |
-| `make validate-manifests` | Validate OpenShift Kustomize overlays |
+| `make deploy-openshift` | Apply overlay, wait for pods, print Route URLs |
+| `make undeploy-openshift` | Remove deployed resources (`DELETE_NAMESPACE=1` deletes project) |
+| `make kind-e2e` | Build/load images, deploy mock stack on kind, run smoke test |
+| `make validate-manifests` | Validate OpenShift and Kind Kustomize overlays |
 | `make compose-e2e` | Stack smoke test: health → ingest → ticket |
 | `make build-images` | Build all three Containerfiles with Podman |
 | `scripts/ingest-sample.sh` | Curl sample `.eml` to `POST /ingest` |
@@ -338,7 +425,7 @@ See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShif
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| [ci.yml](.github/workflows/ci.yml) | PR + push to `main` | Tests, Compose validation, Kustomize validation, container builds, compose e2e |
+| [ci.yml](.github/workflows/ci.yml) | PR + push to `main` | Tests, Compose validation, Kustomize validation, container builds, compose e2e, **kind e2e** |
 | [publish-quay.yml](.github/workflows/publish-quay.yml) | Push to `main` (image paths), release, manual | Build + push to Quay, Trivy scan (CRITICAL/HIGH, warn-only) |
 | [reusable-build.yml](.github/workflows/reusable-build.yml) | `workflow_call` from customer repos | Reusable build/push for all three images |
 
@@ -362,8 +449,9 @@ make test && make validate-manifests && make compose-e2e
 ├── compose.mock.demo.yml       # Mock + gateway + UI
 ├── compose.gateway-only.yml    # Mock + gateway (integrator)
 ├── deploy/
-│   ├── openshift/              # Kustomize base + overlays
-│   └── quadlet/                # Podman systemd units
+│   ├── openshift/              # Kustomize base + overlays (OpenShift)
+│   ├── kind/                   # Kustomize overlays for kind / CI
+│   └── quadlet/                # Podman systemd units (RHEL)
 ├── email-gateway/              # Reusable gateway (API, SMTP, tokenization)
 ├── agent-dashboard/            # Streamlit demo UI
 ├── inference-mock/             # OpenAI-compatible mock

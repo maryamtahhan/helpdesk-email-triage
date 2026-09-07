@@ -2,14 +2,15 @@ FROM registry.access.redhat.com/ubi9/python-312:latest
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY agent-dashboard/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py .
-COPY .streamlit ./.streamlit
+COPY agent-dashboard/app.py .
+COPY agent-dashboard/.streamlit ./.streamlit
+COPY scripts/openshift_route_host.py ./scripts/openshift_route_host.py
+COPY agent-dashboard/entrypoint.sh ./entrypoint.sh
+RUN chmod +x entrypoint.sh
 
 EXPOSE 8501
 
-CMD ["streamlit", "run", "app.py", \
-     "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", \
-     "--server.enableCORS=false", "--server.enableXsrfProtection=false"]
+ENTRYPOINT ["./entrypoint.sh"]

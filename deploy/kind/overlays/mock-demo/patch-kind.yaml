@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-mock
+spec:
+  template:
+    spec:
+      containers:
+        - name: inference-mock
+          imagePullPolicy: Never
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: email-gateway
+spec:
+  template:
+    spec:
+      serviceAccountName: default
+      initContainers:
+        - name: wait-for-inference
+          imagePullPolicy: Never
+      containers:
+        - name: email-gateway
+          imagePullPolicy: Never
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-dashboard
+spec:
+  template:
+    spec:
+      serviceAccountName: default
+      containers:
+        - name: agent-dashboard
+          imagePullPolicy: Never

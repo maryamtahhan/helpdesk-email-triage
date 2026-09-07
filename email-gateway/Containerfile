@@ -2,13 +2,16 @@ FROM registry.access.redhat.com/ubi9/python-312:latest
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY email-gateway/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
-COPY gateways ./gateways
-COPY vllm-email-gw.json ./vllm-email-gw.json
+COPY email-gateway/app ./app
+COPY email-gateway/gateways ./gateways
+COPY email-gateway/vllm-email-gw.json ./vllm-email-gw.json
+COPY scripts/openshift_route_host.py ./scripts/openshift_route_host.py
+COPY email-gateway/entrypoint.sh ./entrypoint.sh
+RUN chmod +x entrypoint.sh
 
 EXPOSE 8080 3025
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+ENTRYPOINT ["./entrypoint.sh"]

@@ -33,7 +33,8 @@ services:
 
   email-gateway:
     build:
-      context: ./email-gateway
+      context: .
+      dockerfile: email-gateway/Containerfile
     image: ${GATEWAY_IMAGE:-quay.io/mtahhan/helpdesk-email-gateway:latest}
     container_name: rhaii-email-gateway
     restart: unless-stopped
@@ -59,7 +60,8 @@ services:
 
   agent-dashboard-ui:
     build:
-      context: ./agent-dashboard
+      context: .
+      dockerfile: agent-dashboard/Containerfile
     image: ${UI_IMAGE:-quay.io/mtahhan/helpdesk-triage-ui:latest}
     container_name: rhaii-triage-ui
     restart: unless-stopped

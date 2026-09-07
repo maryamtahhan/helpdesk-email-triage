@@ -63,21 +63,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - context: email-gateway
+          - context: .
+            dockerfile: email-gateway/Containerfile
             smoke_test: python -c "import app.main"
-          - context: agent-dashboard
+          - context: .
+            dockerfile: agent-dashboard/Containerfile
             smoke_test: python -c "import streamlit"
           - context: inference-mock
+            dockerfile: inference-mock/Containerfile
             smoke_test: python -c "import server"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Build image
-        run: docker build -f "${{ matrix.context }}/Containerfile" -t "local/${{ matrix.context }}:ci" "${{ matrix.context }}"
+        run: docker build -f "${{ matrix.dockerfile }}" -t "local/${{ matrix.dockerfile }}:ci" "${{ matrix.context }}"
 
       - name: Smoke test
-        run: docker run --rm "local/${{ matrix.context }}:ci" ${{ matrix.smoke_test }}
+        run: docker run --rm "local/${{ matrix.dockerfile }}:ci" ${{ matrix.smoke_test }}
 
   compose-e2e:
     name: Compose end-to-end smoke test
@@ -88,3 +91,23 @@ jobs:
 
       - name: Run compose e2e
         run: make compose-e2e
+
+  kind-e2e:
+    name: Kind cluster end-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kustomize
+        run: |
+          curl -sSL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Set up kind
+        uses: helm/kind-action@v1
+        with:
+          install_only: true
+
+      - name: Run kind e2e
+        run: make kind-e2e

@@ -33,7 +33,8 @@ services:
 
   email-gateway:
     build:
-      context: ./email-gateway
+      context: .
+      dockerfile: email-gateway/Containerfile
     image: ${GATEWAY_IMAGE:-quay.io/mtahhan/helpdesk-email-gateway:latest}
     container_name: rhaii-email-gateway
     restart: unless-stopped

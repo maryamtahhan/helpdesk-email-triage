@@ -1,5 +1,5 @@
 .PHONY: demo up down logs ingest test demo-local gateway-only test-webhook webhook-receiver \
-        validate-manifests compose-e2e build-images
+        validate-manifests compose-e2e build-images deploy-openshift undeploy-openshift kind-e2e
 
 # demo          — mock inference + gateway + Streamlit UI
 # gateway-only  — mock inference + gateway (integrator path, no UI)
@@ -53,6 +53,18 @@ compose-e2e:
 	./scripts/compose-e2e.sh
 
 build-images:
-	podman build -t localhost/helpdesk-email-gateway:local ./email-gateway
-	podman build -t localhost/helpdesk-triage-ui:local ./agent-dashboard
-	podman build -t localhost/helpdesk-inference-mock:local ./inference-mock
+	podman build -f email-gateway/Containerfile -t localhost/helpdesk-email-gateway:local .
+	podman build -f agent-dashboard/Containerfile -t localhost/helpdesk-triage-ui:local .
+	podman build -f inference-mock/Containerfile -t localhost/helpdesk-inference-mock:local ./inference-mock
+
+deploy-openshift:
+	chmod +x scripts/deploy-openshift.sh
+	./scripts/deploy-openshift.sh
+
+undeploy-openshift:
+	chmod +x scripts/undeploy-openshift.sh
+	./scripts/undeploy-openshift.sh
+
+kind-e2e:
+	chmod +x scripts/kind-e2e.sh scripts/ingest-sample.sh
+	./scripts/kind-e2e.sh

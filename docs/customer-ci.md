@@ -75,10 +75,12 @@ Minimal stages any pipeline should include:
 
 1. **Test** — `make test && make test-webhook`
 2. **Validate manifests** — `make validate-manifests`
-3. **Build images** — build each `*/Containerfile` with your registry tag
-4. **Smoke test** — run container with import check (see `publish-quay.yml`)
-5. **Scan** — Trivy or your scanner on pushed images
-6. **Deploy** — `kustomize build overlays/gateway-only | oc apply -f -` (or GitOps)
+3. **Kind e2e** — `make kind-e2e` (plain Kubernetes; no cluster required beyond Docker)
+4. **Build images** — build each `*/Containerfile` with your registry tag
+5. **Smoke test** — run container with import check (see `publish-quay.yml`)
+6. **Scan** — Trivy or your scanner on pushed images
+7. **Deploy** — `make deploy-openshift` (or `kustomize build ... | oc apply -f -`)
+8. **Verify** — health check + dashboard Route (see below)
 
 Example Tekton-style steps map directly to the Makefile targets:
 
@@ -86,14 +88,29 @@ Example Tekton-style steps map directly to the Makefile targets:
 make test
 make validate-manifests
 # build & push images (podman or buildah)
-make compose-e2e   # optional integration gate
+make kind-e2e      # Kubernetes mock stack (runs in GitHub Actions)
+make compose-e2e   # optional Podman/Docker compose gate
 ```
+
+### Verify after OpenShift deploy
+
+```bash
+oc get pods,route -n helpdesk-email-triage
+
+curl -sk https://email-gateway-helpdesk-email-triage.apps.alpha.modelarch.org/health
+curl -skI https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org | head -5
+```
+
+Open: [https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org](https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org)
+
+See [deploy-openshift.md](deploy-openshift.md) for dynamic hostname resolution on other clusters.
 
 ## Local parity with CI
 
 ```bash
 make test
 make validate-manifests
+make kind-e2e
 make compose-e2e
 ```
 
@@ -109,5 +126,6 @@ make compose-e2e
 |---|---|
 | RHEL + Podman Compose | `compose.yml`, `compose.mock.demo.yml`, `compose.gateway-only.yml` |
 | RHEL + systemd | `deploy/quadlet/` |
-| OpenShift 4.x | `deploy/openshift/overlays/*` |
+| OpenShift 4.x | `deploy/openshift/overlays/*`, `make deploy-openshift` |
+| Kind / Kubernetes CI | `deploy/kind/overlays/*`, `make kind-e2e` |
 | Customer CI | GitHub Actions workflows + Makefile targets |

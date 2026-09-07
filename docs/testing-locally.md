@@ -21,6 +21,22 @@ podman compose -f compose.mock.demo.yml up --build
 
 Open [http://127.0.0.1:8501](http://127.0.0.1:8501). The queue will already contain tickets auto-ingested from `sample_emails/`.
 
+## Verify
+
+```bash
+curl -sS http://127.0.0.1:8080/health
+curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
+curl -sI http://127.0.0.1:8501 | head -5
+```
+
+Open: [http://127.0.0.1:8501](http://127.0.0.1:8501)
+
+Optional ingest:
+
+```bash
+./scripts/ingest-sample.sh
+```
+
 Stop and remove volumes with:
 
 ```bash

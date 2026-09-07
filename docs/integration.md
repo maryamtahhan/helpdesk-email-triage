@@ -15,7 +15,7 @@ The Streamlit dashboard (`agent-dashboard/`) is a **demo inbox** only. Productio
 | **Gateway-only compose** | `compose.gateway-only.yml` | Inference + gateway, no Streamlit |
 | **Integration guide** | `docs/integration.md` | This document |
 | **Webhook test scripts** | `scripts/webhook-receiver.py`, `scripts/test-webhook-sink.sh` | Local receiver + `make test-webhook` |
-| **Published images** | `quay.io/mayamtahhan/helpdesk-*` | Built by `.github/workflows/publish-quay.yml` on push to `main` |
+| **Published images** | `quay.io/mtahhan/helpdesk-*` | Built by `.github/workflows/publish-quay.yml` on push to `main` |
 | **CI** | `.github/workflows/ci.yml` | Tests + Compose validation on every PR |
 
 Compose files default to the published Quay images. Use `podman compose up --build` to rebuild from source, or set `GATEWAY_IMAGE` / `UI_IMAGE` / `MOCK_IMAGE` to override.
@@ -43,6 +43,19 @@ curl -sS http://127.0.0.1:8080/health
 ./scripts/ingest-sample.sh
 curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool
 ```
+
+### OpenShift verify
+
+After `make deploy-openshift`:
+
+```bash
+curl -sk https://email-gateway-helpdesk-email-triage.apps.alpha.modelarch.org/health
+curl -skI https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org | head -5
+```
+
+Open: [https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org](https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org)
+
+Full runbook: [deploy-openshift.md](deploy-openshift.md).
 
 ## Adoption paths
 

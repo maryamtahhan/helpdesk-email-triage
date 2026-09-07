@@ -18,6 +18,7 @@ spec:
         app.kubernetes.io/component: ui
         app.kubernetes.io/part-of: helpdesk-email-triage
     spec:
+      serviceAccountName: helpdesk-route-reader
       securityContext:
         runAsNonRoot: true
         seccompProfile:
@@ -35,28 +36,20 @@ spec:
                 name: helpdesk-config
             - secretRef:
                 name: helpdesk-secrets
-          env:
-            - name: STREAMLIT_SERVER_ENABLE_CORS
-              value: "false"
-            - name: STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION
-              value: "false"
-            - name: STREAMLIT_BROWSER_SERVER_PORT
-              value: "443"
-            - name: STREAMLIT_BROWSER_SERVER_ADDRESS
-              valueFrom:
-                configMapKeyRef:
-                  name: helpdesk-routes
-                  key: DASHBOARD_PUBLIC_HOST
-                  optional: true
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
+          startupProbe:
+            httpGet:
+              path: /_stcore/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
           readinessProbe:
             httpGet:
               path: /_stcore/health
               port: http
-            initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
             httpGet:

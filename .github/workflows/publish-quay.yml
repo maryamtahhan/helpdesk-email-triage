@@ -68,13 +68,16 @@ jobs:
       matrix:
         include:
           - image: helpdesk-email-gateway
-            context: email-gateway
+            context: .
+            dockerfile: email-gateway/Containerfile
             smoke_test: python -c "import app.main"
           - image: helpdesk-triage-ui
-            context: agent-dashboard
+            context: .
+            dockerfile: agent-dashboard/Containerfile
             smoke_test: python -c "import streamlit"
           - image: helpdesk-inference-mock
             context: inference-mock
+            dockerfile: inference-mock/Containerfile
             smoke_test: python -c "import server"
 
     steps:
@@ -106,7 +109,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
-          file: ${{ matrix.context }}/Containerfile
+          file: ${{ matrix.dockerfile || format('{0}/Containerfile', matrix.context) }}
           push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -124,7 +127,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
-          file: ${{ matrix.context }}/Containerfile
+          file: ${{ matrix.dockerfile || format('{0}/Containerfile', matrix.context) }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

@@ -7,6 +7,8 @@ OVERLAYS=(
   deploy/openshift/overlays/mock-demo
   deploy/openshift/overlays/gateway-only
   deploy/openshift/overlays/external-inference
+  deploy/openshift/overlays/helpdesk-email-triage
+  deploy/kind/overlays/mock-demo
 )
 
 if ! command -v kustomize >/dev/null 2>&1; then

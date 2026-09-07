@@ -2,7 +2,7 @@
 
 Quadlet runs each container as a rootless systemd service on RHEL 9.4+. Use this path instead of `podman compose` when you want containers managed by systemd (auto-restart, journal logging, boot integration).
 
-This is an **enterprise single-host** deploy path. Change default secrets, restrict published ports, and harden vault access before any real production use. Published Quay images (`quay.io/mayamtahhan/helpdesk-*`) can replace local `podman build` tags in the `.container` files when CI images are available.
+This is an **enterprise single-host** deploy path. Change default secrets, restrict published ports, and harden vault access before any real production use. Published Quay images (`quay.io/mtahhan/helpdesk-*`) can replace local `podman build` tags in the `.container` files when CI images are available.
 
 ## Prerequisites
 
@@ -43,6 +43,23 @@ cp deploy/quadlet/*.container deploy/quadlet/*.network deploy/quadlet/*.volume \
 # Reload systemd and start the stack
 systemctl --user daemon-reload
 systemctl --user enable --now rhaii-cpu-engine.service email-gateway.service agent-dashboard.service
+```
+
+## Verify
+
+```bash
+systemctl --user status rhaii-cpu-engine email-gateway agent-dashboard
+curl -sS http://127.0.0.1:8080/health
+curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
+curl -sI http://127.0.0.1:8501 | head -5
+```
+
+Open: [http://127.0.0.1:8501](http://127.0.0.1:8501)
+
+Optional ingest:
+
+```bash
+./scripts/ingest-sample.sh
 ```
 
 ## Check status

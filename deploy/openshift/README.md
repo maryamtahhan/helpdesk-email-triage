@@ -1,95 +1,84 @@
 # OpenShift / Kubernetes deployment
 
-Kustomize manifests for deploying the helpdesk email triage stack on OpenShift (or any Kubernetes cluster with minor edits).
+Kustomize manifests for deploying the helpdesk email triage stack on OpenShift.
 
 ## Layout
 
 ```
 deploy/openshift/
-├── base/                         # Shared Deployments, Services, PVC, ConfigMap, Secret
-├── components/routes/            # OpenShift Routes + CORS helper ConfigMap
+├── base/                         # Deployments, Services, PVC, ConfigMap, Secret
+├── components/
+│   ├── routes/                   # OpenShift Routes (edge TLS, websocket timeout)
+│   └── route-reader/             # ServiceAccount + Role for Route auto-discovery
 └── overlays/
-    ├── mock-demo/                # Mock inference + gateway + dashboard (demo / CI parity)
-    ├── gateway-only/             # Mock inference + gateway (integrator path)
-    └── external-inference/         # Gateway only, wired to your existing inference Service
+    ├── helpdesk-email-triage/    # Recommended: existing project (no Namespace resource)
+    ├── mock-demo/                # Greenfield: creates Namespace + full demo stack
+    ├── gateway-only/             # Integrator path (no UI)
+    └── external-inference/       # Gateway + external RHAII
 ```
 
-Images default to `quay.io/mayamtahhan/helpdesk-*:latest`. Override in an overlay:
+Images default to `quay.io/mtahhan/helpdesk-*:latest`.
 
-```yaml
-images:
-  - name: quay.io/mayamtahhan/helpdesk-email-gateway
-    newName: registry.example.com/acme/helpdesk-email-gateway
-    newTag: v1.0.0
-```
-
-## Prerequisites
-
-- OpenShift 4.x or Kubernetes 1.27+ with a default StorageClass (for ticket PVC)
-- `kubectl` and `kustomize` (or `oc kustomize`)
-- Cluster pull access to your image registry
-- For production inference: Red Hat AI Inference or another OpenAI-compatible endpoint
-
-## Deploy (mock demo stack)
+## Deploy (recommended)
 
 ```bash
-# Build manifests (sample emails reference repo paths; load restrictor required)
-kustomize build --load-restrictor LoadRestrictionsNone deploy/openshift/overlays/mock-demo \
-  | oc apply -f -
+oc new-project helpdesk-email-triage   # once
+oc label namespace helpdesk-email-triage opendatahub.io/dashboard=true   # optional
+make deploy-openshift
+```
 
-# Or with kubectl on plain Kubernetes (Routes require OpenShift CRD):
-# kustomize build ... | kubectl apply -f -
+Or manually:
 
-oc wait deployment/inference-mock -n helpdesk-email-triage --for=condition=Available --timeout=180s
-oc wait deployment/email-gateway -n helpdesk-email-triage --for=condition=Available --timeout=180s
-oc wait deployment/agent-dashboard -n helpdesk-email-triage --for=condition=Available --timeout=180s
+```bash
+kustomize build --load-restrictor LoadRestrictionsNone \
+  deploy/openshift/overlays/helpdesk-email-triage | oc apply -f -
 
+oc wait deployment --all -n helpdesk-email-triage --for=condition=Available --timeout=300s
 oc get route -n helpdesk-email-triage
 ```
 
-Patch CORS after you know the dashboard Route URL:
+Gateway CORS and Streamlit WebSocket settings are applied automatically at pod startup — no post-deploy patching.
+
+## Verify
 
 ```bash
-DASHBOARD_URL="$(oc get route agent-dashboard -n helpdesk-email-triage -o jsonpath='{.spec.host}')"
-oc patch configmap helpdesk-routes -n helpdesk-email-triage --type merge \
-  -p "{\"data\":{\"DASHBOARD_ORIGIN\":\"https://${DASHBOARD_URL}\"}}"
-oc rollout restart deployment/email-gateway -n helpdesk-email-triage
+oc get pods,route -n helpdesk-email-triage
+
+curl -sk https://email-gateway-helpdesk-email-triage.apps.alpha.modelarch.org/health
+curl -skI https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org | head -5
 ```
 
-## Deploy (gateway only — integrator path)
+Open: [https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org](https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org)
+
+Dynamic hostnames (any namespace):
 
 ```bash
-kustomize build --load-restrictor LoadRestrictionsNone deploy/openshift/overlays/gateway-only \
-  | oc apply -f -
+NS=helpdesk-email-triage
+GW=$(oc get route email-gateway -n "$NS" -o jsonpath='{.spec.host}')
+UI=$(oc get route agent-dashboard -n "$NS" -o jsonpath='{.spec.host}')
+curl -sk "https://${GW}/health"
+curl -skI "https://${UI}" | head -5
+echo "Open: https://${UI}"
 ```
 
-Gateway listens on SMTP (`3025`) and HTTP (`8080`). See [docs/integration.md](../../docs/integration.md).
-
-## Deploy (external inference — production pattern)
-
-1. Run Red Hat AI Inference (or vLLM) in your cluster or on a reachable host.
-2. Edit `overlays/external-inference/patch-external-inference.yaml` with your Service DNS name, or patch after apply:
+## Cleanup
 
 ```bash
-kustomize build deploy/openshift/overlays/external-inference | oc apply -f -
-
-oc patch configmap helpdesk-config -n helpdesk-email-triage --type merge -p '{
-  "data": {
-    "VLLM_BASE_URL": "http://rhaii.inference.svc.cluster.local:8000/v1",
-    "VLLM_ENDPOINT": "http://rhaii.inference.svc.cluster.local:8000/v1/chat/completions"
-  }
-}'
+make undeploy-openshift                  # remove resources, keep project
+DELETE_NAMESPACE=1 make undeploy-openshift   # delete entire project
 ```
 
-3. Set a strong vault secret:
+## Auto-discovery
 
-```bash
-oc create secret generic helpdesk-secrets \
-  --from-literal=VAULT_SECRET="$(openssl rand -hex 32)" \
-  -n helpdesk-email-triage --dry-run=client -o yaml | oc apply -f -
-```
+On OpenShift, both `email-gateway` and `agent-dashboard` entrypoints:
 
-## Validate locally
+1. Read the in-cluster ServiceAccount token
+2. Query `routes.route.openshift.io/agent-dashboard`
+3. Set `DASHBOARD_ORIGIN` and `STREAMLIT_BROWSER_SERVER_ADDRESS` from the Route hostname
+
+Requires the `route-reader` component (included in `mock-demo` and `helpdesk-email-triage` overlays).
+
+## Validate manifests locally
 
 ```bash
 make validate-manifests
@@ -97,8 +86,7 @@ make validate-manifests
 
 ## Notes
 
-- **Single replica:** ticket storage is a JSON file on a PVC; scale the gateway only after moving to shared storage.
-- **SMTP in clusters:** prefer an MTA relay → `POST /ingest` rather than exposing port 3025 on a Route.
-- **Podman alternative:** use `compose.mock.demo.yml`, `compose.gateway-only.yml`, or Quadlet units under `deploy/quadlet/`.
+- **Single gateway replica** — JSON ticket store on ReadWriteOnce PVC (`Recreate` strategy).
+- **Rebuild images** after changing entrypoints; push to your registry before redeploying.
 
-See [docs/deploy-openshift.md](../../docs/deploy-openshift.md) for a full runbook.
+See [docs/deploy-openshift.md](../../docs/deploy-openshift.md).

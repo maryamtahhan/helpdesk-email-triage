@@ -20,6 +20,7 @@ spec:
         app.kubernetes.io/component: gateway
         app.kubernetes.io/part-of: helpdesk-email-triage
     spec:
+      serviceAccountName: helpdesk-route-reader
       securityContext:
         runAsNonRoot: true
         seccompProfile:
@@ -69,22 +70,20 @@ spec:
                 name: helpdesk-config
             - secretRef:
                 name: helpdesk-secrets
-          env:
-            - name: DASHBOARD_ORIGIN
-              valueFrom:
-                configMapKeyRef:
-                  name: helpdesk-routes
-                  key: DASHBOARD_ORIGIN
-                  optional: true
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
           readinessProbe:
             httpGet:
               path: /health
               port: http
-            initialDelaySeconds: 5
             periodSeconds: 5
           livenessProbe:
             httpGet:

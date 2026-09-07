@@ -37,13 +37,16 @@ jobs:
       matrix:
         include:
           - image: helpdesk-email-gateway
-            context: email-gateway
+            context: .
+            dockerfile: email-gateway/Containerfile
             smoke_test: python -c "import app.main"
           - image: helpdesk-triage-ui
-            context: agent-dashboard
+            context: .
+            dockerfile: agent-dashboard/Containerfile
             smoke_test: python -c "import streamlit"
           - image: helpdesk-inference-mock
             context: inference-mock
+            dockerfile: inference-mock/Containerfile
             smoke_test: python -c "import server"
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +65,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
-          file: ${{ matrix.context }}/Containerfile
+          file: ${{ matrix.dockerfile }}
           push: ${{ inputs.push }}
           tags: ${{ inputs.image_registry }}/${{ inputs.image_namespace }}/${{ matrix.image }}:${{ inputs.image_tag }}
           load: ${{ ! inputs.push }}
