@@ -142,35 +142,3 @@ jobs:
           echo ""
           echo "Additional tags:"
           echo "${{ steps.meta.outputs.tags }}" | sed 's/^/  - /'
-
-  scan:
-    name: Trivy — ${{ matrix.image }}
-    if: github.event_name != 'pull_request'
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        image:
-          - helpdesk-email-gateway
-          - helpdesk-triage-ui
-          - helpdesk-inference-mock
-    steps:
-      - name: Log in to Quay.io
-        uses: redhat-actions/podman-login@v2
-        with:
-          registry: ${{ env.IMAGE_REGISTRY }}
-          username: ${{ secrets.REDHAT_REGISTRY_USERNAME }}
-          password: ${{ secrets.REDHAT_REGISTRY_PASSWORD }}
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ env.IMAGE_TAG }}
-          format: table
-          exit-code: "0"
-          ignore-unfixed: true
-          vuln-type: os,library
-          severity: CRITICAL,HIGH

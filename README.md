@@ -443,7 +443,7 @@ See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShif
 | Workflow | Trigger | What it does |
 |---|---|---|
 | [ci.yml](.github/workflows/ci.yml) | PR + push to `main` | Tests, Compose validation, Kustomize validation, container builds, compose e2e, **kind e2e** |
-| [publish-quay.yml](.github/workflows/publish-quay.yml) | Push to `main` (image paths), release, manual | Build + push to Quay, Trivy scan (CRITICAL/HIGH, warn-only) |
+| [publish-quay.yml](.github/workflows/publish-quay.yml) | Push to `main` (image paths), release, manual | Build, smoke-test, and push to Quay |
 | [reusable-build.yml](.github/workflows/reusable-build.yml) | `workflow_call` from customer repos | Reusable build/push for all three images |
 
 **Publish secrets:** `REDHAT_REGISTRY_USERNAME`, `REDHAT_REGISTRY_PASSWORD` (Quay robot with write access to all three repos).

@@ -14,6 +14,7 @@ services:
   rhaii-cpu-engine:
     build:
       context: ./inference-mock
+      dockerfile: Containerfile
     image: ${MOCK_IMAGE:-quay.io/mtahhan/helpdesk-inference-mock:latest}
     container_name: rhaii-cpu-engine
     restart: unless-stopped
