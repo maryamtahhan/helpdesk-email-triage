@@ -4,10 +4,27 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="${COMPOSE_FILE:-compose.gateway-only.yml}"
-COMPOSE=(docker compose -f "${ROOT}/${COMPOSE_FILE}")
 
-if command -v podman >/dev/null 2>&1 && podman compose version >/dev/null 2>&1; then
+compose_engine_ready() {
+  local engine="$1"
+  command -v "$engine" >/dev/null 2>&1 \
+    && "$engine" info >/dev/null 2>&1 \
+    && "$engine" compose version >/dev/null 2>&1
+}
+
+if [[ -n "${COMPOSE_ENGINE:-}" ]]; then
+  if ! compose_engine_ready "${COMPOSE_ENGINE}"; then
+    echo "${COMPOSE_ENGINE} compose is not available" >&2
+    exit 1
+  fi
+  COMPOSE=("${COMPOSE_ENGINE}" compose -f "${ROOT}/${COMPOSE_FILE}")
+elif compose_engine_ready docker; then
+  COMPOSE=(docker compose -f "${ROOT}/${COMPOSE_FILE}")
+elif compose_engine_ready podman; then
   COMPOSE=(podman compose -f "${ROOT}/${COMPOSE_FILE}")
+else
+  echo "Neither docker nor podman compose is available" >&2
+  exit 1
 fi
 
 cleanup() {

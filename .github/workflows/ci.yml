@@ -63,13 +63,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - context: .
+          - image: helpdesk-email-gateway
+            context: .
             dockerfile: email-gateway/Containerfile
             smoke_test: python -c "import app.main"
-          - context: .
+          - image: helpdesk-triage-ui
+            context: .
             dockerfile: agent-dashboard/Containerfile
             smoke_test: python -c "import streamlit"
-          - context: inference-mock
+          - image: helpdesk-inference-mock
+            context: inference-mock
             dockerfile: inference-mock/Containerfile
             smoke_test: python -c "import server"
     steps:
@@ -77,10 +80,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build image
-        run: docker build -f "${{ matrix.dockerfile }}" -t "local/${{ matrix.dockerfile }}:ci" "${{ matrix.context }}"
+        run: docker build -f "${{ matrix.dockerfile }}" -t "${{ matrix.image }}:ci" "${{ matrix.context }}"
 
       - name: Smoke test
-        run: docker run --rm "local/${{ matrix.dockerfile }}:ci" ${{ matrix.smoke_test }}
+        run: docker run --rm "${{ matrix.image }}:ci" ${{ matrix.smoke_test }}
 
   compose-e2e:
     name: Compose end-to-end smoke test
@@ -90,6 +93,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run compose e2e
+        env:
+          COMPOSE_ENGINE: docker
         run: make compose-e2e
 
   kind-e2e:

@@ -9,8 +9,7 @@ COPY email-gateway/app ./app
 COPY email-gateway/gateways ./gateways
 COPY email-gateway/vllm-email-gw.json ./vllm-email-gw.json
 COPY scripts/openshift_route_host.py ./scripts/openshift_route_host.py
-COPY email-gateway/entrypoint.sh ./entrypoint.sh
-RUN chmod +x entrypoint.sh
+COPY --chmod=755 email-gateway/entrypoint.sh ./entrypoint.sh
 
 EXPOSE 8080 3025
 
