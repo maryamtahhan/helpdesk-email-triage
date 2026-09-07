@@ -1,5 +1,6 @@
 .PHONY: demo up down logs ingest test demo-local gateway-only test-webhook webhook-receiver \
-        validate-manifests compose-e2e build-images deploy-openshift undeploy-openshift kind-e2e
+        validate-manifests compose-e2e build-images deploy-openshift undeploy-openshift \
+        run-on-kind destroy-kind kind-e2e
 
 # demo          — mock inference + gateway + Streamlit UI
 # gateway-only  — mock inference + gateway (integrator path, no UI)
@@ -65,6 +66,14 @@ undeploy-openshift:
 	chmod +x scripts/undeploy-openshift.sh
 	./scripts/undeploy-openshift.sh
 
+run-on-kind:
+	chmod +x scripts/run-on-kind.sh scripts/kind-lib.sh
+	./scripts/run-on-kind.sh
+
+destroy-kind:
+	chmod +x scripts/destroy-kind.sh
+	./scripts/destroy-kind.sh
+
 kind-e2e:
-	chmod +x scripts/kind-e2e.sh scripts/ingest-sample.sh
+	chmod +x scripts/kind-e2e.sh scripts/kind-lib.sh scripts/destroy-kind.sh scripts/ingest-sample.sh
 	./scripts/kind-e2e.sh

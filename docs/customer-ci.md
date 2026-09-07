@@ -127,5 +127,5 @@ make compose-e2e
 | RHEL + Podman Compose | `compose.yml`, `compose.mock.demo.yml`, `compose.gateway-only.yml` |
 | RHEL + systemd | `deploy/quadlet/` |
 | OpenShift 4.x | `deploy/openshift/overlays/*`, `make deploy-openshift` |
-| Kind / Kubernetes CI | `deploy/kind/overlays/*`, `make kind-e2e` |
+| Kind / Kubernetes CI | `deploy/kind/overlays/*`, `make run-on-kind`, `make kind-e2e`, `make destroy-kind` |
 | Customer CI | GitHub Actions workflows + Makefile targets |

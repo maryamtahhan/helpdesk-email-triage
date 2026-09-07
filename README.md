@@ -46,7 +46,7 @@ Pick **one** path — they share the same containers, env vars, and API contract
 | **OpenShift** | Cluster deploy, customer GitOps | Kustomize overlays (mock, gateway-only, external RHAII) | `deploy/openshift/overlays/*` |
 | **Quadlet** | Single RHEL host, systemd | Podman user units | `deploy/quadlet/` |
 | **No containers** | Quick local hack | Native Python | `scripts/run-demo-local.sh` |
-| **Kind / CI** | GitHub Actions Kubernetes test | Mock stack on kind | `make kind-e2e` |
+| **Kind / CI** | GitHub Actions Kubernetes test | Mock stack on kind | `make run-on-kind` / `make kind-e2e` |
 | **Your CI pipeline** | Fork + your registry | Same Containerfiles, your namespace | [docs/customer-ci.md](docs/customer-ci.md) |
 
 ### Ports and endpoints (defaults)
@@ -277,16 +277,31 @@ curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
 
 Open: [http://127.0.0.1:8501](http://127.0.0.1:8501)
 
-### Kind / CI (`make kind-e2e`)
+### Kind (`make run-on-kind`)
 
-The script verifies gateway health and ingest automatically. To inspect manually after `KEEP_CLUSTER=1 make kind-e2e`:
+Deploy the mock stack on a local kind cluster:
 
 ```bash
-kubectl get pods -n helpdesk-kind-test
-kubectl port-forward -n helpdesk-kind-test svc/email-gateway 8080:8080 &
+make run-on-kind
+```
+
+Port-forward in separate terminals, then verify:
+
+```bash
+kubectl port-forward -n helpdesk-kind-test svc/email-gateway 8080:8080 3025:3025
+kubectl port-forward -n helpdesk-kind-test svc/agent-dashboard 8501:8501
+
 curl -sS http://127.0.0.1:8080/health
 ./scripts/ingest-sample.sh
+curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
+curl -sI http://127.0.0.1:8501 | head -5
 ```
+
+Open: [http://127.0.0.1:8501](http://127.0.0.1:8501)
+
+Teardown: `make destroy-kind`
+
+CI uses `make kind-e2e` (deploy → verify → destroy automatically).
 
 ---
 
@@ -411,7 +426,9 @@ See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShif
 | `make test-webhook` | Webhook sink e2e (no compose) |
 | `make deploy-openshift` | Apply overlay, wait for pods, print Route URLs |
 | `make undeploy-openshift` | Remove deployed resources (`DELETE_NAMESPACE=1` deletes project) |
-| `make kind-e2e` | Build/load images, deploy mock stack on kind, run smoke test |
+| `make run-on-kind` | Deploy mock stack on kind (keeps cluster running) |
+| `make destroy-kind` | Delete the local kind cluster (`helpdesk-ci`) |
+| `make kind-e2e` | Deploy on kind, smoke test, then destroy cluster |
 | `make validate-manifests` | Validate OpenShift and Kind Kustomize overlays |
 | `make compose-e2e` | Stack smoke test: health → ingest → ticket |
 | `make build-images` | Build all three Containerfiles with Podman |
