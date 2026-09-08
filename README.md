@@ -46,7 +46,7 @@ Pick **one** path — they share the same containers, env vars, and API contract
 | **Demo stack** | Laptop walkthrough, UI + tokenization | Mock inference + gateway + Streamlit | `make demo` or `compose.mock.demo.yml` |
 | **Production RHEL** | On-prem CPU inference with RHAII | RHAII + gateway + Streamlit | `compose.yml` |
 | **Gateway only** | ServiceNow, Salesforce, custom queue | Inference + gateway (no UI) | `make gateway-only` or `compose.gateway-only.yml` |
-| **OpenShift** | Cluster deploy, customer GitOps | Kustomize overlays (mock, gateway-only, external RHAII) | `deploy/openshift/overlays/*` |
+| **OpenShift** | Cluster deploy, customer GitOps | Kustomize overlays (mock or **RHAII CPU** in-namespace) | `make deploy-openshift` |
 | **Quadlet** | Single RHEL host, systemd | Podman user units | `deploy/quadlet/` |
 | **No containers** | Quick local hack | Native Python | `scripts/run-demo-local.sh` |
 | **Kind / CI** | GitHub Actions Kubernetes test | Mock stack on kind | `make run-on-kind` / `make kind-e2e` |
@@ -197,20 +197,30 @@ curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
 
 ### OpenShift / Kubernetes
 
-| Overlay | Use when |
+`make deploy-openshift` deploys gateway + Streamlit UI and picks inference automatically:
+
+| `INFERENCE` | Stack |
 |---|---|
-| `deploy/openshift/overlays/helpdesk-email-triage` | **Recommended** — deploy into an existing project (`oc new-project`) |
-| `deploy/openshift/overlays/mock-demo` | Greenfield — Kustomize creates the Namespace resource |
-| `deploy/openshift/overlays/gateway-only` | API/SMTP only; no UI |
-| `deploy/openshift/overlays/external-inference` | Gateway pointed at existing RHAII / vLLM Service |
+| `auto` (default) | **RHAII CPU** when `HF_TOKEN` + `registry.redhat.io` login exist; otherwise **mock** |
+| `rhaii` | RHAII CPU (`vllm-cpu-rhel9`) + gateway + UI in one namespace |
+| `mock` | Mock inference only (CI / no registry) |
 
 ```bash
 oc new-project helpdesk-email-triage   # once
-oc label namespace helpdesk-email-triage opendatahub.io/dashboard=true   # optional
+export HF_TOKEN="your_huggingface_token"
+podman login registry.redhat.io
 make deploy-openshift
 ```
 
-Route hostnames, gateway CORS, and Streamlit WebSocket settings are discovered automatically at pod startup — no manual patching.
+Route hostnames, gateway CORS, and Streamlit WebSocket settings are discovered automatically at pod startup — no manual patching. First RHAII CPU start may take several minutes while model weights download.
+
+| Overlay | Use when |
+|---|---|
+| `deploy/openshift/overlays/helpdesk-email-triage-rhaii` | **RHAII CPU demo** — existing project |
+| `deploy/openshift/overlays/helpdesk-email-triage` | Mock inference — existing project |
+| `deploy/openshift/overlays/mock-demo` | Greenfield — Kustomize creates the Namespace |
+| `deploy/openshift/overlays/gateway-only` | API/SMTP only; no UI |
+| `deploy/openshift/overlays/external-inference` | Gateway pointed at RHAII in **another** namespace |
 
 Details: [deploy/openshift/README.md](deploy/openshift/README.md) · [docs/deploy-openshift.md](docs/deploy-openshift.md)
 

@@ -5,9 +5,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OVERLAYS=(
   deploy/openshift/overlays/mock-demo
+  deploy/openshift/overlays/rhaii-demo
   deploy/openshift/overlays/gateway-only
   deploy/openshift/overlays/external-inference
   deploy/openshift/overlays/helpdesk-email-triage
+  deploy/openshift/overlays/helpdesk-email-triage-rhaii
   deploy/kind/overlays/mock-demo
 )
 

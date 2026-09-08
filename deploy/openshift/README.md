@@ -8,33 +8,42 @@ Kustomize manifests for deploying the helpdesk email triage stack on OpenShift.
 deploy/openshift/
 ├── base/                         # Deployments, Services, PVC, ConfigMap, Secret
 ├── components/
+│   ├── rhaii-cpu/                # RHAII 3.5 CPU inference (vllm-cpu-rhel9)
 │   ├── routes/                   # OpenShift Routes (edge TLS, websocket timeout)
 │   └── route-reader/             # ServiceAccount + Role for Route auto-discovery
 └── overlays/
-    ├── helpdesk-email-triage/    # Recommended: existing project (no Namespace resource)
-    ├── mock-demo/                # Greenfield: creates Namespace + full demo stack
-    ├── gateway-only/             # Integrator path (no UI)
-    └── external-inference/       # Gateway + external RHAII
+    ├── helpdesk-email-triage/         # Mock inference — existing project
+    ├── helpdesk-email-triage-rhaii/   # RHAII CPU — existing project (recommended prod demo)
+    ├── mock-demo/                     # Greenfield mock stack
+    ├── rhaii-demo/                    # Greenfield RHAII CPU stack
+    ├── gateway-only/                  # Integrator path (no UI)
+    └── external-inference/            # Gateway + inference Service elsewhere
 ```
 
-Images default to `quay.io/mtahhan/helpdesk-*:latest`.
+Images default to `quay.io/mtahhan/helpdesk-*:latest`. RHAII CPU uses `registry.redhat.io/rhaii/vllm-cpu-rhel9:3.5.0-1786546771` (same as `compose.yml`).
 
 ## Deploy (recommended)
 
 ```bash
 oc new-project helpdesk-email-triage   # once
 oc label namespace helpdesk-email-triage opendatahub.io/dashboard=true   # optional
+
+# RHAII CPU when HF_TOKEN + registry.redhat.io login are set; otherwise mock
+export HF_TOKEN="your_huggingface_token"
+podman login registry.redhat.io
 make deploy-openshift
 ```
 
-Or manually:
+Or manually (RHAII CPU):
 
 ```bash
+export HF_TOKEN=...
+./scripts/openshift-rhaii-secrets.sh helpdesk-email-triage
 kustomize build --load-restrictor LoadRestrictionsNone \
-  deploy/openshift/overlays/helpdesk-email-triage | oc apply -f -
+  deploy/openshift/overlays/helpdesk-email-triage-rhaii | oc apply -f -
 
-oc wait deployment --all -n helpdesk-email-triage --for=condition=Available --timeout=300s
-oc get route -n helpdesk-email-triage
+oc wait deployment/rhaii-cpu deployment/email-gateway deployment/agent-dashboard \
+  -n helpdesk-email-triage --for=condition=Available --timeout=900s
 ```
 
 Gateway CORS and Streamlit WebSocket settings are applied automatically at pod startup — no post-deploy patching.
@@ -76,7 +85,7 @@ On OpenShift, both `email-gateway` and `agent-dashboard` entrypoints:
 2. Query `routes.route.openshift.io/agent-dashboard`
 3. Set `DASHBOARD_ORIGIN` and `STREAMLIT_BROWSER_SERVER_ADDRESS` from the Route hostname
 
-Requires the `route-reader` component (included in `mock-demo` and `helpdesk-email-triage` overlays).
+Requires the `route-reader` component (included in demo overlays).
 
 ## Validate manifests locally
 
@@ -87,6 +96,7 @@ make validate-manifests
 ## Notes
 
 - **Single gateway replica** — JSON ticket store on ReadWriteOnce PVC (`Recreate` strategy).
+- **RHAII CPU** — no GPU Operator; requires AVX2+ worker nodes and `hf-secret` + `redhat-registry-pull`.
 - **Rebuild images** after changing entrypoints; push to your registry before redeploying.
 
 See [docs/deploy-openshift.md](../../docs/deploy-openshift.md).

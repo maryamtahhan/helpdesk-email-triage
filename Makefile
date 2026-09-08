@@ -59,7 +59,7 @@ build-images:
 	podman build -f inference-mock/Containerfile -t localhost/helpdesk-inference-mock:local ./inference-mock
 
 deploy-openshift:
-	chmod +x scripts/deploy-openshift.sh
+	chmod +x scripts/deploy-openshift.sh scripts/openshift-rhaii-secrets.sh
 	./scripts/deploy-openshift.sh
 
 undeploy-openshift:

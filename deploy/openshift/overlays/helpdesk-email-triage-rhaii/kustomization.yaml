@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Full demo stack with RHAII CPU inference in an existing OpenShift project.
+namespace: helpdesk-email-triage
+
+resources:
+  - ../rhaii-demo
+
+patches:
+  - path: patch-drop-namespace.yaml
