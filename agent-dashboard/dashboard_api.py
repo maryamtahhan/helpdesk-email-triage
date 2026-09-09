@@ -19,6 +19,13 @@ VAULT_SECRET = os.environ.get("VAULT_SECRET", "")
 INGEST_API_KEY = os.environ.get("INGEST_API_KEY", "")
 
 
+def _gateway_headers() -> dict[str, str]:
+    headers: dict[str, str] = {}
+    if INGEST_API_KEY:
+        headers["X-Ingest-Key"] = INGEST_API_KEY
+    return headers
+
+
 def check_gateway() -> bool:
     try:
         httpx.get(f"{GATEWAY_URL}/health", timeout=2.0).raise_for_status()
@@ -30,7 +37,11 @@ def check_gateway() -> bool:
 @st.cache_data(ttl=3)
 def fetch_tickets() -> list[dict]:
     try:
-        response = httpx.get(f"{GATEWAY_URL}/tickets", timeout=10.0)
+        response = httpx.get(
+            f"{GATEWAY_URL}/tickets",
+            headers=_gateway_headers(),
+            timeout=10.0,
+        )
         response.raise_for_status()
         return response.json()
     except httpx.HTTPError:
@@ -39,7 +50,9 @@ def fetch_tickets() -> list[dict]:
 
 @st.cache_data(ttl=10)
 def fetch_vault(ticket_id: str) -> dict | None:
-    headers = {"X-Vault-Secret": VAULT_SECRET} if VAULT_SECRET else {}
+    headers = _gateway_headers()
+    if VAULT_SECRET:
+        headers["X-Vault-Secret"] = VAULT_SECRET
     try:
         response = httpx.get(
             f"{GATEWAY_URL}/tickets/{ticket_id}/vault",
@@ -53,13 +66,10 @@ def fetch_vault(ticket_id: str) -> dict | None:
 
 
 def ingest_text(sender: str, subject: str, body: str) -> dict:
-    headers = {}
-    if INGEST_API_KEY:
-        headers["X-Ingest-Key"] = INGEST_API_KEY
     response = httpx.post(
         f"{GATEWAY_URL}/ingest/raw",
         json={"sender": sender, "subject": subject, "body": body},
-        headers=headers,
+        headers=_gateway_headers(),
         timeout=120.0,
     )
     response.raise_for_status()
