@@ -151,7 +151,7 @@ See [deploy/kind/README.md](../deploy/kind/README.md).
 
 ## Related
 
-- [README — OpenShift section](../README.md#openshift--kubernetes)
+- [README — OpenShift section](../README.md#openshift-quick-deploy)
 - [Manifest layout](../deploy/openshift/README.md)
 - [Customer CI](customer-ci.md)
 - [Integration guide](integration.md)

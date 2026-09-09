@@ -1,6 +1,6 @@
 # Running the demo locally
 
-**Fastest path:** [README Quick start](../README.md#quick-start-laptop-demo) — `make demo`, open port 8501, done.
+**Fastest path:** [README Quick start](../README.md#try-it-now-about-2-minutes) — `make demo`, open port 8501, done.
 
 This guide walks through every feature in the demo UI and alternative run methods. No Red Hat subscription, registry login, GPU, or Hugging Face token required.
 
@@ -73,7 +73,7 @@ Stop with Ctrl-C, or `podman compose -f compose.mock.demo.yml down` if processes
 
 ## OpenShift
 
-Cluster deploy is documented in the [README](../README.md#openshift--kubernetes) (step-by-step) and [deploy-openshift.md](deploy-openshift.md) (overlay catalog).
+Cluster deploy is documented in the [README](../README.md#openshift-quick-deploy) (step-by-step) and [deploy-openshift.md](deploy-openshift.md) (overlay catalog).
 
 ## Mock vs RHAII
 
