@@ -1,6 +1,8 @@
 # Running the demo locally
 
-**Fastest path:** [README Quick start](../README.md#try-it-now-about-2-minutes) — `make demo`, open port 8501, done.
+**Fastest path:** [README Try it now](../README.md#try-it-now-about-2-minutes) — `make demo`, open port 8501, done.
+
+**Hands-on walkthrough:** [README Quickstart walkthrough](../README.md#quickstart-walkthrough) — submit tickets, review classification/redaction, classification speed, quality checks, and optional GuideLLM load testing.
 
 This guide walks through every feature in the demo UI and alternative run methods. No Red Hat subscription, registry login, GPU, or Hugging Face token required.
 
