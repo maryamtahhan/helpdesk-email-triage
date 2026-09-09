@@ -29,8 +29,8 @@ The gateway exposes a stable HTTP contract documented in [integration.md](integr
 
 | Workflow | Purpose |
 |---|---|
-| `.github/workflows/ci.yml` | Unit tests, compose validation, manifest validation, compose e2e |
-| `.github/workflows/publish-quay.yml` | Build, smoke-test, and push images |
+| `.github/workflows/ci.yml` | ruff lint, unit tests, compose validation, Kustomize validation (pinned), container builds + Trivy scan, compose e2e, kind e2e |
+| `.github/workflows/publish-quay.yml` | Lint, tests, compose e2e, then build, smoke-test, and push images |
 | `.github/workflows/reusable-build.yml` | Callable workflow for customer repos |
 
 ### Secrets for publish
@@ -51,7 +51,7 @@ env:
   IMAGE_TAG: latest
 ```
 
-Compose and Kustomize defaults use `quay.io/mayamtahhan/helpdesk-*`; override with env vars or Kustomize `images:`.
+Compose and Kustomize defaults use `quay.io/mtahhan/helpdesk-*`; override with env vars or Kustomize `images:`.
 
 ## Reusable build workflow (call from your repo)
 
@@ -73,14 +73,15 @@ jobs:
 
 Minimal stages any pipeline should include:
 
-1. **Test** — `make test && make test-webhook`
-2. **Validate manifests** — `make validate-manifests`
-3. **Kind e2e** — `make kind-e2e` (plain Kubernetes; no cluster required beyond Docker)
-4. **Build images** — build each `*/Containerfile` with your registry tag
-5. **Smoke test** — run container with import check (see `publish-quay.yml`)
-6. **Scan** — run your organization's preferred container scanner on pushed images
-7. **Deploy** — `make deploy-openshift` (or `kustomize build ... | oc apply -f -`)
-8. **Verify** — health check + dashboard Route (see below)
+1. **Lint** — `make lint`
+2. **Test** — `make test && make test-webhook`
+3. **Validate manifests** — `make validate-manifests`
+4. **Kind e2e** — `make kind-e2e` (plain Kubernetes; no cluster required beyond Docker)
+5. **Build images** — build each `*/Containerfile` with your registry tag
+6. **Smoke test** — run container with import check (see `publish-quay.yml`)
+7. **Scan** — Trivy is included in `ci.yml`; add your org scanner on push if required
+8. **Deploy** — `make deploy-openshift` (or `OVERLAY=deploy/openshift/overlays/hardened ...` for production)
+9. **Verify** — `make verify-openshift` (health + ingest/ticket smoke test)
 
 ## OpenShift deploy
 
@@ -93,11 +94,12 @@ make deploy-openshift                      # INFERENCE=auto
 make verify-openshift
 ```
 
-Use `INFERENCE=mock` in CI-like environments without registry access. See [deploy-openshift.md](deploy-openshift.md).
+Use `INFERENCE=mock` in CI-like environments without registry access. For production pilots, use the `hardened` overlay and set non-demo `VAULT_SECRET` + `INGEST_API_KEY` before deploy. See [deploy-openshift.md](deploy-openshift.md).
 
 Example Tekton-style steps map directly to the Makefile targets:
 
 ```bash
+make lint
 make test
 make validate-manifests
 # build & push images (podman or buildah)
@@ -116,6 +118,7 @@ See [deploy-openshift.md](deploy-openshift.md).
 ## Local parity with CI
 
 ```bash
+make lint
 make test
 make validate-manifests
 make kind-e2e
@@ -125,7 +128,7 @@ make compose-e2e
 ## Versioning recommendation
 
 - Tag releases as `v1.2.3` and set `IMAGE_TAG` to match.
-- Pin overlay `images.newTag` to the same semver for reproducible cluster deploys.
+- Pin overlay `images.newTag` to the same semver for reproducible cluster deploys, or pass `IMAGE_TAG=v1.2.3` to `deploy-openshift.sh`.
 - Keep `latest` for development only.
 
 ## Support matrix

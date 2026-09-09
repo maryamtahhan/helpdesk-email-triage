@@ -19,6 +19,8 @@ podman compose -f compose.mock.demo.yml up --build
 # or: docker compose -f compose.mock.demo.yml up --build
 ```
 
+The mock compose file names the inference service `inference-mock` (not `rhaii-cpu-engine`, which is reserved for the real RHAII path in `compose.yml`).
+
 Open [http://127.0.0.1:8501](http://127.0.0.1:8501). The queue will already contain tickets auto-ingested from `sample_emails/`.
 
 ## Verify
@@ -43,7 +45,7 @@ Stop and remove volumes with:
 podman compose -f compose.mock.demo.yml down -v
 ```
 
-For gateway + inference without the UI, see [integration.md](integration.md) and `compose.gateway-only.yml`.
+For gateway + inference without the UI, see [integration.md](integration.md) and `compose.gateway-only.yml` (also uses the `inference-mock` service name).
 
 ## What you'll see
 
@@ -133,6 +135,8 @@ make verify-openshift
 | `auto` (default) | RHAII CPU when `HF_TOKEN` + registry login exist; otherwise mock |
 | `rhaii` | Require RHAII CPU (`vllm-cpu-rhel9`) |
 | `mock` | Mock inference only |
+
+For production pilots, use the `hardened` overlay (`OVERLAY=deploy/openshift/overlays/hardened`) after setting non-demo secrets — see [deploy-openshift.md](deploy-openshift.md).
 
 Full runbook: [deploy-openshift.md](deploy-openshift.md).
 

@@ -47,6 +47,7 @@ Pick **one** path — they share the same containers, env vars, and API contract
 | **Production RHEL** | On-prem CPU inference with RHAII | RHAII + gateway + Streamlit | `compose.yml` |
 | **Gateway only** | ServiceNow, Salesforce, custom queue | Inference + gateway (no UI) | `make gateway-only` or `compose.gateway-only.yml` |
 | **OpenShift** | Cluster deploy, customer GitOps | Kustomize overlays (mock or **RHAII CPU** in-namespace) | `make deploy-openshift` |
+| **OpenShift (hardened)** | Production pilot | NetworkPolicies, dashboard OAuth, `REQUIRE_SECRETS=1` | `OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift` |
 | **Quadlet** | Single RHEL host, systemd | Podman user units | `deploy/quadlet/` |
 | **No containers** | Quick local hack | Native Python | `scripts/run-demo-local.sh` |
 | **Kind / CI** | GitHub Actions Kubernetes test | Mock stack on kind | `make run-on-kind` / `make kind-e2e` |
@@ -62,6 +63,8 @@ Pick **one** path — they share the same containers, env vars, and API contract
 | Agent dashboard | **8501** | Streamlit demo inbox |
 
 Vault rehydration (authorized agents only): `GET /tickets/{id}/vault` with header `X-Vault-Secret: <VAULT_SECRET>`.
+
+When `INGEST_API_KEY` is set, HTTP ingest requires header `X-Ingest-Key: <INGEST_API_KEY>` on `POST /ingest` and `/ingest/raw`.
 
 ### Published container images
 
@@ -253,6 +256,8 @@ make verify-openshift
 # or: ./scripts/openshift-verify.sh helpdesk-email-triage
 ```
 
+`verify-openshift` checks gateway health, dashboard headers, waits for file-watcher tickets, and falls back to a `/ingest/raw` smoke test if needed. When `INGEST_API_KEY` is set in `helpdesk-secrets`, the script reads it from the cluster automatically.
+
 Manual equivalent:
 
 ```bash
@@ -272,7 +277,7 @@ oc new-project helpdesk-email-triage
 make deploy-openshift
 ```
 
-Optional ingest smoke test:
+Manual ingest smoke test (add `-H "X-Ingest-Key: $INGEST_API_KEY"` when the hardened overlay is used):
 
 ```bash
 curl -sk -X POST "https://${GW}/ingest/raw" \
@@ -324,11 +329,14 @@ Key environment variables (full list in `.env.example`):
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `VLLM_BASE_URL` | `http://rhaii-cpu-engine:8000/v1` | OpenAI-compatible inference base URL |
+| `VLLM_BASE_URL` | `http://rhaii-cpu-engine:8000/v1` (`compose.yml`) or `http://inference-mock:8000/v1` (mock compose) | OpenAI-compatible inference base URL |
 | `MODEL_NAME` | `Qwen/Qwen2.5-1.5B-Instruct` (prod) / `mock-triage` (demo) | Model ID sent to inference |
 | `GATEWAY_MODE` | `FILE_WATCHER` | `FILE_WATCHER` watches `EMAIL_INPUT_DIR`; use `SMTP_ONLY` on OpenShift gateway-only |
 | `VAULT_SECRET` | `helpdesk-demo-secret` | **Change before production** — gates `/vault` and dashboard |
+| `INGEST_API_KEY` | (empty) | When set, requires `X-Ingest-Key` on `POST /ingest` and `/ingest/raw` |
+| `REQUIRE_SECRETS` | (empty) | Set to `1` to refuse demo-default secrets at gateway startup (hardened overlay) |
 | `INFERENCE` | `auto` | OpenShift only: `mock`, `rhaii`, or `auto` (see [deploy-openshift.md](docs/deploy-openshift.md)) |
+| `IMAGE_TAG` | `latest` | OpenShift deploy: pin image tags (`IMAGE_TAG=v1.2.3 make deploy-openshift`) |
 | `HF_TOKEN` | (empty) | Hugging Face token — required for RHAII CPU on OpenShift or RHEL |
 | `RHAII_WAIT_TIMEOUT` | `900s` | OpenShift deploy wait for model download on first RHAII start |
 | `DASHBOARD_ORIGIN` | `http://localhost:8501` | CORS origin for browser UI |
@@ -345,8 +353,8 @@ Three ingest paths — all produce the same `TriageResult`. Full API: [docs/inte
 | Method | How |
 |---|---|
 | **HTTP (.eml)** | `POST /ingest` with multipart file — `./scripts/ingest-sample.sh` |
-| **HTTP (JSON)** | `POST /ingest/raw` with `sender`, `subject`, `body` |
-| **SMTP** | Deliver mail to port **3025** — gateway returns `250` immediately |
+| **HTTP (JSON)** | `POST /ingest/raw` with `sender`, `subject`, `body` (and `X-Ingest-Key` when configured) |
+| **SMTP** | Deliver mail to port **3025** — gateway returns `250` immediately (not durable; prefer HTTP for production) |
 | **File drop** | Place `.eml` in `sample_emails/` when `GATEWAY_MODE=FILE_WATCHER` |
 
 **Health check:** `GET http://127.0.0.1:8080/health` → `{"status":"ok"}`
@@ -359,6 +367,7 @@ Three ingest paths — all produce the same `TriageResult`. Full API: [docs/inte
 curl -sS -X POST http://127.0.0.1:8080/ingest/raw \
   -H "Content-Type: application/json" \
   -d '{"sender":"demo@example.com","subject":"VPN down","body":"Cannot connect from home."}'
+# With INGEST_API_KEY set, add: -H "X-Ingest-Key: your-secret"
 ```
 
 **Pull vs push:** Poll `GET /tickets` (default), or set `TICKET_SINK=webhook:https://…` for push delivery after each triage. Same JSON either way.
@@ -441,7 +450,7 @@ See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShif
 | `make test` | Unit tests |
 | `make test-webhook` | Webhook sink e2e (no compose) |
 | `make deploy-openshift` | Apply overlay, wait for pods, print Route URLs |
-| `make verify-openshift` | Resolve Route hosts from cluster and run health checks |
+| `make verify-openshift` | Route health checks + ingest/ticket smoke test |
 | `make undeploy-openshift` | Remove deployed resources (`DELETE_NAMESPACE=1` deletes project) |
 | `make run-on-kind` | Deploy mock stack on kind (keeps cluster running) |
 | `make destroy-kind` | Delete the local kind cluster (`helpdesk-ci`) |
@@ -450,7 +459,7 @@ See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShif
 | `make compose-e2e` | Mock-stack smoke test: health → ticket (via file watcher or API) |
 | `make build-images` | Build all three Containerfiles with Podman |
 | `scripts/ingest-sample.sh` | Curl sample `.eml` to `POST /ingest` |
-| `scripts/openshift-verify.sh` | Resolve OpenShift Route URLs and run health checks |
+| `scripts/openshift-verify.sh` | Resolve OpenShift Route URLs and run full smoke checks |
 | `scripts/openshift-rhaii-secrets.sh` | Create `hf-secret` and `redhat-registry-pull` in a namespace |
 | `scripts/run-demo-local.sh` | Native Python demo |
 | `scripts/webhook-receiver.py` | Local webhook listener for manual testing |
@@ -461,8 +470,8 @@ See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShif
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| [ci.yml](.github/workflows/ci.yml) | PR + push to `main` | Tests, Compose validation, Kustomize validation, container builds, compose e2e, **kind e2e** |
-| [publish-quay.yml](.github/workflows/publish-quay.yml) | Push to `main` (image paths), release, manual | Build, smoke-test, and push to Quay |
+| [ci.yml](.github/workflows/ci.yml) | PR + push to `main` | **ruff** lint, tests, Compose validation, Kustomize validation (pinned), container builds + **Trivy** scan, compose e2e, **kind e2e** |
+| [publish-quay.yml](.github/workflows/publish-quay.yml) | Push to `main` (image paths), release, manual | Lint, tests, compose e2e, then build, smoke-test, and push to Quay |
 | [reusable-build.yml](.github/workflows/reusable-build.yml) | `workflow_call` from customer repos | Reusable build/push for all three images |
 
 **CI uses the mock inference stack only.** `compose-e2e` and `kind-e2e` exercise `inference-mock`, not `registry.redhat.io/rhaii/...`. OpenShift production demos use **`INFERENCE=rhaii`** with RHAII CPU (`vllm-cpu-rhel9`) when `HF_TOKEN` and registry credentials are set — see [docs/deploy-openshift.md](docs/deploy-openshift.md).
@@ -474,7 +483,7 @@ See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShif
 **Local CI parity:**
 
 ```bash
-make test && make validate-manifests && make compose-e2e
+make lint && make test && make validate-manifests && make compose-e2e
 ```
 
 ---

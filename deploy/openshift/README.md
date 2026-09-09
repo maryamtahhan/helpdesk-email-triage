@@ -10,17 +10,20 @@ deploy/openshift/
 ├── components/
 │   ├── rhaii-cpu/                # RHAII 3.5 CPU inference (vllm-cpu-rhel9)
 │   ├── routes/                   # OpenShift Routes (edge TLS, websocket timeout)
-│   └── route-reader/             # ServiceAccount + Role for Route auto-discovery
+│   ├── route-reader/             # ServiceAccount + Role for Route auto-discovery
+│   ├── network-policy/           # Namespace NetworkPolicies (default deny + allow rules)
+│   └── hardening/                # Patches: REQUIRE_SECRETS, dashboard OAuth
 └── overlays/
     ├── helpdesk-email-triage/         # Mock inference — existing project
     ├── helpdesk-email-triage-rhaii/   # RHAII CPU — existing project (recommended prod demo)
     ├── mock-demo/                     # Greenfield mock stack
     ├── rhaii-demo/                    # Greenfield RHAII CPU stack
     ├── gateway-only/                  # Integrator path (no UI)
-    └── external-inference/            # Gateway + inference Service elsewhere
+    ├── external-inference/            # Gateway + inference Service elsewhere
+    └── hardened/                      # Production-oriented (see below)
 ```
 
-Images default to `quay.io/mtahhan/helpdesk-*:latest`. RHAII CPU uses `registry.redhat.io/rhaii/vllm-cpu-rhel9:3.5.0-1786546771` (same as `compose.yml`).
+Images default to `quay.io/mtahhan/helpdesk-*:latest`. Pin tags with `IMAGE_TAG=v1.2.3 make deploy-openshift` or Kustomize `images:` in your fork. RHAII CPU uses `registry.redhat.io/rhaii/vllm-cpu-rhel9:3.5.0-1786546771` (same as `compose.yml`).
 
 ## Deploy (recommended)
 
@@ -46,7 +49,26 @@ oc wait deployment/rhaii-cpu deployment/email-gateway deployment/agent-dashboard
   -n helpdesk-email-triage --for=condition=Available --timeout=900s
 ```
 
-Gateway CORS and Streamlit WebSocket settings are applied automatically at pod startup — no post-deploy patching.
+Gateway CORS and Streamlit WebSocket settings are applied automatically at pod startup — no post-deploy patching. Deploy records inference mode and overlay in the `helpdesk-deploy-info` ConfigMap for reliable `undeploy-openshift`.
+
+## Production / hardened overlay
+
+For pilots beyond the demo defaults, use the hardened overlay (NetworkPolicies, OpenShift OAuth on the dashboard Route, `REQUIRE_SECRETS=1`):
+
+```bash
+export VAULT_SECRET="$(openssl rand -hex 32)"
+export INGEST_API_KEY="$(openssl rand -hex 16)"
+oc create secret generic helpdesk-secrets \
+  --from-literal=VAULT_SECRET="$VAULT_SECRET" \
+  --from-literal=INGEST_API_KEY="$INGEST_API_KEY" \
+  -n helpdesk-email-triage --dry-run=client -o yaml | oc apply -f -
+
+OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift
+```
+
+With `REQUIRE_SECRETS=1`, the gateway refuses to start with demo-default `VAULT_SECRET` or a missing `INGEST_API_KEY`. HTTP ingest then requires header `X-Ingest-Key`. Ticket JSON on the gateway PVC is not encrypted at rest — use an encrypted storage class for regulated data.
+
+Full checklist: [docs/deploy-openshift.md](../../docs/deploy-openshift.md#production-checklist).
 
 ## Verify
 
@@ -54,7 +76,9 @@ Gateway CORS and Streamlit WebSocket settings are applied automatically at pod s
 make verify-openshift
 ```
 
-Or:
+This resolves Route URLs, checks gateway health and dashboard headers, waits for file-watcher tickets, and falls back to `/ingest/raw` if needed (reads `INGEST_API_KEY` from `helpdesk-secrets` when set).
+
+Manual equivalent:
 
 ```bash
 NS=helpdesk-email-triage
@@ -72,6 +96,8 @@ make undeploy-openshift                  # remove resources, keep project
 DELETE_NAMESPACE=1 make undeploy-openshift   # delete entire project
 ```
 
+`undeploy-openshift` reads `helpdesk-deploy-info` to select the correct overlay and image tag.
+
 ## Auto-discovery
 
 On OpenShift, both `email-gateway` and `agent-dashboard` entrypoints:
@@ -80,7 +106,7 @@ On OpenShift, both `email-gateway` and `agent-dashboard` entrypoints:
 2. Query `routes.route.openshift.io/agent-dashboard`
 3. Set `DASHBOARD_ORIGIN` and `STREAMLIT_BROWSER_SERVER_ADDRESS` from the Route hostname
 
-Requires the `route-reader` component (included in demo overlays).
+Streamlit XSRF protection is enabled automatically on OpenShift. Requires the `route-reader` component (included in demo overlays).
 
 ## Validate manifests locally
 
@@ -90,8 +116,10 @@ make validate-manifests
 
 ## Notes
 
-- **Single gateway replica** — JSON ticket store on ReadWriteOnce PVC (`Recreate` strategy).
-- **RHAII CPU** — no GPU Operator; requires AVX2+ worker nodes and `hf-secret` + `redhat-registry-pull`.
+- **Single gateway replica** — JSON ticket store on ReadWriteOnce PVC (`Recreate` strategy); not encrypted at rest.
+- **RHAII CPU** — no GPU Operator; requires AVX2+ worker nodes (16 GiB+ allocatable RAM recommended) and `hf-secret` + `redhat-registry-pull`.
+- **NetworkPolicies** — included in demo overlays; restrict pod-to-pod traffic within the namespace.
+- **SMTP** — not exposed on public Routes; use authenticated `POST /ingest` for production MTA integration.
 - **Rebuild images** after changing entrypoints; push to your registry before redeploying.
 
 See [docs/deploy-openshift.md](../../docs/deploy-openshift.md).
