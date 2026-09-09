@@ -515,7 +515,7 @@ See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShif
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| [ci.yml](.github/workflows/ci.yml) | PR + push to `main` | **ruff** lint, tests, Compose validation, Kustomize validation (pinned), container builds + **Trivy** scan, compose e2e, **kind e2e** |
+| [ci.yml](.github/workflows/ci.yml) | PR + push to `main` | **ruff** lint, tests, Compose validation, Kustomize validation (pinned), container builds, compose e2e, **kind e2e** |
 | [publish-quay.yml](.github/workflows/publish-quay.yml) | Push to `main` (image paths), release, manual | Lint, tests, compose e2e, then build, smoke-test, and push to Quay |
 | [reusable-build.yml](.github/workflows/reusable-build.yml) | `workflow_call` from customer repos | Reusable build/push for all three images |
 

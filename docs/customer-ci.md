@@ -31,7 +31,7 @@ The gateway exposes a stable HTTP contract documented in [integration.md](integr
 
 | Workflow | Purpose |
 |---|---|
-| `.github/workflows/ci.yml` | ruff lint, unit tests, compose validation, Kustomize validation (pinned), container builds + Trivy scan, compose e2e, kind e2e |
+| `.github/workflows/ci.yml` | ruff lint, unit tests, compose validation, Kustomize validation (pinned), container builds, compose e2e, kind e2e |
 | `.github/workflows/publish-quay.yml` | Lint, tests, compose e2e, then build, smoke-test, and push images |
 | `.github/workflows/reusable-build.yml` | Callable workflow for customer repos |
 
@@ -81,7 +81,7 @@ Minimal stages any pipeline should include:
 4. **Kind e2e** — `make kind-e2e` (plain Kubernetes; no cluster required beyond Docker)
 5. **Build images** — build each `*/Containerfile` with your registry tag
 6. **Smoke test** — run container with import check (see `publish-quay.yml`)
-7. **Scan** — Trivy is included in `ci.yml`; add your org scanner on push if required
+7. **Scan** — add your org's container scanner on push if required
 8. **Deploy** — `make deploy-openshift` (production: `OVERLAY=.../hardened` for mock, or `INFERENCE=rhaii OVERLAY=.../hardened` for RHAII CPU)
 9. **Verify** — `make verify-openshift` (health + ingest/ticket smoke test)
 
