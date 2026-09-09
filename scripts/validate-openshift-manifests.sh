@@ -11,6 +11,7 @@ OVERLAYS=(
   deploy/openshift/overlays/helpdesk-email-triage
   deploy/openshift/overlays/helpdesk-email-triage-rhaii
   deploy/openshift/overlays/hardened
+  deploy/openshift/overlays/hardened-rhaii
   deploy/kind/overlays/mock-demo
 )
 

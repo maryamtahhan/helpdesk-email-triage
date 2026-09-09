@@ -40,10 +40,25 @@ resolve_inference_mode() {
   esac
 }
 
+resolve_overlay_path() {
+  local path="$1"
+  if [[ "$path" != /* ]]; then
+    path="${ROOT}/${path}"
+  fi
+  echo "$path"
+}
+
 resolve_overlay() {
   local mode="$1"
   if [[ -n "${OVERLAY:-}" ]]; then
-    echo "$OVERLAY"
+    local overlay_path
+    overlay_path="$(resolve_overlay_path "$OVERLAY")"
+    # hardened/ is mock-only; map to hardened-rhaii when INFERENCE=rhaii.
+    if [[ "$overlay_path" == "${ROOT}/deploy/openshift/overlays/hardened" && "$mode" == "rhaii" ]]; then
+      echo "${ROOT}/deploy/openshift/overlays/hardened-rhaii"
+      return 0
+    fi
+    echo "$overlay_path"
     return 0
   fi
   case "$mode" in

@@ -88,7 +88,8 @@ curl -sk "https://${GW}/tickets" | python3 -m json.tool | head -20
 | `deploy/openshift/overlays/rhaii-demo` | Greenfield — Namespace + RHAII CPU stack |
 | `deploy/openshift/overlays/gateway-only` | API/SMTP only; no Streamlit UI |
 | `deploy/openshift/overlays/external-inference` | Gateway wired to RHAII/vLLM **already running elsewhere** |
-| `deploy/openshift/overlays/hardened` | Production-oriented: NetworkPolicies, OAuth on dashboard Route, `REQUIRE_SECRETS=1` |
+| `deploy/openshift/overlays/hardened` | Production mock inference + hardening (`REQUIRE_SECRETS=1`) |
+| `deploy/openshift/overlays/hardened-rhaii` | Production RHAII CPU + hardening (or `INFERENCE=rhaii OVERLAY=.../hardened`) |
 
 Set a custom overlay when calling the script:
 
@@ -127,7 +128,8 @@ oc create secret generic helpdesk-secrets \
   --from-literal=VAULT_SECRET="$VAULT_SECRET" \
   --from-literal=INGEST_API_KEY="$INGEST_API_KEY" \
   -n helpdesk-email-triage --dry-run=client -o yaml | oc apply -f -
-OVERLAY=deploy/openshift/overlays/hardened ./scripts/deploy-openshift.sh helpdesk-email-triage
+INFERENCE=rhaii OVERLAY=deploy/openshift/overlays/hardened ./scripts/deploy-openshift.sh helpdesk-email-triage
+# deploy script maps hardened → hardened-rhaii when INFERENCE=rhaii
 ```
 
 ## Uninstall

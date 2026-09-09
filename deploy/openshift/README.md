@@ -20,7 +20,8 @@ deploy/openshift/
     ├── rhaii-demo/                    # Greenfield RHAII CPU stack
     ├── gateway-only/                  # Integrator path (no UI)
     ├── external-inference/            # Gateway + inference Service elsewhere
-    └── hardened/                      # Production-oriented (see below)
+    ├── hardened/                      # Production mock + hardening
+    └── hardened-rhaii/              # Production RHAII CPU + hardening
 ```
 
 Images default to `quay.io/mtahhan/helpdesk-*:latest`. Pin tags with `IMAGE_TAG=v1.2.3 make deploy-openshift` or Kustomize `images:` in your fork. RHAII CPU uses `registry.redhat.io/rhaii/vllm-cpu-rhel9:3.5.0-1786546771` (same as `compose.yml`).
@@ -63,7 +64,8 @@ oc create secret generic helpdesk-secrets \
   --from-literal=INGEST_API_KEY="$INGEST_API_KEY" \
   -n helpdesk-email-triage --dry-run=client -o yaml | oc apply -f -
 
-OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift
+INFERENCE=rhaii OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift
+# maps hardened → hardened-rhaii when INFERENCE=rhaii
 ```
 
 With `REQUIRE_SECRETS=1`, the gateway refuses to start with demo-default `VAULT_SECRET` or a missing `INGEST_API_KEY`. HTTP ingest then requires header `X-Ingest-Key`. Ticket JSON on the gateway PVC is not encrypted at rest — use an encrypted storage class for regulated data.
