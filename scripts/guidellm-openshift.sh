@@ -45,7 +45,7 @@ TARGET="http://${SERVICE}.${NAMESPACE}.svc.cluster.local:8000"
 PROCESSOR_ARGS=""
 if [[ "$USE_HF_SECRET" == "1" ]]; then
   PROCESSOR="${GUIDELLM_PROCESSOR:-$MODEL}"
-  PROCESSOR_ARGS=$'- --processor\n            - '"${PROCESSOR}"
+  PROCESSOR_ARGS=$'            - --processor\n            - '"${PROCESSOR}"
 fi
 
 echo "==> Ensuring GuideLLM can reach inference (NetworkPolicy)"
@@ -116,7 +116,7 @@ ${HF_ENV_BLOCK}
             - --target
             - ${TARGET}
             - --model
-            - ${MODEL}
+            - "${MODEL}"
 ${PROCESSOR_ARGS}
             - --data
             - '${DATA}'
