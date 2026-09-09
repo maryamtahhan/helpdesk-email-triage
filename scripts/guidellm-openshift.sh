@@ -85,12 +85,44 @@ PY
 )"
 
 if [[ "$CLI_MODE" == "run" ]]; then
-  BENCHMARK_ARGS=$'            - run\n            - --backend\n            - kind=openai_http,target='"${TARGET}"',model='"${MODEL}"$'\n            - --tokenizer\n            - kind=huggingface_auto,model='"${PROCESSOR}"$'\n            - --data\n            - kind=synthetic_text,prompt_tokens='"${PROMPT_TOKENS}"',output_tokens='"${OUTPUT_TOKENS}"$'\n            - --profile\n            - '"'"${PROFILE_JSON}"'"$'\n            - --constraint\n            - kind=max_duration,seconds='"${MAX_SECONDS}"$'\n            - --output\n            - kind=json,path=/results/benchmark-results.json\n            - --output\n            - kind=html,path=/results/benchmark-results.html'
+  BENCHMARK_ARGS="            - run
+            - --backend
+            - kind=openai_http,target=${TARGET},model=${MODEL}
+            - --tokenizer
+            - kind=huggingface_auto,model=${PROCESSOR}
+            - --data
+            - kind=synthetic_text,prompt_tokens=${PROMPT_TOKENS},output_tokens=${OUTPUT_TOKENS}
+            - --profile
+            - '${PROFILE_JSON}'
+            - --constraint
+            - kind=max_duration,seconds=${MAX_SECONDS}
+            - --output
+            - kind=json,path=/results/benchmark-results.json
+            - --output
+            - kind=html,path=/results/benchmark-results.html"
   RUN_HTML_JOB=0
 else
-  PROCESSOR_ARGS=$'            - --processor\n            - '"${PROCESSOR}"
   REPORT_SOURCE="${GUIDELLM_REPORT_SOURCE:-https://vllm-project.github.io/guidellm/ui/v0.7.1/index.html}"
-  BENCHMARK_ARGS=$'            - benchmark\n            - run\n            - --target\n            - '"${TARGET}"$'\n            - --model\n            - '"${MODEL}"$'\n'"${PROCESSOR_ARGS}"$'\n            - --data\n            - '"'"${DATA}"'"$'\n            - --rate-type\n            - concurrent\n            - --rate\n            - '"${RATE}"$'\n            - --max-seconds\n            - '"${MAX_SECONDS}"$'\n            - --output-dir\n            - /results\n            - --outputs\n            - benchmark-results.json'
+  BENCHMARK_ARGS="            - benchmark
+            - run
+            - --target
+            - ${TARGET}
+            - --model
+            - ${MODEL}
+            - --processor
+            - ${PROCESSOR}
+            - --data
+            - '${DATA}'
+            - --rate-type
+            - concurrent
+            - --rate
+            - ${RATE}
+            - --max-seconds
+            - ${MAX_SECONDS}
+            - --output-dir
+            - /results
+            - --outputs
+            - benchmark-results.json"
   RUN_HTML_JOB=1
 fi
 
