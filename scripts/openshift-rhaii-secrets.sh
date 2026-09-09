@@ -2,8 +2,6 @@
 # Ensure OpenShift secrets required for in-cluster RHAII CPU inference.
 set -euo pipefail
 
-namespace="${1:?namespace required}"
-
 registry_auth_file() {
   if [[ -n "${DOCKER_CONFIG:-}" && -f "${DOCKER_CONFIG}/config.json" ]]; then
     echo "${DOCKER_CONFIG}/config.json"
@@ -21,6 +19,7 @@ registry_auth_file() {
 }
 
 ensure_hf_secret() {
+  local namespace="$1"
   if [[ -n "${HF_TOKEN:-}" ]]; then
     oc create secret generic hf-secret \
       --from-literal=HF_TOKEN="$HF_TOKEN" \
@@ -32,10 +31,12 @@ ensure_hf_secret() {
 }
 
 has_hf_secret() {
+  local namespace="$1"
   [[ -n "${HF_TOKEN:-}" ]] || oc get secret hf-secret -n "$namespace" >/dev/null 2>&1
 }
 
 ensure_redhat_pull_secret() {
+  local namespace="$1"
   if oc get secret redhat-registry-pull -n "$namespace" >/dev/null 2>&1; then
     return 0
   fi
@@ -54,7 +55,7 @@ ensure_redhat_pull_secret() {
   auth_file="$(registry_auth_file)" || true
   if [[ -n "$auth_file" ]]; then
     if [[ "$auth_file" == *"auth.json" ]] && command -v jq >/dev/null 2>&1; then
-      local auth_b64 user pass
+      local auth_b64 userpass user pass
       auth_b64="$(jq -r '.auths["registry.redhat.io"].auth // empty' "$auth_file")"
       if [[ -n "$auth_b64" ]]; then
         userpass="$(printf '%s' "$auth_b64" | base64 -d 2>/dev/null || true)"
@@ -85,35 +86,39 @@ ensure_redhat_pull_secret() {
 }
 
 has_redhat_pull_secret() {
+  local namespace="$1"
   oc get secret redhat-registry-pull -n "$namespace" >/dev/null 2>&1 \
     || [[ -n "${REDHAT_REGISTRY_USERNAME:-}" && -n "${REDHAT_REGISTRY_PASSWORD:-}" ]] \
     || registry_auth_file >/dev/null 2>&1
 }
 
 link_pull_secret() {
+  local namespace="$1"
   oc secrets link default redhat-registry-pull --for=pull -n "$namespace" >/dev/null 2>&1 || true
 }
 
 rhaii_prereqs_met() {
-  has_hf_secret && has_redhat_pull_secret
+  local namespace="${1:?namespace required}"
+  has_hf_secret "$namespace" && has_redhat_pull_secret "$namespace"
 }
 
 setup_rhaii_secrets() {
-  if ! ensure_hf_secret; then
+  local namespace="${1:?namespace required}"
+  if ! ensure_hf_secret "$namespace"; then
     echo "RHAII CPU deploy requires HF_TOKEN (env) or an existing hf-secret in ${namespace}." >&2
     echo "  export HF_TOKEN=hf_..." >&2
     return 1
   fi
-  if ! ensure_redhat_pull_secret; then
+  if ! ensure_redhat_pull_secret "$namespace"; then
     echo "RHAII CPU deploy requires registry.redhat.io pull credentials." >&2
     echo "  podman login registry.redhat.io" >&2
     echo "  # or set REDHAT_REGISTRY_USERNAME / REDHAT_REGISTRY_PASSWORD" >&2
     return 1
   fi
-  link_pull_secret
+  link_pull_secret "$namespace"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-  setup_rhaii_secrets "$namespace"
-  echo "OpenShift RHAII secrets ready in ${namespace}"
+  setup_rhaii_secrets "${1:?namespace required}"
+  echo "OpenShift RHAII secrets ready in ${1}"
 fi

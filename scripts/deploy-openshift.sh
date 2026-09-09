@@ -25,7 +25,7 @@ resolve_inference_mode() {
   case "$INFERENCE" in
     mock|rhaii) echo "$INFERENCE" ;;
     auto)
-      if rhaii_prereqs_met >/dev/null 2>&1; then
+      if rhaii_prereqs_met "$NAMESPACE" >/dev/null 2>&1; then
         echo "rhaii"
       else
         echo "mock"
