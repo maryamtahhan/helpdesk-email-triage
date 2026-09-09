@@ -40,35 +40,10 @@ resolve_inference_mode() {
   esac
 }
 
-resolve_overlay_path() {
-  local path="$1"
-  if [[ "$path" != /* ]]; then
-    path="${ROOT}/${path}"
-  fi
-  echo "$path"
-}
-
-resolve_overlay() {
-  local mode="$1"
-  if [[ -n "${OVERLAY:-}" ]]; then
-    local overlay_path
-    overlay_path="$(resolve_overlay_path "$OVERLAY")"
-    # hardened/ is mock-only; map to hardened-rhaii when INFERENCE=rhaii.
-    if [[ "$overlay_path" == "${ROOT}/deploy/openshift/overlays/hardened" && "$mode" == "rhaii" ]]; then
-      echo "${ROOT}/deploy/openshift/overlays/hardened-rhaii"
-      return 0
-    fi
-    echo "$overlay_path"
-    return 0
-  fi
-  case "$mode" in
-    rhaii) echo "${ROOT}/deploy/openshift/overlays/helpdesk-email-triage-rhaii" ;;
-    mock) echo "${ROOT}/deploy/openshift/overlays/helpdesk-email-triage" ;;
-  esac
-}
-
 INFERENCE_MODE="$(resolve_inference_mode)"
-OVERLAY="$(resolve_overlay "$INFERENCE_MODE")"
+resolve_deploy_overlay "$INFERENCE_MODE"
+REQUESTED_OVERLAY="$RESOLVED_OVERLAY_REQUESTED"
+OVERLAY="$RESOLVED_OVERLAY_APPLIED"
 
 if [[ "$INFERENCE_MODE" == "rhaii" ]]; then
   WAIT_TIMEOUT="$RHAII_WAIT_TIMEOUT"
@@ -91,7 +66,7 @@ fi
 
 echo "==> Applying ${OVERLAY} (inference=${INFERENCE_MODE}, image-tag=${IMAGE_TAG:-latest})"
 openshift_kustomize_build "$OVERLAY" | oc apply -f -
-record_deploy_metadata "$NAMESPACE" "$INFERENCE_MODE" "$OVERLAY"
+record_deploy_metadata "$NAMESPACE" "$INFERENCE_MODE" "$REQUESTED_OVERLAY" "$OVERLAY"
 
 echo "==> Waiting for deployments"
 if [[ "$INFERENCE_MODE" == "rhaii" ]]; then

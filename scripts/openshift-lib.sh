@@ -10,8 +10,11 @@ openshift_kustomize_build() {
     return 0
   fi
 
+  # Copy overlay to a temp dir so `kustomize edit set image` does not mutate the tree.
+  # Symlinks under the overlay are not preserved; use absolute paths in kustomization if needed.
   local tmp
   tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' RETURN
   cp -R "$overlay/." "$tmp/"
   (
     cd "$tmp"
@@ -21,16 +24,76 @@ openshift_kustomize_build() {
       "quay.io/mtahhan/helpdesk-inference-mock=quay.io/mtahhan/helpdesk-inference-mock:${tag}"
     kustomize build --load-restrictor LoadRestrictionsNone .
   )
-  rm -rf "$tmp"
+}
+
+resolve_overlay_path() {
+  local path="$1"
+  if [[ "$path" != /* ]]; then
+    path="${ROOT}/${path}"
+  fi
+  echo "$path"
+}
+
+overlay_inference_mode() {
+  local path="$1"
+  case "$path" in
+    *external-inference*|*gateway-only*) echo "skip" ;;
+    *helpdesk-email-triage-rhaii*|*hardened-rhaii*|*rhaii-demo*) echo "rhaii" ;;
+    *) echo "mock" ;;
+  esac
+}
+
+validate_overlay_inference() {
+  local mode="$1"
+  local path="$2"
+  local expected
+  expected="$(overlay_inference_mode "$path")"
+  if [[ "$expected" == "skip" ]]; then
+    return 0
+  fi
+  if [[ "$mode" != "$expected" ]]; then
+    echo "ERROR: INFERENCE=${mode} conflicts with overlay (expects ${expected}):" >&2
+    echo "       ${path}" >&2
+    echo "       Use INFERENCE=${expected} or choose a matching overlay." >&2
+    exit 1
+  fi
+}
+
+# Sets RESOLVED_OVERLAY_REQUESTED and RESOLVED_OVERLAY_APPLIED (absolute paths).
+resolve_deploy_overlay() {
+  local mode="$1"
+  local requested=""
+  local applied=""
+
+  if [[ -n "${OVERLAY:-}" ]]; then
+    requested="$(resolve_overlay_path "$OVERLAY")"
+    applied="$requested"
+    if [[ "$requested" == "${ROOT}/deploy/openshift/overlays/hardened" && "$mode" == "rhaii" ]]; then
+      applied="${ROOT}/deploy/openshift/overlays/hardened-rhaii"
+      echo "==> Remapping OVERLAY: hardened -> hardened-rhaii (INFERENCE=rhaii)" >&2
+    fi
+  else
+    case "$mode" in
+      rhaii) applied="${ROOT}/deploy/openshift/overlays/helpdesk-email-triage-rhaii" ;;
+      mock) applied="${ROOT}/deploy/openshift/overlays/helpdesk-email-triage" ;;
+    esac
+    requested="$applied"
+  fi
+
+  validate_overlay_inference "$mode" "$applied"
+  export RESOLVED_OVERLAY_REQUESTED="$requested"
+  export RESOLVED_OVERLAY_APPLIED="$applied"
 }
 
 record_deploy_metadata() {
   local namespace="$1"
   local inference_mode="$2"
-  local overlay="$3"
+  local requested_overlay="$3"
+  local applied_overlay="$4"
   oc create configmap helpdesk-deploy-info \
     --from-literal=inference-mode="$inference_mode" \
-    --from-literal=overlay="$overlay" \
+    --from-literal=overlay="$requested_overlay" \
+    --from-literal=applied-overlay="$applied_overlay" \
     --from-literal=image-tag="${IMAGE_TAG:-latest}" \
     -n "$namespace" \
     --dry-run=client -o yaml | oc apply -f -
@@ -43,7 +106,12 @@ read_deploy_metadata() {
   fi
   DEPLOY_INFERENCE_MODE="$(oc get configmap helpdesk-deploy-info -n "$namespace" -o jsonpath='{.data.inference-mode}')"
   DEPLOY_OVERLAY="$(oc get configmap helpdesk-deploy-info -n "$namespace" -o jsonpath='{.data.overlay}')"
+  DEPLOY_APPLIED_OVERLAY="$(oc get configmap helpdesk-deploy-info -n "$namespace" -o jsonpath='{.data.applied-overlay}')"
+  if [[ -z "$DEPLOY_APPLIED_OVERLAY" ]]; then
+    DEPLOY_APPLIED_OVERLAY="$DEPLOY_OVERLAY"
+  fi
   DEPLOY_IMAGE_TAG="$(oc get configmap helpdesk-deploy-info -n "$namespace" -o jsonpath='{.data.image-tag}')"
+  export DEPLOY_INFERENCE_MODE DEPLOY_OVERLAY DEPLOY_APPLIED_OVERLAY DEPLOY_IMAGE_TAG
 }
 
 rhaii_preflight() {

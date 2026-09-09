@@ -40,34 +40,14 @@ resolve_inference_mode() {
   esac
 }
 
-resolve_overlay_path() {
-  local path="$1"
-  if [[ "$path" != /* ]]; then
-    path="${ROOT}/${path}"
-  fi
-  echo "$path"
-}
-
-resolve_overlay() {
+resolve_undeploy_overlay() {
   local mode="$1"
-  if [[ -n "${OVERLAY:-}" ]]; then
-    local overlay_path
-    overlay_path="$(resolve_overlay_path "$OVERLAY")"
-    if [[ "$overlay_path" == "${ROOT}/deploy/openshift/overlays/hardened" && "$mode" == "rhaii" ]]; then
-      echo "${ROOT}/deploy/openshift/overlays/hardened-rhaii"
-      return 0
-    fi
-    echo "$overlay_path"
+  if read_deploy_metadata "$NAMESPACE" && [[ -n "${DEPLOY_APPLIED_OVERLAY:-}" ]]; then
+    echo "$DEPLOY_APPLIED_OVERLAY"
     return 0
   fi
-  if read_deploy_metadata "$NAMESPACE" && [[ -n "${DEPLOY_OVERLAY:-}" ]]; then
-    echo "$DEPLOY_OVERLAY"
-    return 0
-  fi
-  case "$mode" in
-    rhaii) echo "${ROOT}/deploy/openshift/overlays/helpdesk-email-triage-rhaii" ;;
-    mock) echo "${ROOT}/deploy/openshift/overlays/helpdesk-email-triage" ;;
-  esac
+  resolve_deploy_overlay "$mode"
+  echo "$RESOLVED_OVERLAY_APPLIED"
 }
 
 if [[ "$DELETE_NAMESPACE" == "1" ]]; then
@@ -84,10 +64,10 @@ fi
 
 oc project "$NAMESPACE"
 INFERENCE_MODE="$(resolve_inference_mode)"
-OVERLAY="$(resolve_overlay "$INFERENCE_MODE")"
+OVERLAY="$(resolve_undeploy_overlay "$INFERENCE_MODE")"
 
 if read_deploy_metadata "$NAMESPACE" && [[ -n "${DEPLOY_IMAGE_TAG:-}" ]]; then
-  IMAGE_TAG="$DEPLOY_IMAGE_TAG"
+  export IMAGE_TAG="$DEPLOY_IMAGE_TAG"
 fi
 
 echo "==> Removing resources from ${OVERLAY} (inference=${INFERENCE_MODE})"
