@@ -1,4 +1,4 @@
-# Publishes to quay.io/mayamtahhan:
+# Publishes to quay.io/mtahhan:
 #   helpdesk-email-gateway, helpdesk-triage-ui, helpdesk-inference-mock
 #
 # GitHub repo secrets (Settings → Secrets and variables → Actions):
@@ -51,11 +51,20 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Run lint
+        run: make lint
+
       - name: Run unit tests
         run: make test
 
       - name: Run webhook sink e2e
         run: make test-webhook
+
+      - name: Run compose e2e
+        env:
+          COMPOSE_ENGINE: docker
+          COMPOSE_FILE: compose.gateway-only.yml
+        run: make compose-e2e
 
   build-and-push:
     name: ${{ matrix.image }}

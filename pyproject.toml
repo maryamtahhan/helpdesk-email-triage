@@ -1,0 +1,11 @@
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"agent-dashboard/app.py" = ["E501"]
+"email-gateway/gateways/*.py" = ["E402", "E501"]
+"email-gateway/app/tokenizer.py" = ["E501"]

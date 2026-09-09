@@ -15,13 +15,12 @@ Extensions in this file (beyond the original):
   - Updated INSTR: Account Access category + structured token format
 '''
 
-import json
 import email
 import email.parser
 import email.policy
-from email.message import EmailMessage
-import sys
+import json
 import os
+import sys
 from argparse import ArgumentParser
 from pathlib import Path
 from types import SimpleNamespace
@@ -82,7 +81,7 @@ def _tokenize_payload(text: str) -> tuple:
         )
 
 
-class VLLMEmailGateway():
+class VLLMEmailGateway:
     '''Gateway from email to VLLM with configurable actions'''
     def __init__(self, config):
         if isinstance(config, dict):

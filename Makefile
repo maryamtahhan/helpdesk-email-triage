@@ -1,4 +1,4 @@
-.PHONY: demo up down logs ingest test demo-local gateway-only test-webhook webhook-receiver \
+.PHONY: demo up down logs ingest test lint demo-local gateway-only test-webhook webhook-receiver \
         validate-manifests compose-e2e build-images deploy-openshift verify-openshift \
         undeploy-openshift run-on-kind destroy-kind kind-e2e
 
@@ -33,6 +33,11 @@ test:
 	test -d .venv || python3 -m venv .venv
 	.venv/bin/pip install -q -r email-gateway/requirements.txt pytest
 	PYTHONPATH=email-gateway .venv/bin/python -m pytest email-gateway/tests -q
+
+lint:
+	test -d .venv || python3 -m venv .venv
+	.venv/bin/pip install -q ruff
+	.venv/bin/ruff check email-gateway agent-dashboard inference-mock
 
 demo-local:
 	./scripts/run-demo-local.sh

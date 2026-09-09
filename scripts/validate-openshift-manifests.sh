@@ -10,6 +10,7 @@ OVERLAYS=(
   deploy/openshift/overlays/external-inference
   deploy/openshift/overlays/helpdesk-email-triage
   deploy/openshift/overlays/helpdesk-email-triage-rhaii
+  deploy/openshift/overlays/hardened
   deploy/kind/overlays/mock-demo
 )
 

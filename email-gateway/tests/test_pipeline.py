@@ -2,11 +2,9 @@ import importlib
 from unittest.mock import patch
 
 import pytest
-
 from app.email_parser import parse_raw_email
 from app.inference import extract_json_object
 from app.tokenizer import heuristic_triage, tokenize_structured_pii
-
 
 SAMPLE = b"""From: Jane Martinez <jane.martinez@example.com>
 To: support@example.com

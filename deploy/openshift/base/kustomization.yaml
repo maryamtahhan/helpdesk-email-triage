@@ -15,6 +15,7 @@ resources:
   - agent-dashboard/deployment.yaml
   - agent-dashboard/service.yaml
 
+# Pin tags in your overlay or pass IMAGE_TAG= to deploy-openshift.sh
 images:
   - name: quay.io/mtahhan/helpdesk-email-gateway
     newTag: latest

@@ -327,12 +327,18 @@ Do not expose this endpoint to untrusted consumers. The demo Streamlit UI gates 
 | `TICKET_SINK_SECRET` | *(unset)* | HMAC secret for webhook `X-Ticket-Signature` |
 | `TICKET_SINK_SYNC` | *(unset)* | Set to `1` for inline delivery (tests/debug) |
 | `DASHBOARD_ORIGIN` | `http://localhost:8501` | CORS origin (only needed if a browser UI calls the API) |
+| `INGEST_API_KEY` | *(unset)* | Require `X-Ingest-Key` on `POST /ingest` and `/ingest/raw` |
+| `REQUIRE_SECRETS` | *(unset)* | Set to `1` to refuse demo-default secrets at gateway startup |
+
+## SMTP durability note
+
+The SMTP listener accepts mail with `250 Message accepted` and classifies in a background thread. If the gateway process crashes after accept but before persistence, that message is lost. For production MTA integration, prefer `POST /ingest` (with `INGEST_API_KEY` when configured) or an upstream queue that retries on failure.
 
 ## Compose files
 
 | File | Services | Default images |
 |---|---|---|
-| `compose.mock.demo.yml` | Mock inference + gateway + Streamlit UI | `quay.io/mayamtahhan/helpdesk-*:latest` |
+| `compose.mock.demo.yml` | Mock inference + gateway + Streamlit UI | `quay.io/mtahhan/helpdesk-*:latest` |
 | `compose.gateway-only.yml` | Mock inference + gateway (no UI) | same |
 | `compose.yml` | Red Hat AI Inference + gateway + Streamlit UI | gateway + UI from Quay; RHAII from `registry.redhat.io` |
 

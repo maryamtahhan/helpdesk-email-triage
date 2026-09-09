@@ -5,7 +5,6 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
-
 from app.sink import dispatch, parse_sinks, post_webhook, sign_payload, webhook_urls
 from app.triage_result import TriageResult
 

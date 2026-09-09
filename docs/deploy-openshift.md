@@ -88,6 +88,7 @@ curl -sk "https://${GW}/tickets" | python3 -m json.tool | head -20
 | `deploy/openshift/overlays/rhaii-demo` | Greenfield — Namespace + RHAII CPU stack |
 | `deploy/openshift/overlays/gateway-only` | API/SMTP only; no Streamlit UI |
 | `deploy/openshift/overlays/external-inference` | Gateway wired to RHAII/vLLM **already running elsewhere** |
+| `deploy/openshift/overlays/hardened` | Production-oriented: NetworkPolicies, OAuth on dashboard Route, `REQUIRE_SECRETS=1` |
 
 Set a custom overlay when calling the script:
 
@@ -109,11 +110,25 @@ Optional override: set `DASHBOARD_ORIGIN` or `STREAMLIT_BROWSER_SERVER_ADDRESS` 
 
 ## Production checklist
 
-1. **Images** — mirror or rebuild into your registry; update Kustomize `images:` in your overlay.
-2. **Secrets** — replace `VAULT_SECRET` before any real deployment.
-3. **Inference** — `INFERENCE=auto` deploys RHAII CPU when creds exist; use `external-inference` only when inference runs in another namespace.
-4. **Storage** — gateway uses a 1 Gi PVC; RHAII uses a 20 Gi `rhaii-model-cache` PVC; single replica only unless you add shared storage.
-5. **SMTP** — relay to `POST /ingest`; do not expose port 3025 on a public Route.
+1. **Overlay** — use `deploy/openshift/overlays/hardened` (NetworkPolicies, dashboard OAuth, `REQUIRE_SECRETS=1`).
+2. **Images** — pin tags with `IMAGE_TAG=v1.2.3 make deploy-openshift` or update Kustomize `images:` in your fork.
+3. **Secrets** — before deploy, patch `helpdesk-secrets` with non-demo `VAULT_SECRET` and `INGEST_API_KEY` (required when `REQUIRE_SECRETS=1`). HTTP ingest then requires header `X-Ingest-Key`.
+4. **Vault storage** — `tickets.json` on the gateway PVC is **not encrypted at rest**; use an encrypted volume class or external store for regulated data.
+5. **Inference** — `INFERENCE=auto` deploys RHAII CPU when creds exist; use `external-inference` only when inference runs in another namespace.
+6. **Storage** — gateway uses a 1 Gi PVC; RHAII uses a 20 Gi `rhaii-model-cache` PVC; single replica only unless you add shared storage.
+7. **SMTP** — relay to authenticated `POST /ingest` or `/ingest/raw`; do not expose port 3025 on a public Route. SMTP returns `250` before triage completes — use HTTP ingest when durability matters.
+
+### Hardened deploy example
+
+```bash
+export VAULT_SECRET="$(openssl rand -hex 32)"
+export INGEST_API_KEY="$(openssl rand -hex 16)"
+oc create secret generic helpdesk-secrets \
+  --from-literal=VAULT_SECRET="$VAULT_SECRET" \
+  --from-literal=INGEST_API_KEY="$INGEST_API_KEY" \
+  -n helpdesk-email-triage --dry-run=client -o yaml | oc apply -f -
+OVERLAY=deploy/openshift/overlays/hardened ./scripts/deploy-openshift.sh helpdesk-email-triage
+```
 
 ## Uninstall
 
