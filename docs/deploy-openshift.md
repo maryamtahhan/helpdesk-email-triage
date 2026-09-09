@@ -1,6 +1,27 @@
 # Deploy on OpenShift
 
-This guide covers cluster deployment of the helpdesk email triage quickstart. For single-host RHEL, use Podman Compose or Quadlet (`deploy/quadlet/`).
+**Start here:** the [README](../README.md) has copy-paste deploy, verify, and hardened commands. This guide adds overlay reference and production checklist detail.
+
+For single-host RHEL, use Podman Compose or Quadlet (`deploy/quadlet/`).
+
+## Decision guide
+
+| I want… | Command |
+|---|---|
+| Demo (auto: RHAII if creds exist, else mock) | `make deploy-openshift` |
+| Demo mock only | `INFERENCE=mock make deploy-openshift` |
+| Demo RHAII CPU | `INFERENCE=rhaii make deploy-openshift` |
+| Hardened mock | `OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift` |
+| Hardened RHAII CPU | `INFERENCE=rhaii OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift` |
+
+### `INFERENCE` vs `OVERLAY`
+
+| Variable | Controls |
+|---|---|
+| `INFERENCE` | Mock vs RHAII for secrets, `oc wait`, and deploy metadata when **no** `OVERLAY` is set (`auto` → RHAII if `HF_TOKEN` + registry creds exist, else mock). |
+| `OVERLAY` | Which Kustomize tree is applied. **Takes precedence** over the default overlay implied by `INFERENCE`. |
+
+`deploy/openshift/overlays/hardened` includes the **mock** stack. For hardened **RHAII CPU**, use `INFERENCE=rhaii` with that overlay (remapped to `hardened-rhaii`) or set `OVERLAY=deploy/openshift/overlays/hardened-rhaii` explicitly.
 
 ## One-command deploy
 
@@ -11,136 +32,73 @@ make deploy-openshift
 # or: ./scripts/deploy-openshift.sh helpdesk-email-triage
 ```
 
-That applies the Kustomize overlay, waits for all Deployments, and prints the Route URLs. **No manual ConfigMap patching** — gateway and dashboard entrypoints discover the `agent-dashboard` Route hostname from the OpenShift API at startup (via a scoped ServiceAccount).
+Applies the overlay, waits for Deployments, prints Route URLs. Gateway CORS and Streamlit WebSockets are discovered from the `agent-dashboard` Route at pod startup — no manual ConfigMap patching.
 
-### RHAII CPU inference (production demo)
-
-By default, `make deploy-openshift` uses **`INFERENCE=auto`**:
-
-- If `HF_TOKEN` and `registry.redhat.io` credentials are available → deploys **RHAII CPU** (`vllm-cpu-rhel9`) in the same namespace as the gateway and UI
-- Otherwise → deploys the **mock** inference pod (fast, no Red Hat registry)
+### RHAII CPU prerequisites
 
 ```bash
 podman login registry.redhat.io
 export HF_TOKEN="your_huggingface_token"
 make deploy-openshift
-# equivalent: INFERENCE=rhaii make deploy-openshift
+# or: INFERENCE=rhaii make deploy-openshift
 ```
 
-This follows [RHAII 3.5 standalone CPU on OpenShift](https://docs.redhat.com/en/documentation/red_hat_ai_inference/3.5/html/getting_started/about-cpu-inference_getting-started) — **CPU only, no GPU Operator**. The deploy script creates `hf-secret` and `redhat-registry-pull` in your project automatically.
+Follows [RHAII 3.5 CPU on OpenShift](https://docs.redhat.com/en/documentation/red_hat_ai_inference/3.5/html/getting_started/about-cpu-inference_getting-started) — **CPU only, no GPU Operator**. The deploy script creates `hf-secret` and `redhat-registry-pull` automatically.
 
-Force mock (CI parity, no registry access):
+Force mock (no registry):
 
 ```bash
 INFERENCE=mock make deploy-openshift
 ```
 
-First RHAII start downloads model weights into the `rhaii-model-cache` PVC (several minutes). Increase wait time if needed:
-
-```bash
-RHAII_WAIT_TIMEOUT=1200s make deploy-openshift
-```
-
-Worker nodes need **x86_64 with AVX2** and enough RAM (16 GiB minimum, 32 GiB recommended for `Qwen/Qwen2.5-1.5B-Instruct`).
+First RHAII start downloads weights to the `rhaii-model-cache` PVC (several minutes). Increase wait: `RHAII_WAIT_TIMEOUT=1200s make deploy-openshift`. Workers need **x86_64 + AVX2** and **16 GiB+ allocatable RAM** (32 GiB recommended).
 
 ## Verify
-
-Route hostnames include the **OpenShift project name** (`{route}-{namespace}.apps.{cluster}`). Resolve them from the cluster — do not hardcode URLs.
 
 ```bash
 make verify-openshift
 ```
 
-Or manually:
+Checks health, dashboard headers, file-watcher tickets, and falls back to `/ingest/raw`. Reads `INGEST_API_KEY` from `helpdesk-secrets` when set.
+
+Manual check:
 
 ```bash
 NS=helpdesk-email-triage
 GW=$(oc get route email-gateway -n "$NS" -o jsonpath='{.spec.host}')
 UI=$(oc get route agent-dashboard -n "$NS" -o jsonpath='{.spec.host}')
 curl -sk "https://${GW}/health"
-curl -skI "https://${UI}" | head -5
 echo "Open: https://${UI}"
 ```
 
-Still seeing `*-mtahhan-quickstart.apps.*`? Delete the old project and redeploy into `helpdesk-email-triage`:
+## Overlay catalog
 
-```bash
-oc delete project mtahhan-quickstart
-make deploy-openshift
-```
+| Overlay | Inference | Use when |
+|---|---|---|
+| `helpdesk-email-triage` | Mock | Existing project, no HF/registry |
+| `helpdesk-email-triage-rhaii` | RHAII CPU | Existing project, full RHAII demo |
+| `mock-demo` | Mock | Greenfield — creates Namespace |
+| `rhaii-demo` | RHAII CPU | Greenfield + RHAII |
+| `gateway-only` | Mock | API/SMTP only, no UI |
+| `external-inference` | External | Gateway only; inference elsewhere |
+| `hardened` | Mock | Production hardening (`REQUIRE_SECRETS=1`) |
+| `hardened-rhaii` | RHAII CPU | Production hardening + RHAII |
 
-Optional ingest test:
-
-```bash
-curl -sk -X POST "https://${GW}/ingest/raw" \
-  -H "Content-Type: application/json" \
-  -d '{"sender":"test@example.com","subject":"Verify deploy","body":"OpenShift smoke test."}'
-curl -sk "https://${GW}/tickets" | python3 -m json.tool | head -20
-```
-
-## Choose an overlay
-
-| Overlay | Use when |
-|---|---|
-| `deploy/openshift/overlays/helpdesk-email-triage` | **Mock inference** — existing project, no registry/HF token |
-| `deploy/openshift/overlays/helpdesk-email-triage-rhaii` | **RHAII CPU inference** — full demo with `vllm-cpu-rhel9` (used by `INFERENCE=rhaii`) |
-| `deploy/openshift/overlays/mock-demo` | Greenfield — Kustomize creates the Namespace resource |
-| `deploy/openshift/overlays/rhaii-demo` | Greenfield — Namespace + RHAII CPU stack |
-| `deploy/openshift/overlays/gateway-only` | API/SMTP only; no Streamlit UI |
-| `deploy/openshift/overlays/external-inference` | Gateway wired to RHAII/vLLM **already running elsewhere** |
-| `deploy/openshift/overlays/hardened` | Production mock inference + hardening (`REQUIRE_SECRETS=1`) |
-| `deploy/openshift/overlays/hardened-rhaii` | Production RHAII CPU + hardening (or `INFERENCE=rhaii OVERLAY=.../hardened`) |
-
-Set a custom overlay when calling the script:
+Custom overlay:
 
 ```bash
 OVERLAY=deploy/openshift/overlays/mock-demo ./scripts/deploy-openshift.sh my-namespace
 ```
 
-### `INFERENCE` vs `OVERLAY`
-
-| Variable | Controls |
-|---|---|
-| `INFERENCE` | Which inference stack to prepare when **no** `OVERLAY` is set (`auto` → RHAII if `HF_TOKEN` + registry creds exist, else mock). Also drives secret setup and `oc wait` targets. |
-| `OVERLAY` | Which Kustomize tree is applied. **Takes precedence** over the default overlay implied by `INFERENCE`. |
-
-Important: `deploy/openshift/overlays/hardened` includes the **mock** stack (`helpdesk-email-triage` → `mock-demo`). To run hardened **with RHAII CPU**, either:
-
-- set `INFERENCE=rhaii` together with `OVERLAY=deploy/openshift/overlays/hardened` (the deploy script remaps to `hardened-rhaii`), or
-- set `OVERLAY=deploy/openshift/overlays/hardened-rhaii` explicitly.
-
-| Goal | Command |
-|---|---|
-| Demo mock (default) | `make deploy-openshift` |
-| Demo RHAII CPU | `INFERENCE=rhaii make deploy-openshift` |
-| Hardened mock | `OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift` |
-| Hardened RHAII CPU | `INFERENCE=rhaii OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift` |
-
-## How auto-configuration works
-
-| Concern | Mechanism |
-|---|---|
-| Streamlit WebSocket host | `agent-dashboard/entrypoint.sh` reads Route `agent-dashboard` |
-| Gateway CORS (`DASHBOARD_ORIGIN`) | `email-gateway/entrypoint.sh` reads the same Route host |
-| RBAC | `deploy/openshift/components/route-reader/` grants `get/list routes` in-namespace |
-
-Optional override: set `DASHBOARD_ORIGIN` or `STREAMLIT_BROWSER_SERVER_ADDRESS` in the environment to skip auto-discovery.
-
-**Images must include the entrypoints** — rebuild and push `helpdesk-email-gateway` and `helpdesk-triage-ui` after pulling these changes.
-
 ## Production checklist
 
-1. **Overlay** — use `hardened` (mock inference) or `hardened-rhaii` / `INFERENCE=rhaii OVERLAY=.../hardened` (RHAII CPU). Both add NetworkPolicies, dashboard OAuth, and `REQUIRE_SECRETS=1`.
-2. **Images** — pin tags with `IMAGE_TAG=v1.2.3 make deploy-openshift` or update Kustomize `images:` in your fork.
-3. **Secrets** — before deploy, patch `helpdesk-secrets` with non-demo `VAULT_SECRET` and `INGEST_API_KEY` (required when `REQUIRE_SECRETS=1`). HTTP ingest then requires header `X-Ingest-Key`.
-4. **Vault storage** — `tickets.json` on the gateway PVC is **not encrypted at rest**; use an encrypted volume class or external store for regulated data.
-5. **Inference** — `INFERENCE=auto` deploys RHAII CPU when creds exist; use `external-inference` only when inference runs in another namespace.
-6. **Storage** — gateway uses a 1 Gi PVC; RHAII uses a 20 Gi `rhaii-model-cache` PVC; single replica only unless you add shared storage.
-7. **SMTP** — relay to authenticated `POST /ingest` or `/ingest/raw`; do not expose port 3025 on a public Route. SMTP returns `250` before triage completes — use HTTP ingest when durability matters.
+1. **Overlay** — `hardened` (mock) or `hardened-rhaii` / `INFERENCE=rhaii OVERLAY=.../hardened` (RHAII).
+2. **Secrets** — non-demo `VAULT_SECRET` and `INGEST_API_KEY` in `helpdesk-secrets` before deploy.
+3. **Images** — `IMAGE_TAG=v1.2.3 make deploy-openshift` or Kustomize `images:` in your fork.
+4. **Vault storage** — `tickets.json` on the gateway PVC is **not encrypted at rest**.
+5. **SMTP** — do not expose port 3025 on a public Route; prefer authenticated HTTP ingest.
 
-### Hardened deploy examples
-
-Create secrets first (required for both examples):
+### Hardened deploy
 
 ```bash
 export VAULT_SECRET="$(openssl rand -hex 32)"
@@ -149,48 +107,31 @@ oc create secret generic helpdesk-secrets \
   --from-literal=VAULT_SECRET="$VAULT_SECRET" \
   --from-literal=INGEST_API_KEY="$INGEST_API_KEY" \
   -n helpdesk-email-triage --dry-run=client -o yaml | oc apply -f -
-```
 
-**Hardened mock** (no RHAII registry/HF token):
-
-```bash
+# Mock:
 OVERLAY=deploy/openshift/overlays/hardened ./scripts/deploy-openshift.sh helpdesk-email-triage
-```
 
-**Hardened RHAII CPU** (also set `HF_TOKEN` and `podman login registry.redhat.io`):
-
-```bash
-export HF_TOKEN="your_huggingface_token"
-podman login registry.redhat.io
+# RHAII CPU (also HF_TOKEN + registry login):
 INFERENCE=rhaii OVERLAY=deploy/openshift/overlays/hardened ./scripts/deploy-openshift.sh helpdesk-email-triage
-# applies deploy/openshift/overlays/hardened-rhaii
 ```
 
-Equivalent explicit overlay:
+## Auto-configuration
 
-```bash
-OVERLAY=deploy/openshift/overlays/hardened-rhaii INFERENCE=rhaii ./scripts/deploy-openshift.sh helpdesk-email-triage
-```
+| Concern | Mechanism |
+|---|---|
+| Streamlit WebSocket host | `agent-dashboard/entrypoint.sh` reads Route `agent-dashboard` |
+| Gateway CORS | `email-gateway/entrypoint.sh` reads the same Route host |
+| RBAC | `components/route-reader/` grants `get/list routes` in-namespace |
+| Undeploy | `helpdesk-deploy-info` ConfigMap records overlay and image tag |
 
 ## Uninstall
 
-Remove resources but keep the project:
-
 ```bash
 make undeploy-openshift
-# or: ./scripts/undeploy-openshift.sh helpdesk-email-triage
+DELETE_NAMESPACE=1 make undeploy-openshift   # delete entire project
 ```
 
-Delete the entire project:
-
-```bash
-DELETE_NAMESPACE=1 make undeploy-openshift
-# or: oc delete project helpdesk-email-triage
-```
-
-## Kind / CI testing
-
-For GitHub Actions and local Kubernetes testing without OpenShift:
+## Kind / CI (no OpenShift)
 
 ```bash
 make kind-e2e
@@ -202,15 +143,14 @@ See [deploy/kind/README.md](../deploy/kind/README.md).
 
 | Script | Purpose |
 |---|---|
-| `scripts/deploy-openshift.sh` | Deploy mock or RHAII CPU stack (`INFERENCE=auto\|mock\|rhaii`) |
-| `scripts/undeploy-openshift.sh` | Remove deployed resources |
-| `scripts/openshift-verify.sh` | Print Route URLs from cluster and run health checks |
-| `scripts/openshift-rhaii-secrets.sh` | Create `hf-secret` and `redhat-registry-pull` |
+| `scripts/deploy-openshift.sh` | Deploy (`INFERENCE=auto\|mock\|rhaii`) |
+| `scripts/undeploy-openshift.sh` | Remove resources |
+| `scripts/openshift-verify.sh` | Smoke test |
+| `scripts/openshift-rhaii-secrets.sh` | Create HF + registry secrets |
 
-Makefile wrappers: `make deploy-openshift`, `make verify-openshift`, `make undeploy-openshift`.
+## Related
 
-## Related docs
-
-- [Customer CI pipelines](customer-ci.md)
+- [README — OpenShift section](../README.md#openshift--kubernetes)
+- [Manifest layout](../deploy/openshift/README.md)
+- [Customer CI](customer-ci.md)
 - [Integration guide](integration.md)
-- [OpenShift manifest README](../deploy/openshift/README.md)

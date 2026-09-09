@@ -1,5 +1,7 @@
 # Integrating the email gateway
 
+**Overview, deploy paths, and quick start:** [README](../README.md)
+
 The **email gateway** is the reusable building block in this quickstart. It ingests RFC-822 mail, regex-tokenizes structured PII into a local vault, calls Red Hat AI Inference (or a mock) for category, urgency, summary, and residual name redaction, and exposes sanitized tickets over HTTP and SMTP.
 
 The Streamlit dashboard (`agent-dashboard/`) is a **demo inbox** only. Production adopters typically poll the ticket API, receive push delivery via `TICKET_SINK` webhooks, or import `process_parsed_email()` directly.

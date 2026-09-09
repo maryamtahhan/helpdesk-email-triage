@@ -1,55 +1,42 @@
-# Running the demo locally (mock inference)
+# Running the demo locally
 
-This guide lets you walk the full helpdesk-triage UI on a laptop without any Red Hat subscription, container registry login, GPU, or Hugging Face token. A lightweight mock server stands in for the AI inference engine and returns realistic structured responses instantly.
+**Fastest path:** [README Quick start](../README.md#quick-start-laptop-demo) — `make demo`, open port 8501, done.
+
+This guide walks through every feature in the demo UI and alternative run methods. No Red Hat subscription, registry login, GPU, or Hugging Face token required.
 
 ## Prerequisites
 
-- Podman 4.9+ with the Compose plugin (`podman compose`), **or** Docker with `docker compose`
+- Podman 4.9+ with Compose (`podman compose`), **or** Docker with `docker compose`
 - Git
 
-No Red Hat subscription, no registry login, no GPU, no Hugging Face token.
-
-## Quick start
+## Start the stack
 
 ```bash
 git clone <repo-url>
 cd helpdesk-email-triage
-
-podman compose -f compose.mock.demo.yml up --build
-# or: docker compose -f compose.mock.demo.yml up --build
+make demo
+# or: podman compose -f compose.mock.demo.yml up --build
 ```
 
-The mock compose file names the inference service `inference-mock` (not `rhaii-cpu-engine`, which is reserved for the real RHAII path in `compose.yml`).
+Mock compose uses service name `inference-mock` (real RHAII in `compose.yml` uses `rhaii-cpu-engine`).
 
-Open [http://127.0.0.1:8501](http://127.0.0.1:8501). The queue will already contain tickets auto-ingested from `sample_emails/`.
+Open [http://127.0.0.1:8501](http://127.0.0.1:8501). Tickets from `sample_emails/` load automatically.
 
 ## Verify
 
 ```bash
 curl -sS http://127.0.0.1:8080/health
 curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
-curl -sI http://127.0.0.1:8501 | head -5
+./scripts/ingest-sample.sh    # optional
 ```
 
-Open: [http://127.0.0.1:8501](http://127.0.0.1:8501)
+Stop: `make down` or `podman compose -f compose.mock.demo.yml down -v`
 
-Optional ingest:
-
-```bash
-./scripts/ingest-sample.sh
-```
-
-Stop and remove volumes with:
-
-```bash
-podman compose -f compose.mock.demo.yml down -v
-```
-
-For gateway + inference without the UI, see [integration.md](integration.md) and `compose.gateway-only.yml` (also uses the `inference-mock` service name).
+Gateway without UI: `make gateway-only` ([integration.md](integration.md)).
 
 ## What you'll see
 
-The **Model** field in the sidebar shows `mock-triage`. The queue on the left should contain several tickets auto-ingested from `sample_emails/`.
+Sidebar **Model** shows `mock-triage`. Queue auto-refreshes every 10 seconds.
 
 | Sample email | Category | Urgency |
 |---|---|---|
@@ -63,111 +50,44 @@ The **Model** field in the sidebar shows `mock-triage`. The queue on the left sh
 
 ## Things to try
 
-### 1. Quick demo scenarios (sidebar)
-
-Click any of the seven scenario buttons in the sidebar. Each injects a pre-built email through the full pipeline — regex tokenization, mock classification, ticket creation — and selects the new ticket in the queue.
-
-### 2. Custom message
-
-Fill in the **Custom message** form in the sidebar with any sender, subject, and body. Include a phone number, credit card, or name to see how the tokenizer replaces them with structured tokens (`[NAME_1]`, `[PHONE_1]`, `[CARD_LAST4_1]`, etc.).
-
-### 3. SMTP ingest (alternative path)
-
-The **SMTP ingest** section in the sidebar sends an email directly to the SMTP listener on port 3025, bypassing the HTTP API — the same path a real mail server would use. Click **↪ Double charge** or **↪ MFA lockout** to send an RFC-822 message over SMTP. The ticket appears in the queue within the next 10-second auto-refresh.
-
-You can also send manually with any SMTP client or `swaks`:
+1. **Quick demo scenarios** — sidebar buttons triage pre-built mail instantly.
+2. **Custom message** — sidebar form; watch tokens like `[NAME_1]`, `[PHONE_1]` appear.
+3. **SMTP ingest** — sidebar **↪** buttons or `swaks` to port 3025:
 
 ```bash
-swaks --to support@helpdesk.local \
-      --from test@example.com \
+swaks --to support@helpdesk.local --from test@example.com \
       --server 127.0.0.1:3025 \
-      --body "Hi, I'm Alex. Account ACC-12345 was charged twice on 4111-1111-1111-1111."
+      --body "Account ACC-12345 charged twice on 4111-1111-1111-1111."
 ```
 
-### 4. Drop a `.eml` file
+4. **Drop a `.eml` file** — copy into `sample_emails/`; file watcher ingests within seconds.
+5. **Vault** — open a ticket → **🔓 View original PII vault** → compare token map vs raw body.
 
-Copy any RFC-822 `.eml` file into `sample_emails/`. The file watcher picks it up automatically within a few seconds and creates a ticket.
-
-### 5. Authorized rehydration
-
-Click a ticket, then click **🔓 View original PII vault**. The left panel shows the original body with raw PII highlighted in red; the right panel shows the sanitized version with blue tokens. The token map table below lists exactly which token maps to which original value. Click **🔒 Close vault** — the state resets independently for each ticket.
-
-## Native process fallback (no container runtime)
-
-If you don't have Podman or Docker, you can run the three processes directly with Python 3.11+:
+## Without containers
 
 ```bash
-chmod +x scripts/run-demo-local.sh
 ./scripts/run-demo-local.sh
 ```
 
-The script creates a `.venv`, installs dependencies, starts mock inference on port 8000 and the email gateway on port 8080, then opens the Streamlit dashboard. Stop everything with **Ctrl-C**.
+Stop with Ctrl-C, or `podman compose -f compose.mock.demo.yml down` if processes linger.
 
-If you lose the terminal or processes are still running after Ctrl-C, stop them by PID or use Compose teardown — broad `pkill` patterns can hit unrelated processes on your machine:
+## OpenShift
 
-```bash
-podman compose -f compose.mock.demo.yml down
-```
+Cluster deploy is documented in the [README](../README.md#openshift--kubernetes) (step-by-step) and [deploy-openshift.md](deploy-openshift.md) (overlay catalog).
 
-If you ran the native script instead:
+## Mock vs RHAII
 
-```bash
-# Prefer finding PIDs: lsof -i :8000 -i :8080 -i :8501
-pkill -f "uvicorn server:app"   # mock inference only
-pkill -f "uvicorn app.main:app" # email gateway only
-pkill -f "streamlit run app.py" # dashboard only
-```
-
-## OpenShift (cluster demo)
-
-Deploy the full stack to OpenShift with one command. Route hostnames are **`{route}-{namespace}.apps.{cluster}`** — always resolve them from the cluster; do not hardcode URLs.
-
-```bash
-oc new-project helpdesk-email-triage
-export HF_TOKEN="your_huggingface_token"   # optional — omit for mock inference
-podman login registry.redhat.io            # optional — omit for mock inference
-make deploy-openshift
-make verify-openshift
-```
-
-| `INFERENCE` | Result |
-|---|---|
-| `auto` (default) | RHAII CPU when `HF_TOKEN` + registry login exist; otherwise mock |
-| `rhaii` | Require RHAII CPU (`vllm-cpu-rhel9`) |
-| `mock` | Mock inference only |
-
-For production pilots on OpenShift, use `hardened` (mock inference) or `hardened-rhaii` / `INFERENCE=rhaii OVERLAY=.../hardened` (RHAII CPU) after setting non-demo secrets — see [deploy-openshift.md](deploy-openshift.md#inference-vs-overlay).
-
-Full runbook: [deploy-openshift.md](deploy-openshift.md).
-
-## Differences from the RHAII stack
-
-| | Mock stack | RHAII stack (RHEL Compose or OpenShift `INFERENCE=rhaii`) |
+| | Mock (`make demo`) | RHAII (`compose.yml` or OpenShift `INFERENCE=rhaii`) |
 |---|---|---|
-| Inference | Deterministic mock — always returns plausible JSON | `Qwen/Qwen2.5-1.5B-Instruct` on CPU via Red Hat AI Inference 3.5 |
-| Registry login | Not required | `podman login registry.redhat.io` |
-| Hugging Face token | Not required | Required to download model weights |
-| RHEL required | No — runs on macOS and Linux | RHEL 9.4+ x86_64 for Compose; OpenShift workers need AVX2+ |
-| GPU | Not used | Not used — **CPU inference only** in this quickstart |
-| Cold start | ~5 seconds | Several minutes (model download on first run) |
-| Classification quality | Fixed responses | Real LLM — output varies |
+| Inference | Deterministic mock | `Qwen/Qwen2.5-1.5B-Instruct` on CPU |
+| Registry / HF token | Not required | Required |
+| Cold start | ~5 seconds | Minutes (model download) |
+| API and UI | Identical | Identical |
 
-The tokenization and vault logic, the API surface, and the entire dashboard are identical between the two stacks.
-
-## Test webhook delivery
-
-Verify **push** delivery (`TICKET_SINK`) without starting the full compose stack. This does not open the dashboard — it prints the JSON your webhook endpoint would receive:
+## Webhook test (no UI)
 
 ```bash
 make test-webhook
 ```
 
-This runs `scripts/test-webhook-sink.sh`, which:
-
-1. Starts `scripts/webhook-receiver.py` on a random local port (simulates your case-management system)
-2. Triages one sample message through the pipeline (mock inference)
-3. Prints the signed `TriageResult` JSON that the gateway would `POST` to a webhook
-
-Compare with **pull**: open the demo UI, click a ticket, and expand **📤 What downstream systems see** — same JSON shape, but fetched via `GET /tickets/{id}` instead of pushed.
-
-To test push against a running gateway in compose, see [integration.md — Webhook delivery](integration.md#webhook-delivery-ticket_sink).
+Simulates push delivery (`TICKET_SINK`). Compare with pull: ticket detail → **📤 What downstream systems see**.

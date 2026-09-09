@@ -7,8 +7,29 @@ Ingest customer support email, classify topic and urgency, and replace PII with 
 - Anton Ivanov ([anivanov@redhat.com](mailto:anivanov@redhat.com))
 - Michael Dawson ([midawson@redhat.com](mailto:midawson@redhat.com))
 
+## Quick start (laptop demo)
+
+No Red Hat registry, Hugging Face token, or GPU required.
+
+```bash
+git clone <repo-url> && cd helpdesk-email-triage
+make demo
+```
+
+Open [http://127.0.0.1:8501](http://127.0.0.1:8501). Sample tickets from `sample_emails/` appear automatically. Use the sidebar **Quick demo scenarios** to triage more mail.
+
+```bash
+curl -sS http://127.0.0.1:8080/health
+curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -10
+```
+
+Stop: `make down`
+
+**Other paths** (OpenShift, RHAII on RHEL, gateway-only, production hardening) are in [Deploy — pick a path](#deploy--pick-a-path) below.
+
 ## Table of Contents
 
+- [Quick start (laptop demo)](#quick-start-laptop-demo)
 - [At a glance](#at-a-glance)
 - [What you'll see](#what-youll-see)
 - [Architecture](#architecture)
@@ -21,6 +42,7 @@ Ingest customer support email, classify topic and urgency, and replace PII with 
 - [Integrate with your systems](#integrate-with-your-systems)
 - [Commands and scripts](#commands-and-scripts)
 - [CI/CD and customer pipelines](#cicd-and-customer-pipelines)
+- [More documentation](#more-documentation)
 - [Repository structure](#repository-structure)
 - [Technical details](#technical-details)
 - [References](#references)
@@ -37,21 +59,19 @@ Ingest customer support email, classify topic and urgency, and replace PII with 
 | **Demo UI** | `agent-dashboard/` — Streamlit inbox (optional; not required for production). |
 | **Inference** | Red Hat AI Inference 3.5 on CPU (production) or `inference-mock/` (laptop / CI). |
 
-### Deployment paths
+### Where should I start?
 
-Pick **one** path — they share the same containers, env vars, and API contract.
+| I want to… | Command / path |
+|---|---|
+| Try the UI on my laptop (fastest) | [Quick start](#quick-start-laptop-demo) → `make demo` |
+| Wire my own queue / CRM (no UI) | `make gateway-only` |
+| Run real RHAII on a RHEL host | `compose.yml` ([below](#production-rhel-red-hat-ai-inference-35--gateway--ui)) |
+| Deploy to OpenShift (demo) | `make deploy-openshift` ([below](#openshift--kubernetes)) |
+| Deploy to OpenShift (production pilot) | [Hardened OpenShift](#openshift-production-hardened) |
+| Run CI tests locally | `make lint && make test && make compose-e2e` |
+| Fork into my org's pipeline | [docs/customer-ci.md](docs/customer-ci.md) |
 
-| Path | Best for | What runs | Entry point |
-|---|---|---|---|
-| **Demo stack** | Laptop walkthrough, UI + tokenization | Mock inference + gateway + Streamlit | `make demo` or `compose.mock.demo.yml` |
-| **Production RHEL** | On-prem CPU inference with RHAII | RHAII + gateway + Streamlit | `compose.yml` |
-| **Gateway only** | ServiceNow, Salesforce, custom queue | Inference + gateway (no UI) | `make gateway-only` or `compose.gateway-only.yml` |
-| **OpenShift** | Cluster deploy, customer GitOps | Kustomize overlays (mock or **RHAII CPU** in-namespace) | `make deploy-openshift` |
-| **OpenShift (hardened)** | Production pilot | NetworkPolicies, dashboard OAuth, `REQUIRE_SECRETS=1` | Mock: `OVERLAY=.../hardened` · RHAII: `INFERENCE=rhaii OVERLAY=.../hardened` (see [deploy-openshift.md](docs/deploy-openshift.md)) |
-| **Quadlet** | Single RHEL host, systemd | Podman user units | `deploy/quadlet/` |
-| **No containers** | Quick local hack | Native Python | `scripts/run-demo-local.sh` |
-| **Kind / CI** | GitHub Actions Kubernetes test | Mock stack on kind | `make run-on-kind` / `make kind-e2e` |
-| **Your CI pipeline** | Fork + your registry | Same Containerfiles, your namespace | [docs/customer-ci.md](docs/customer-ci.md) |
+All paths share the same gateway API and container images.
 
 ### Ports and endpoints (defaults)
 
@@ -146,23 +166,9 @@ All paths use the same gateway API. Copy env defaults once: `cp .env.example .en
 
 ### Demo stack (mock inference + gateway + UI)
 
-```bash
-make demo
-# equivalent: podman compose -f compose.mock.demo.yml up --build
-```
-
-Open [http://127.0.0.1:8501](http://127.0.0.1:8501). No Hugging Face token or Red Hat registry required.
+Same as [Quick start](#quick-start-laptop-demo). Equivalent: `podman compose -f compose.mock.demo.yml up --build`
 
 **Without Podman:** `./scripts/run-demo-local.sh`
-
-#### Verify (Compose demo)
-
-```bash
-curl -sS http://127.0.0.1:8080/health
-curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
-```
-
-Open: [http://127.0.0.1:8501](http://127.0.0.1:8501)
 
 ### Production RHEL (Red Hat AI Inference 3.5 + gateway + UI)
 
@@ -200,32 +206,71 @@ curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
 
 ### OpenShift / Kubernetes
 
-`make deploy-openshift` deploys gateway + Streamlit UI and picks inference automatically:
-
-| `INFERENCE` | Stack |
-|---|---|
-| `auto` (default) | **RHAII CPU** when `HF_TOKEN` + `registry.redhat.io` login exist; otherwise **mock** |
-| `rhaii` | RHAII CPU (`vllm-cpu-rhel9`) + gateway + UI in one namespace |
-| `mock` | Mock inference only (CI / no registry) |
+**Step 1 — create project (once):**
 
 ```bash
-oc new-project helpdesk-email-triage   # once
-export HF_TOKEN="your_huggingface_token"
-podman login registry.redhat.io
-make deploy-openshift
+oc new-project helpdesk-email-triage
 ```
 
-Route hostnames, gateway CORS, and Streamlit WebSocket settings are discovered automatically at pod startup — no manual patching. First RHAII CPU start may take several minutes while model weights download.
+**Step 2 — pick inference and deploy:**
 
-| Overlay | Use when |
+| Goal | Prerequisites | Command |
+|---|---|---|
+| Demo (auto: RHAII if creds exist, else mock) | None for mock; `HF_TOKEN` + `podman login registry.redhat.io` for RHAII | `make deploy-openshift` |
+| Force mock | None | `INFERENCE=mock make deploy-openshift` |
+| Force RHAII CPU | `HF_TOKEN` + registry login | `INFERENCE=rhaii make deploy-openshift` |
+
+```bash
+export HF_TOKEN="your_huggingface_token"   # optional for mock
+podman login registry.redhat.io            # optional for mock
+make deploy-openshift
+make verify-openshift
+```
+
+**Step 3 — open the UI:** the deploy script prints `https://…` Route URLs. Hostnames look like `{route}-{namespace}.apps.{cluster}` — always take them from `make verify-openshift`, never hardcode.
+
+Routes, gateway CORS, and Streamlit WebSockets are configured automatically at pod startup. First RHAII CPU start can take several minutes (model download to PVC).
+
+#### `INFERENCE` vs `OVERLAY` (read this before hardened deploy)
+
+| Variable | What it does |
 |---|---|
-| `deploy/openshift/overlays/helpdesk-email-triage-rhaii` | **RHAII CPU demo** — existing project |
-| `deploy/openshift/overlays/helpdesk-email-triage` | Mock inference — existing project |
-| `deploy/openshift/overlays/mock-demo` | Greenfield — Kustomize creates the Namespace |
-| `deploy/openshift/overlays/gateway-only` | API/SMTP only; no UI |
-| `deploy/openshift/overlays/external-inference` | Gateway pointed at RHAII in **another** namespace |
+| `INFERENCE` | Chooses mock vs RHAII for **secrets, waits, and metadata** when you do not set `OVERLAY`. Values: `auto` (default), `mock`, `rhaii`. |
+| `OVERLAY` | Chooses which **manifests** are applied. When set, it overrides the default overlay — except `hardened` is remapped to `hardened-rhaii` when `INFERENCE=rhaii`. |
 
-Details: [deploy/openshift/README.md](deploy/openshift/README.md) · [docs/deploy-openshift.md](docs/deploy-openshift.md)
+| I want on OpenShift | Command |
+|---|---|
+| Demo mock | `INFERENCE=mock make deploy-openshift` |
+| Demo RHAII CPU | `INFERENCE=rhaii make deploy-openshift` |
+| Hardened mock | `OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift` |
+| Hardened RHAII CPU | `INFERENCE=rhaii OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift` |
+
+> **Common mistake:** `OVERLAY=.../hardened` alone always deploys **mock** inference. Add `INFERENCE=rhaii` (or use overlay `hardened-rhaii`) for RHAII CPU.
+
+#### OpenShift production (hardened)
+
+For pilots beyond demo defaults: NetworkPolicies, dashboard OAuth, non-demo secrets, and `REQUIRE_SECRETS=1`.
+
+```bash
+export VAULT_SECRET="$(openssl rand -hex 32)"
+export INGEST_API_KEY="$(openssl rand -hex 16)"
+oc create secret generic helpdesk-secrets \
+  --from-literal=VAULT_SECRET="$VAULT_SECRET" \
+  --from-literal=INGEST_API_KEY="$INGEST_API_KEY" \
+  -n helpdesk-email-triage --dry-run=client -o yaml | oc apply -f -
+
+# Hardened mock:
+OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift
+
+# Hardened RHAII CPU (also export HF_TOKEN and log in to registry.redhat.io):
+INFERENCE=rhaii OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift
+```
+
+HTTP ingest then requires header `X-Ingest-Key`. Pin images with `IMAGE_TAG=v1.2.3 make deploy-openshift`.
+
+Tear down: `make undeploy-openshift` · delete project: `DELETE_NAMESPACE=1 make undeploy-openshift`
+
+Manifest layout and overlay reference: [deploy/openshift/README.md](deploy/openshift/README.md) · extended runbook: [docs/deploy-openshift.md](docs/deploy-openshift.md)
 
 ### RHEL systemd (Quadlet)
 
@@ -536,12 +581,21 @@ Ticket IDs start at `TICKET-8921`. Sample mail uses fictional test values (Visa 
 
 ---
 
+## More documentation
+
+This README is self-contained for deploy, verify, configure, and integrate. Use these guides when you need depth beyond what is here:
+
+| Guide | Read when you need… |
+|---|---|
+| [docs/testing-locally.md](docs/testing-locally.md) | A walkthrough of every demo UI feature (sidebar scenarios, SMTP, vault, webhook test) |
+| [docs/deploy-openshift.md](docs/deploy-openshift.md) | OpenShift-only detail: overlay catalog, production checklist, Kind CI |
+| [docs/integration.md](docs/integration.md) | Full HTTP/SMTP API reference, webhook signing, compose file matrix |
+| [docs/customer-ci.md](docs/customer-ci.md) | Forking the repo, Quay publish, Tekton/Jenkins stage list |
+| [deploy/openshift/README.md](deploy/openshift/README.md) | Kustomize directory layout and manifest notes |
+| [deploy/quadlet/README.md](deploy/quadlet/README.md) | systemd / Quadlet on a single RHEL host |
+
 ## References
 
-- [Integrating the email gateway](docs/integration.md)
-- [Deploy on OpenShift](docs/deploy-openshift.md)
-- [Customer CI pipelines](docs/customer-ci.md)
-- [Testing locally without RHEL](docs/testing-locally.md)
 - [Red Hat AI Inference 3.5 — CPU inference](https://docs.redhat.com/en/documentation/red_hat_ai_inference/3.5/html/getting_started/about-cpu-inference_getting-started)
 - [AI quickstart catalog](https://docs.redhat.com/en/learn/ai-quickstarts)
 - [Qwen2.5-1.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct)

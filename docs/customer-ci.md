@@ -1,6 +1,8 @@
 # Customer CI and pipeline adoption
 
-This repository is designed so you can fork it, point CI at your registry, and deploy with Podman Compose, Quadlet, or OpenShift Kustomize overlays without rewriting application code.
+**Deploy and verify commands:** [README](../README.md) · **OpenShift overlays:** [deploy-openshift.md](deploy-openshift.md)
+
+Fork this repository, point CI at your registry, and deploy with Podman Compose, Quadlet, or OpenShift Kustomize without rewriting application code.
 
 ## Reusable components
 
