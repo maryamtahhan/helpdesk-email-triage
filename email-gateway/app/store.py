@@ -101,9 +101,16 @@ def has_source(source: str) -> bool:
         return any(ticket.get("source") == source for ticket in _tickets)
 
 
-def list_public_tickets() -> list[dict[str, Any]]:
+def list_public_tickets(
+    limit: int | None = None, offset: int = 0
+) -> list[dict[str, Any]]:
     with _lock:
-        return [_public(ticket) for ticket in _tickets]
+        tickets = [_public(ticket) for ticket in _tickets]
+    if offset:
+        tickets = tickets[offset:]
+    if limit is not None:
+        tickets = tickets[:limit]
+    return tickets
 
 
 def get_ticket(ticket_id: str, include_vault: bool = False) -> dict[str, Any] | None:

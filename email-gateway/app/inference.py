@@ -17,6 +17,8 @@ from gateways.email_classification_gateway import VLLMEmailGateway  # noqa: E402
 
 CATEGORIES = {"Billing", "Tech Support", "Account Access", "General"}
 URGENCIES = {"Low", "Medium", "High"}
+_gateway: VLLMEmailGateway | None = None
+_config_key: str | None = None
 
 
 def extract_json_object(text: str) -> dict[str, Any]:
@@ -70,6 +72,16 @@ def _normalize(parsed: dict[str, Any], fallback_text: str, model: str) -> dict[s
     }
 
 
+def _get_gateway() -> VLLMEmailGateway:
+    global _gateway, _config_key
+    config = env_config()
+    key = json.dumps(config, sort_keys=True)
+    if _gateway is None or _config_key != key:
+        _gateway = VLLMEmailGateway(config)
+        _config_key = key
+    return _gateway
+
+
 def classify_and_sanitize(body: str) -> dict[str, Any]:
     """Classify a pre-tokenized plain text body via RHAII.
 
@@ -79,7 +91,7 @@ def classify_and_sanitize(body: str) -> dict[str, Any]:
     is present in `body` before calling this function.
     """
     config = env_config()
-    gateway = VLLMEmailGateway(config)
+    gateway = _get_gateway()
     response = gateway._classify(body)
     if response is None:
         raise RuntimeError("RHAII returned no response")
