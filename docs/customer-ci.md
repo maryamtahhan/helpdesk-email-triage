@@ -82,6 +82,19 @@ Minimal stages any pipeline should include:
 7. **Deploy** — `make deploy-openshift` (or `kustomize build ... | oc apply -f -`)
 8. **Verify** — health check + dashboard Route (see below)
 
+## OpenShift deploy
+
+Customer clusters typically use:
+
+```bash
+export HF_TOKEN=...                      # for RHAII CPU path
+podman login registry.redhat.io
+make deploy-openshift                      # INFERENCE=auto
+make verify-openshift
+```
+
+Use `INFERENCE=mock` in CI-like environments without registry access. See [deploy-openshift.md](deploy-openshift.md).
+
 Example Tekton-style steps map directly to the Makefile targets:
 
 ```bash

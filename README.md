@@ -328,6 +328,9 @@ Key environment variables (full list in `.env.example`):
 | `MODEL_NAME` | `Qwen/Qwen2.5-1.5B-Instruct` (prod) / `mock-triage` (demo) | Model ID sent to inference |
 | `GATEWAY_MODE` | `FILE_WATCHER` | `FILE_WATCHER` watches `EMAIL_INPUT_DIR`; use `SMTP_ONLY` on OpenShift gateway-only |
 | `VAULT_SECRET` | `helpdesk-demo-secret` | **Change before production** — gates `/vault` and dashboard |
+| `INFERENCE` | `auto` | OpenShift only: `mock`, `rhaii`, or `auto` (see [deploy-openshift.md](docs/deploy-openshift.md)) |
+| `HF_TOKEN` | (empty) | Hugging Face token — required for RHAII CPU on OpenShift or RHEL |
+| `RHAII_WAIT_TIMEOUT` | `900s` | OpenShift deploy wait for model download on first RHAII start |
 | `DASHBOARD_ORIGIN` | `http://localhost:8501` | CORS origin for browser UI |
 | `TICKET_SINK` | (empty) | Push delivery: `webhook:https://…` or `log` |
 | `TICKET_SINK_SECRET` | (empty) | HMAC signing for webhook payloads |
@@ -447,6 +450,8 @@ See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShif
 | `make compose-e2e` | Mock-stack smoke test: health → ticket (via file watcher or API) |
 | `make build-images` | Build all three Containerfiles with Podman |
 | `scripts/ingest-sample.sh` | Curl sample `.eml` to `POST /ingest` |
+| `scripts/openshift-verify.sh` | Resolve OpenShift Route URLs and run health checks |
+| `scripts/openshift-rhaii-secrets.sh` | Create `hf-secret` and `redhat-registry-pull` in a namespace |
 | `scripts/run-demo-local.sh` | Native Python demo |
 | `scripts/webhook-receiver.py` | Local webhook listener for manual testing |
 
@@ -460,7 +465,7 @@ See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShif
 | [publish-quay.yml](.github/workflows/publish-quay.yml) | Push to `main` (image paths), release, manual | Build, smoke-test, and push to Quay |
 | [reusable-build.yml](.github/workflows/reusable-build.yml) | `workflow_call` from customer repos | Reusable build/push for all three images |
 
-**CI uses the mock inference stack only.** `compose-e2e` and `kind-e2e` exercise `inference-mock`, not `registry.redhat.io/rhaii/...`. Real RHAII needs a subscribed RHEL host, `registry.redhat.io` login, an HF token, and minutes of model load time — run that path manually with `compose.yml` on your own hardware, not in GitHub Actions.
+**CI uses the mock inference stack only.** `compose-e2e` and `kind-e2e` exercise `inference-mock`, not `registry.redhat.io/rhaii/...`. OpenShift production demos use **`INFERENCE=rhaii`** with RHAII CPU (`vllm-cpu-rhel9`) when `HF_TOKEN` and registry credentials are set — see [docs/deploy-openshift.md](docs/deploy-openshift.md).
 
 **Publish secrets:** `REDHAT_REGISTRY_USERNAME`, `REDHAT_REGISTRY_PASSWORD` (Quay robot with write access to all three repos).
 

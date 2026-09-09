@@ -141,6 +141,17 @@ make kind-e2e
 
 See [deploy/kind/README.md](../deploy/kind/README.md).
 
+## Scripts
+
+| Script | Purpose |
+|---|---|
+| `scripts/deploy-openshift.sh` | Deploy mock or RHAII CPU stack (`INFERENCE=auto\|mock\|rhaii`) |
+| `scripts/undeploy-openshift.sh` | Remove deployed resources |
+| `scripts/openshift-verify.sh` | Print Route URLs from cluster and run health checks |
+| `scripts/openshift-rhaii-secrets.sh` | Create `hf-secret` and `redhat-registry-pull` |
+
+Makefile wrappers: `make deploy-openshift`, `make verify-openshift`, `make undeploy-openshift`.
+
 ## Related docs
 
 - [Customer CI pipelines](customer-ci.md)

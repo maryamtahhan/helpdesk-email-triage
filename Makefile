@@ -1,6 +1,6 @@
 .PHONY: demo up down logs ingest test demo-local gateway-only test-webhook webhook-receiver \
-        validate-manifests compose-e2e build-images deploy-openshift undeploy-openshift \
-        run-on-kind destroy-kind kind-e2e
+        validate-manifests compose-e2e build-images deploy-openshift verify-openshift \
+        undeploy-openshift run-on-kind destroy-kind kind-e2e
 
 # demo          — mock inference + gateway + Streamlit UI
 # gateway-only  — mock inference + gateway (integrator path, no UI)

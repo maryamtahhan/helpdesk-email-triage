@@ -116,14 +116,35 @@ pkill -f "uvicorn app.main:app" # email gateway only
 pkill -f "streamlit run app.py" # dashboard only
 ```
 
+## OpenShift (cluster demo)
+
+Deploy the full stack to OpenShift with one command. Route hostnames are **`{route}-{namespace}.apps.{cluster}`** — always resolve them from the cluster; do not hardcode URLs.
+
+```bash
+oc new-project helpdesk-email-triage
+export HF_TOKEN="your_huggingface_token"   # optional — omit for mock inference
+podman login registry.redhat.io            # optional — omit for mock inference
+make deploy-openshift
+make verify-openshift
+```
+
+| `INFERENCE` | Result |
+|---|---|
+| `auto` (default) | RHAII CPU when `HF_TOKEN` + registry login exist; otherwise mock |
+| `rhaii` | Require RHAII CPU (`vllm-cpu-rhel9`) |
+| `mock` | Mock inference only |
+
+Full runbook: [deploy-openshift.md](deploy-openshift.md).
+
 ## Differences from the RHAII stack
 
-| | Mock stack | RHAII stack |
+| | Mock stack | RHAII stack (RHEL Compose or OpenShift `INFERENCE=rhaii`) |
 |---|---|---|
 | Inference | Deterministic mock — always returns plausible JSON | `Qwen/Qwen2.5-1.5B-Instruct` on CPU via Red Hat AI Inference 3.5 |
 | Registry login | Not required | `podman login registry.redhat.io` |
 | Hugging Face token | Not required | Required to download model weights |
-| RHEL required | No — runs on macOS and Linux | RHEL 9.4+ x86_64 |
+| RHEL required | No — runs on macOS and Linux | RHEL 9.4+ x86_64 for Compose; OpenShift workers need AVX2+ |
+| GPU | Not used | Not used — **CPU inference only** in this quickstart |
 | Cold start | ~5 seconds | Several minutes (model download on first run) |
 | Classification quality | Fixed responses | Real LLM — output varies |
 
