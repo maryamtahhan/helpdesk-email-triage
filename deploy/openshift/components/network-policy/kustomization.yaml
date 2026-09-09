@@ -3,4 +3,4 @@ kind: Kustomization
 
 resources:
   - network-policies.yaml
-  - allow-guidellm-to-inference.yaml
+  # allow-guidellm-to-inference.yaml is applied by make guidellm-openshift (RHAII only)

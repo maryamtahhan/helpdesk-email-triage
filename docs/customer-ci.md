@@ -84,7 +84,7 @@ Minimal stages any pipeline should include:
 7. **Scan** — add your org's container scanner on push if required
 8. **Deploy** — `make deploy-openshift` (production: `OVERLAY=.../hardened` for mock, or `INFERENCE=rhaii OVERLAY=.../hardened` for RHAII CPU)
 9. **Verify** — `make verify-openshift` (health + ingest/ticket smoke test)
-10. **Load test** *(optional)* — `make guidellm-openshift` after deploy (OpenShift cluster; see [deploy-openshift.md](deploy-openshift.md#load-test-inference-guidellm))
+10. **Load test** *(optional, RHAII only)* — `make guidellm-openshift` after an RHAII deploy (see [deploy-openshift.md](deploy-openshift.md#load-test-inference-guidellm))
 
 ## OpenShift deploy
 

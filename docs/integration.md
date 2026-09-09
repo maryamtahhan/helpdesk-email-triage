@@ -386,4 +386,4 @@ Deploy commands: [README — OpenShift hardened](../README.md#openshift-hardened
 
 - **Quickstart walkthrough** — [README](../README.md#quickstart-walkthrough): submit tickets, review classification/redaction, classification speed, quality checks, GuideLLM load test
 - **Demo UI detail** — [testing-locally.md](testing-locally.md) for every sidebar feature
-- **OpenShift load test** — `make guidellm-openshift` after `make verify-openshift` ([Red Hat GuideLLM article](https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes))
+- **OpenShift load test (RHAII only)** — `make guidellm-openshift` after `make verify-openshift` on an RHAII overlay ([Red Hat GuideLLM article](https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes))

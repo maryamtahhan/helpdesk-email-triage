@@ -78,7 +78,7 @@ Stop with Ctrl-C, or `podman compose -f compose.mock.demo.yml down` if processes
 
 **Laptop** — benchmark the mock inference container directly (see [README Quickstart walkthrough — Load testing](../README.md#load-testing)).
 
-**OpenShift** — after `make verify-openshift`:
+**OpenShift** — after `make verify-openshift` on an **RHAII** deploy (`INFERENCE=rhaii` or rhaii-demo / hardened-rhaii overlay):
 
 ```bash
 make guidellm-openshift

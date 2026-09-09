@@ -69,7 +69,7 @@ After verify succeeds, follow the [README Quickstart walkthrough](../README.md#q
 
 ## Load test inference (GuideLLM)
 
-After verify, benchmark `inference-mock` or `rhaii-cpu` using the in-cluster Job pattern from [How to deploy and benchmark vLLM with GuideLLM on Kubernetes](https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes):
+After verify on an **RHAII** overlay (`rhaii-cpu` deployed), benchmark inference using the in-cluster Job pattern from [How to deploy and benchmark vLLM with GuideLLM on Kubernetes](https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes). Mock-only overlays are not supported.
 
 ```bash
 make guidellm-openshift

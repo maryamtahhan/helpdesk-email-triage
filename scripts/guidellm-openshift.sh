@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run a GuideLLM benchmark Job against inference-mock or rhaii-cpu in OpenShift.
+# Run a GuideLLM benchmark Job against rhaii-cpu in OpenShift (RHAII only — not mock inference).
 #
 # Follows the in-cluster Job pattern from:
 # https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes
@@ -25,28 +25,20 @@ if ! oc get namespace "$NAMESPACE" >/dev/null 2>&1; then
   exit 1
 fi
 
-if oc get deployment rhaii-cpu -n "$NAMESPACE" >/dev/null 2>&1; then
-  SERVICE="rhaii-cpu"
-  MODEL="${GUIDELLM_MODEL:-Qwen/Qwen2.5-1.5B-Instruct}"
-  USE_HF_SECRET=1
-  echo "==> Targeting RHAII CPU (model=${MODEL})"
-elif oc get deployment inference-mock -n "$NAMESPACE" >/dev/null 2>&1; then
-  SERVICE="inference-mock"
-  MODEL="${GUIDELLM_MODEL:-mock-triage}"
-  USE_HF_SECRET=0
-  echo "==> Targeting mock inference (model=${MODEL})"
-else
-  echo "No inference-mock or rhaii-cpu deployment in ${NAMESPACE}." >&2
+if ! oc get deployment rhaii-cpu -n "$NAMESPACE" >/dev/null 2>&1; then
+  echo "GuideLLM requires rhaii-cpu (RHAII CPU inference) in ${NAMESPACE}." >&2
+  echo "Mock-only overlays are not supported. Deploy with INFERENCE=rhaii or a rhaii-demo / hardened-rhaii overlay." >&2
   exit 1
 fi
 
+SERVICE="rhaii-cpu"
+MODEL="${GUIDELLM_MODEL:-Qwen/Qwen2.5-1.5B-Instruct}"
+echo "==> Targeting RHAII CPU (model=${MODEL})"
+
 # Internal cluster DNS — avoids Route/ingress latency (per Red Hat benchmarking guidance).
 TARGET="http://${SERVICE}.${NAMESPACE}.svc.cluster.local:8000"
-PROCESSOR_ARGS=""
-if [[ "$USE_HF_SECRET" == "1" ]]; then
-  PROCESSOR="${GUIDELLM_PROCESSOR:-$MODEL}"
-  PROCESSOR_ARGS=$'            - --processor\n            - '"${PROCESSOR}"
-fi
+PROCESSOR="${GUIDELLM_PROCESSOR:-$MODEL}"
+PROCESSOR_ARGS=$'            - --processor\n            - '"${PROCESSOR}"
 
 echo "==> Ensuring GuideLLM can reach inference (NetworkPolicy)"
 oc apply -n "$NAMESPACE" -f "${ROOT}/deploy/openshift/components/network-policy/allow-guidellm-to-inference.yaml"
@@ -73,12 +65,14 @@ JOB_NAME="guidellm-benchmark-$(date +%s)"
 echo "==> Starting Job ${JOB_NAME} (image=${IMAGE}, target=${TARGET})"
 
 HF_ENV_BLOCK=""
-if [[ "$USE_HF_SECRET" == "1" ]] && oc get secret hf-secret -n "$NAMESPACE" >/dev/null 2>&1; then
+if oc get secret hf-secret -n "$NAMESPACE" >/dev/null 2>&1; then
   HF_ENV_BLOCK="            - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: hf-secret
                   key: HF_TOKEN"
+else
+  echo "WARNING: hf-secret not found; GuideLLM may fail to load the processor for ${MODEL}" >&2
 fi
 
 oc apply -n "$NAMESPACE" -f - <<EOF
