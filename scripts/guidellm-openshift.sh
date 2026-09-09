@@ -155,10 +155,15 @@ EOF
     oc delete pod "${inspector}" -n "$NAMESPACE" --ignore-not-found --wait=false >/dev/null 2>&1 || true
     return 1
   fi
-  oc cp "${NAMESPACE}/${inspector}:/results/benchmark-results.json" \
-    "${RESULTS_DIR}/${job_name}.json" 2>/dev/null || true
-  oc cp "${NAMESPACE}/${inspector}:/results/benchmark-results.html" \
-    "${RESULTS_DIR}/${job_name}.html" 2>/dev/null || true
+  # PVC is mounted at /mnt/results; use exec+cat (oc cp needs tar, absent in ubi-minimal).
+  if oc exec -n "$NAMESPACE" "${inspector}" -- test -f /mnt/results/benchmark-results.json; then
+    oc exec -n "$NAMESPACE" "${inspector}" -- cat /mnt/results/benchmark-results.json \
+      > "${RESULTS_DIR}/${job_name}.json"
+  fi
+  if oc exec -n "$NAMESPACE" "${inspector}" -- test -f /mnt/results/benchmark-results.html; then
+    oc exec -n "$NAMESPACE" "${inspector}" -- cat /mnt/results/benchmark-results.html \
+      > "${RESULTS_DIR}/${job_name}.html"
+  fi
   oc delete pod "${inspector}" -n "$NAMESPACE" --ignore-not-found --wait=false >/dev/null 2>&1 || true
 }
 
