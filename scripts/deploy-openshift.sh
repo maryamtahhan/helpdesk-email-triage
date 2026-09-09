@@ -11,6 +11,8 @@ RHAII_WAIT_TIMEOUT="${RHAII_WAIT_TIMEOUT:-900s}"
 
 # shellcheck source=openshift-rhaii-secrets.sh
 source "${ROOT}/scripts/openshift-rhaii-secrets.sh"
+# shellcheck source=openshift-lib.sh
+source "${ROOT}/scripts/openshift-lib.sh"
 
 if ! command -v oc >/dev/null 2>&1; then
   echo "oc not found" >&2
@@ -63,6 +65,7 @@ fi
 oc project "$NAMESPACE"
 
 if [[ "$INFERENCE_MODE" == "rhaii" ]]; then
+  rhaii_preflight "$NAMESPACE"
   echo "==> Preparing RHAII CPU secrets (registry.redhat.io + Hugging Face)"
   setup_rhaii_secrets "$NAMESPACE"
 else
@@ -71,8 +74,9 @@ else
   fi
 fi
 
-echo "==> Applying ${OVERLAY} (inference=${INFERENCE_MODE})"
-kustomize build --load-restrictor LoadRestrictionsNone "$OVERLAY" | oc apply -f -
+echo "==> Applying ${OVERLAY} (inference=${INFERENCE_MODE}, image-tag=${IMAGE_TAG:-latest})"
+openshift_kustomize_build "$OVERLAY" | oc apply -f -
+record_deploy_metadata "$NAMESPACE" "$INFERENCE_MODE" "$OVERLAY"
 
 echo "==> Waiting for deployments"
 if [[ "$INFERENCE_MODE" == "rhaii" ]]; then

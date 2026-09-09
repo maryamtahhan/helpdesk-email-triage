@@ -1,0 +1,27 @@
+# RHAII cold start can exceed 2 minutes; align gateway init wait with RHAII_WAIT_TIMEOUT.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: email-gateway
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: wait-for-inference
+          command:
+            - python3
+            - -c
+            - |
+              import os
+              import time
+              import urllib.request
+              base = os.environ["VLLM_BASE_URL"].rstrip("/")
+              url = f"{base}/models"
+              for _ in range(450):
+                  try:
+                      urllib.request.urlopen(url, timeout=3)
+                      break
+                  except Exception:
+                      time.sleep(2)
+              else:
+                  raise SystemExit("inference endpoint not ready")

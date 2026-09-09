@@ -10,6 +10,7 @@ resources:
 patches:
   - path: patch-remove-mock.yaml
   - path: patch-rhaii-config.yaml
+  - path: patch-gateway-init-wait.yaml
 
 configMapGenerator:
   - name: sample-emails
