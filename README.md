@@ -122,11 +122,11 @@ For end-to-end ingest load, run parallel `POST /ingest/raw` requests against por
 No local Python install — use the same image as [Red Hat's GuideLLM on Kubernetes guide](https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes):
 
 ```bash
-podman pull ghcr.io/vllm-project/guidellm:v0.5.0
-# or: docker pull ghcr.io/vllm-project/guidellm:v0.5.0
+podman pull ghcr.io/vllm-project/guidellm:v0.7.1
+# or: docker pull ghcr.io/vllm-project/guidellm:v0.7.1
 ```
 
-On OpenShift the cluster pulls the image when the benchmark Job starts (`make guidellm-openshift`).
+On OpenShift the cluster pulls `registry.redhat.io/rhai/guidellm-rhel9` when the benchmark Job starts (`make guidellm-openshift`; same `registry.redhat.io` login as RHAII CPU).
 
 #### Step 2: Run load test
 
@@ -140,7 +140,7 @@ podman run --rm --network host \
   -v "$(pwd)/results/guidellm:/results:rw" \
   -e HOME=/results -e HF_HOME=/results/.cache \
   -e HF_TOKEN="${HF_TOKEN}" \
-  ghcr.io/vllm-project/guidellm:v0.5.0 \
+  ghcr.io/vllm-project/guidellm:v0.7.1 \
   benchmark run \
   --target http://127.0.0.1:8000 \
   --model Qwen/Qwen2.5-1.5B-Instruct \
@@ -164,10 +164,10 @@ make guidellm-openshift
 The script:
 
 - Benchmarks via **internal Service DNS** (`http://rhaii-cpu.<namespace>.svc.cluster.local:8000`) — not the public Route
-- Creates a **results PVC**, applies the GuideLLM **NetworkPolicy**, and runs `ghcr.io/vllm-project/guidellm:v0.5.0`
+- Creates a **results PVC**, applies the GuideLLM **NetworkPolicy**, and runs `registry.redhat.io/rhai/guidellm-rhel9:3.5.0-1787154406` (`guidellm run` — JSON + HTML in one Job)
 - Copies `benchmark-results.json` and `.html` to `./results/guidellm-openshift/`
 
-Tune with `GUIDELLM_RATE`, `GUIDELLM_MAX_SECONDS`, `GUIDELLM_MODEL`, or `GUIDELLM_IMAGE`. For a longer production-style sweep matching the article: `GUIDELLM_RATE=1,2,4 GUIDELLM_MAX_SECONDS=300 make guidellm-openshift`.
+Tune with `GUIDELLM_RATE`, `GUIDELLM_MAX_SECONDS`, `GUIDELLM_MODEL`, `GUIDELLM_WAIT_TIMEOUT`, or `GUIDELLM_IMAGE` (override with upstream `ghcr.io/vllm-project/guidellm` if needed). For a longer production-style sweep matching the article: `GUIDELLM_RATE=1,2,4 GUIDELLM_MAX_SECONDS=300 make guidellm-openshift`.
 
 For end-to-end **gateway** load on OpenShift, send parallel `POST /ingest/raw` requests to the gateway Route (include `X-Ingest-Key` when the hardened overlay is used).
 
@@ -209,11 +209,11 @@ Use the numbers to size RHAII CPU nodes before a pilot.
 
 ## How it works
 
-![Four-stage pipeline: ingestion via HTTP, SMTP, or file drop → email gateway tokenizes PII into a vault → RHAII or mock classifies on sanitized text → optional Streamlit agent inbox](docs/images/architecture-overview.svg)
+![Four-stage pipeline: ingestion via HTTP, SMTP, or file drop → email gateway tokenizes PII into a vault → RHAII (production) or mock (demo/CI) classifies on sanitized text → optional Streamlit agent inbox; GuideLLM benchmarks RHAII on OpenShift](docs/images/architecture-overview.svg)
 
-1. **Ingest** — SMTP `:3025`, HTTP `:8080` (`POST /ingest`, `/ingest/raw`), or file watcher on `.eml` drops.
-2. **Gateway** — Regex-tokenizes structured PII into a vault keyed by ticket ID. Exposes `TriageResult` JSON.
-3. **Inference** — RHAII 3.5 on CPU (production) or built-in mock (laptop / CI). Sees **tokenized text only**.
+1. **Ingest** — HTTP `:8080` (`POST /ingest`, `/ingest/raw`; `X-Ingest-Key` when hardened), SMTP `:3025` (demo), or file watcher on `.eml` drops.
+2. **Gateway** — Regex-tokenizes structured PII into a vault keyed by ticket ID. Exposes `TriageResult` JSON and `/health/ready`.
+3. **Inference** — RHAII 3.5 CPU on OpenShift/RHEL (production) or built-in mock (laptop demo / CI). Sees **tokenized text only**. GuideLLM load tests target RHAII only.
 4. **Agent inbox** *(optional)* — Streamlit demo UI on `:8501`. Integrators can skip this and poll the API or use webhooks.
 
 **Privacy guarantee:** Raw card numbers, phones, and names never reach the model. Downstream systems get tokens; authorized agents rehydrate from the vault locally.

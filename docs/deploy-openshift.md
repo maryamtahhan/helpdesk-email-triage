@@ -75,7 +75,7 @@ After verify on an **RHAII** overlay (`rhaii-cpu` deployed), benchmark inference
 make guidellm-openshift
 ```
 
-Creates a results PVC, runs `ghcr.io/vllm-project/guidellm:v0.5.0` against the internal Service (not the Route), and copies `benchmark-results.html` / `.json` to `./results/guidellm-openshift/`. See [README Quickstart walkthrough — Load testing](../README.md#load-testing).
+Creates a results PVC, runs `registry.redhat.io/rhai/guidellm-rhel9:3.5.0-1787154406` against the internal Service (not the Route; uses `redhat-registry-pull` like `rhaii-cpu`). The Red Hat image uses `guidellm run` (not `guidellm benchmark run`) and writes JSON + HTML in one Job. Override with `GUIDELLM_IMAGE=ghcr.io/vllm-project/guidellm:v0.7.1` for upstream (legacy `benchmark` CLI). See [README Quickstart walkthrough — Load testing](../README.md#load-testing).
 
 Manual check:
 

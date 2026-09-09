@@ -1,18 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1100" height="440" viewBox="0 0 1100 440" role="img" aria-labelledby="title desc">
   <title id="title">Helpdesk email triage architecture</title>
-  <desc id="desc">Support email arrives via SMTP, HTTP, or file drop. The email gateway regex-tokenizes PII into a local vault. Red Hat AI Inference on CPU (or a built-in mock) classifies category and urgency on tokenized text only. An optional Streamlit inbox shows sanitized queues; authorized agents rehydrate originals from the vault.</desc>
+  <desc id="desc">Support email arrives via SMTP, HTTP, or file drop. The email gateway regex-tokenizes PII into a local vault. Red Hat AI Inference on CPU classifies category and urgency on tokenized text only; a built-in mock supports laptop demo and CI. On OpenShift, GuideLLM benchmarks RHAII inference only. An optional Streamlit inbox shows sanitized queues; authorized agents rehydrate originals from the vault.</desc>
   <rect width="1100" height="440" fill="#f8f8f8"/>
   <text x="32" y="36" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#151515">Secure helpdesk email triage</text>
   <text x="32" y="58" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#4d4d4d">Ingest &#x2192; regex-tokenize PII (gateway) &#x2192; classify (RHAII or mock) &#x2192; route sanitized ticket</text>
-  <text x="32" y="76" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">Runs on a laptop, RHEL host, or OpenShift &#x2014; same gateway API everywhere</text>
+  <text x="32" y="76" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">Laptop demo, RHEL host, or OpenShift &#x2014; same gateway API; hardened overlay on OpenShift pilots</text>
 
   <rect x="32" y="96" width="230" height="158" rx="8" fill="#ffffff" stroke="#8a8d90"/>
   <text x="147" y="124" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">STAGE 1</text>
   <text x="147" y="148" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#151515">Ingestion</text>
   <text x="147" y="172" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">Live mailbox or .eml files</text>
-  <text x="147" y="192" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">HTTP :8080 · SMTP :3025</text>
+  <text x="147" y="192" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">HTTP :8080 · SMTP :3025 (demo)</text>
   <text x="147" y="212" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">File watcher (demo)</text>
-  <text x="147" y="238" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">Raw RFC-822 in RAM only</text>
+  <text x="147" y="232" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">X-Ingest-Key on HTTP when hardened</text>
+  <text x="147" y="248" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">Raw RFC-822 in RAM only</text>
 
   <polygon points="272,165 272,185 292,175" fill="#C9190B"/>
 
@@ -23,18 +24,18 @@
   <text x="417" y="187" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">Regex-tokenize PII &#x2192; vault</text>
   <text x="417" y="206" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">cards · phones · SSNs · emails</text>
   <text x="417" y="226" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">Container: email-gateway</text>
-  <text x="417" y="244" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">TriageResult JSON API</text>
+  <text x="417" y="244" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">TriageResult JSON API · /health/ready</text>
 
   <polygon points="542,165 542,185 562,175" fill="#C9190B"/>
 
   <rect x="572" y="96" width="230" height="158" rx="8" fill="#ffffff" stroke="#8a8d90"/>
   <text x="687" y="124" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">STAGE 3</text>
   <text x="687" y="148" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#151515">Inference</text>
-  <text x="687" y="172" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">RHAII 3.5 CPU (production)</text>
-  <text x="687" y="192" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">or mock (laptop / CI)</text>
-  <text x="687" y="212" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">Classify category &amp; urgency</text>
-  <text x="687" y="232" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">Sees only pre-tokenized text</text>
-  <text x="687" y="248" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">vLLM CPU · OpenAI-compatible :8000</text>
+  <text x="687" y="168" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">RHAII 3.5 CPU · OpenShift / RHEL</text>
+  <text x="687" y="186" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">Mock · laptop demo &amp; CI only</text>
+  <text x="687" y="204" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#151515">Classify category &amp; urgency</text>
+  <text x="687" y="222" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">Sees only pre-tokenized text</text>
+  <text x="687" y="240" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">OpenAI :8000 · GuideLLM bench (RHAII)</text>
 
   <polygon points="812,165 812,185 832,175" fill="#C9190B"/>
 
@@ -51,5 +52,5 @@
   <text x="52" y="338" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#151515">Raw card numbers, phone numbers, and names stay in the gateway vault keyed by Ticket ID.</text>
   <text x="52" y="360" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#151515">Downstream systems receive only tokens such as [NAME_1], [PHONE_1], and [CARD_LAST4_1].</text>
   <text x="52" y="382" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#151515">Authorized agents rehydrate originals from the vault locally &#x2014; no external API call required.</text>
-  <text x="52" y="400" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">Production OpenShift: hardened overlay adds NetworkPolicies, ingest auth, and OAuth on Routes.</text>
+  <text x="52" y="400" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6a6e73">Hardened OpenShift: NetworkPolicies, X-Ingest-Key, OAuth on gateway &amp; dashboard Routes, SMTP disabled.</text>
 </svg>

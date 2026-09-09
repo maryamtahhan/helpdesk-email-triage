@@ -56,7 +56,7 @@ Used by `hardened` and `hardened-rhaii` overlays:
 
 ## GuideLLM benchmark
 
-`make guidellm-openshift` benchmarks **RHAII only** (`rhaii-cpu`). It applies `components/network-policy/allow-guidellm-to-inference.yaml`, runs a Job with `ghcr.io/vllm-project/guidellm:v0.5.0`, and copies results to `./results/guidellm-openshift/`. Not available on mock-only overlays. See [docs/deploy-openshift.md](../../docs/deploy-openshift.md#load-test-inference-guidellm).
+`make guidellm-openshift` benchmarks **RHAII only** (`rhaii-cpu`). It applies `components/network-policy/allow-guidellm-to-inference.yaml`, runs `registry.redhat.io/rhai/guidellm-rhel9:3.5.0-1787154406` (`guidellm run` — JSON + HTML in one Job), and copies results to `./results/guidellm-openshift/`. Requires the same `registry.redhat.io` pull secret as RHAII CPU. Not available on mock-only overlays. See [docs/deploy-openshift.md](../../docs/deploy-openshift.md#load-test-inference-guidellm).
 
 ## Notes
 
