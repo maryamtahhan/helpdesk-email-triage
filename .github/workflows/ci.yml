@@ -25,6 +25,19 @@ jobs:
       - name: Run ruff
         run: make lint
 
+  shellcheck:
+    name: Shell script lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck
+        run: make shellcheck
+
   test:
     name: Unit and webhook tests
     runs-on: ubuntu-latest
@@ -39,6 +52,9 @@ jobs:
 
       - name: Run unit tests
         run: make test
+
+      - name: Run OpenShift overlay resolution tests
+        run: make test-openshift-overlay
 
       - name: Run webhook sink e2e
         run: make test-webhook

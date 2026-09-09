@@ -96,7 +96,8 @@ OVERLAY=deploy/openshift/overlays/mock-demo ./scripts/deploy-openshift.sh my-nam
 2. **Secrets** — non-demo `VAULT_SECRET` and `INGEST_API_KEY` in `helpdesk-secrets` before deploy.
 3. **Images** — `IMAGE_TAG=v1.2.3 make deploy-openshift` or Kustomize `images:` in your fork.
 4. **Vault storage** — `tickets.json` on the gateway PVC is **not encrypted at rest**.
-5. **SMTP** — do not expose port 3025 on a public Route; prefer authenticated HTTP ingest.
+5. **SMTP** — disabled automatically when `REQUIRE_SECRETS=1`; prefer authenticated HTTP ingest.
+6. **NetworkPolicy** — demo overlays apply ingress-only policies. If your cluster enforces default-deny **egress**, allow DNS to `openshift-dns` / `kube-dns` (UDP/TCP port 53) and egress from `email-gateway` to inference on port 8000.
 
 ### Hardened deploy
 

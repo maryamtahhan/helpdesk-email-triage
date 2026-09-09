@@ -1,6 +1,6 @@
-.PHONY: demo up down logs ingest test lint demo-local gateway-only test-webhook webhook-receiver \
+.PHONY: demo up down logs ingest test lint shellcheck demo-local gateway-only test-webhook webhook-receiver \
         validate-manifests compose-e2e build-images deploy-openshift verify-openshift \
-        undeploy-openshift run-on-kind destroy-kind kind-e2e
+        undeploy-openshift run-on-kind destroy-kind kind-e2e test-openshift-overlay
 
 # demo          — mock inference + gateway + Streamlit UI
 # gateway-only  — mock inference + gateway (integrator path, no UI)
@@ -38,6 +38,14 @@ lint:
 	test -d .venv || python3 -m venv .venv
 	.venv/bin/pip install -q ruff
 	.venv/bin/ruff check email-gateway agent-dashboard inference-mock
+
+shellcheck:
+	command -v shellcheck >/dev/null || { echo "shellcheck not installed" >&2; exit 1; }
+	shellcheck -x -e SC2329,SC1091 scripts/*.sh
+
+test-openshift-overlay:
+	chmod +x scripts/test-openshift-overlay.sh
+	./scripts/test-openshift-overlay.sh
 
 demo-local:
 	./scripts/run-demo-local.sh
