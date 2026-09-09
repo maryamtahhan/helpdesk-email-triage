@@ -80,7 +80,7 @@ Minimal stages any pipeline should include:
 5. **Build images** — build each `*/Containerfile` with your registry tag
 6. **Smoke test** — run container with import check (see `publish-quay.yml`)
 7. **Scan** — Trivy is included in `ci.yml`; add your org scanner on push if required
-8. **Deploy** — `make deploy-openshift` (or `OVERLAY=deploy/openshift/overlays/hardened ...` for production)
+8. **Deploy** — `make deploy-openshift` (production: `OVERLAY=.../hardened` for mock, or `INFERENCE=rhaii OVERLAY=.../hardened` for RHAII CPU)
 9. **Verify** — `make verify-openshift` (health + ingest/ticket smoke test)
 
 ## OpenShift deploy
@@ -94,7 +94,7 @@ make deploy-openshift                      # INFERENCE=auto
 make verify-openshift
 ```
 
-Use `INFERENCE=mock` in CI-like environments without registry access. For production pilots, use the `hardened` overlay and set non-demo `VAULT_SECRET` + `INGEST_API_KEY` before deploy. See [deploy-openshift.md](deploy-openshift.md).
+Use `INFERENCE=mock` in CI-like environments without registry access. For production pilots, use `hardened` (mock) or `hardened-rhaii` / `INFERENCE=rhaii OVERLAY=.../hardened` (RHAII CPU), and set non-demo `VAULT_SECRET` + `INGEST_API_KEY` before deploy. See [deploy-openshift.md](deploy-openshift.md#inference-vs-overlay).
 
 Example Tekton-style steps map directly to the Makefile targets:
 

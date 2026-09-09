@@ -136,7 +136,7 @@ make verify-openshift
 | `rhaii` | Require RHAII CPU (`vllm-cpu-rhel9`) |
 | `mock` | Mock inference only |
 
-For production pilots, use the `hardened` overlay (`OVERLAY=deploy/openshift/overlays/hardened`) after setting non-demo secrets — see [deploy-openshift.md](deploy-openshift.md).
+For production pilots on OpenShift, use `hardened` (mock inference) or `hardened-rhaii` / `INFERENCE=rhaii OVERLAY=.../hardened` (RHAII CPU) after setting non-demo secrets — see [deploy-openshift.md](deploy-openshift.md#inference-vs-overlay).
 
 Full runbook: [deploy-openshift.md](deploy-openshift.md).
 

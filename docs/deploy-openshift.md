@@ -97,6 +97,25 @@ Set a custom overlay when calling the script:
 OVERLAY=deploy/openshift/overlays/mock-demo ./scripts/deploy-openshift.sh my-namespace
 ```
 
+### `INFERENCE` vs `OVERLAY`
+
+| Variable | Controls |
+|---|---|
+| `INFERENCE` | Which inference stack to prepare when **no** `OVERLAY` is set (`auto` → RHAII if `HF_TOKEN` + registry creds exist, else mock). Also drives secret setup and `oc wait` targets. |
+| `OVERLAY` | Which Kustomize tree is applied. **Takes precedence** over the default overlay implied by `INFERENCE`. |
+
+Important: `deploy/openshift/overlays/hardened` includes the **mock** stack (`helpdesk-email-triage` → `mock-demo`). To run hardened **with RHAII CPU**, either:
+
+- set `INFERENCE=rhaii` together with `OVERLAY=deploy/openshift/overlays/hardened` (the deploy script remaps to `hardened-rhaii`), or
+- set `OVERLAY=deploy/openshift/overlays/hardened-rhaii` explicitly.
+
+| Goal | Command |
+|---|---|
+| Demo mock (default) | `make deploy-openshift` |
+| Demo RHAII CPU | `INFERENCE=rhaii make deploy-openshift` |
+| Hardened mock | `OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift` |
+| Hardened RHAII CPU | `INFERENCE=rhaii OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift` |
+
 ## How auto-configuration works
 
 | Concern | Mechanism |
@@ -111,7 +130,7 @@ Optional override: set `DASHBOARD_ORIGIN` or `STREAMLIT_BROWSER_SERVER_ADDRESS` 
 
 ## Production checklist
 
-1. **Overlay** — use `deploy/openshift/overlays/hardened` (NetworkPolicies, dashboard OAuth, `REQUIRE_SECRETS=1`).
+1. **Overlay** — use `hardened` (mock inference) or `hardened-rhaii` / `INFERENCE=rhaii OVERLAY=.../hardened` (RHAII CPU). Both add NetworkPolicies, dashboard OAuth, and `REQUIRE_SECRETS=1`.
 2. **Images** — pin tags with `IMAGE_TAG=v1.2.3 make deploy-openshift` or update Kustomize `images:` in your fork.
 3. **Secrets** — before deploy, patch `helpdesk-secrets` with non-demo `VAULT_SECRET` and `INGEST_API_KEY` (required when `REQUIRE_SECRETS=1`). HTTP ingest then requires header `X-Ingest-Key`.
 4. **Vault storage** — `tickets.json` on the gateway PVC is **not encrypted at rest**; use an encrypted volume class or external store for regulated data.
@@ -119,7 +138,9 @@ Optional override: set `DASHBOARD_ORIGIN` or `STREAMLIT_BROWSER_SERVER_ADDRESS` 
 6. **Storage** — gateway uses a 1 Gi PVC; RHAII uses a 20 Gi `rhaii-model-cache` PVC; single replica only unless you add shared storage.
 7. **SMTP** — relay to authenticated `POST /ingest` or `/ingest/raw`; do not expose port 3025 on a public Route. SMTP returns `250` before triage completes — use HTTP ingest when durability matters.
 
-### Hardened deploy example
+### Hardened deploy examples
+
+Create secrets first (required for both examples):
 
 ```bash
 export VAULT_SECRET="$(openssl rand -hex 32)"
@@ -128,8 +149,27 @@ oc create secret generic helpdesk-secrets \
   --from-literal=VAULT_SECRET="$VAULT_SECRET" \
   --from-literal=INGEST_API_KEY="$INGEST_API_KEY" \
   -n helpdesk-email-triage --dry-run=client -o yaml | oc apply -f -
+```
+
+**Hardened mock** (no RHAII registry/HF token):
+
+```bash
+OVERLAY=deploy/openshift/overlays/hardened ./scripts/deploy-openshift.sh helpdesk-email-triage
+```
+
+**Hardened RHAII CPU** (also set `HF_TOKEN` and `podman login registry.redhat.io`):
+
+```bash
+export HF_TOKEN="your_huggingface_token"
+podman login registry.redhat.io
 INFERENCE=rhaii OVERLAY=deploy/openshift/overlays/hardened ./scripts/deploy-openshift.sh helpdesk-email-triage
-# deploy script maps hardened → hardened-rhaii when INFERENCE=rhaii
+# applies deploy/openshift/overlays/hardened-rhaii
+```
+
+Equivalent explicit overlay:
+
+```bash
+OVERLAY=deploy/openshift/overlays/hardened-rhaii INFERENCE=rhaii ./scripts/deploy-openshift.sh helpdesk-email-triage
 ```
 
 ## Uninstall

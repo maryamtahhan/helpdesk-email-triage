@@ -47,7 +47,7 @@ Pick **one** path — they share the same containers, env vars, and API contract
 | **Production RHEL** | On-prem CPU inference with RHAII | RHAII + gateway + Streamlit | `compose.yml` |
 | **Gateway only** | ServiceNow, Salesforce, custom queue | Inference + gateway (no UI) | `make gateway-only` or `compose.gateway-only.yml` |
 | **OpenShift** | Cluster deploy, customer GitOps | Kustomize overlays (mock or **RHAII CPU** in-namespace) | `make deploy-openshift` |
-| **OpenShift (hardened)** | Production pilot | NetworkPolicies, dashboard OAuth, `REQUIRE_SECRETS=1` | `OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift` |
+| **OpenShift (hardened)** | Production pilot | NetworkPolicies, dashboard OAuth, `REQUIRE_SECRETS=1` | Mock: `OVERLAY=.../hardened` · RHAII: `INFERENCE=rhaii OVERLAY=.../hardened` (see [deploy-openshift.md](docs/deploy-openshift.md)) |
 | **Quadlet** | Single RHEL host, systemd | Podman user units | `deploy/quadlet/` |
 | **No containers** | Quick local hack | Native Python | `scripts/run-demo-local.sh` |
 | **Kind / CI** | GitHub Actions Kubernetes test | Mock stack on kind | `make run-on-kind` / `make kind-e2e` |

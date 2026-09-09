@@ -52,9 +52,16 @@ oc wait deployment/rhaii-cpu deployment/email-gateway deployment/agent-dashboard
 
 Gateway CORS and Streamlit WebSocket settings are applied automatically at pod startup — no post-deploy patching. Deploy records inference mode and overlay in the `helpdesk-deploy-info` ConfigMap for reliable `undeploy-openshift`.
 
-## Production / hardened overlay
+## Production / hardened overlays
 
-For pilots beyond the demo defaults, use the hardened overlay (NetworkPolicies, OpenShift OAuth on the dashboard Route, `REQUIRE_SECRETS=1`):
+Two hardened overlays share the same security patches (`REQUIRE_SECRETS=1`, dashboard OAuth, NetworkPolicies):
+
+| Overlay | Inference | When to use |
+|---|---|---|
+| `hardened` | Mock (`inference-mock`) | Production-style hardening without RHAII registry/HF token |
+| `hardened-rhaii` | RHAII CPU (`rhaii-cpu`) | Production pilot with real CPU inference |
+
+`OVERLAY` selects which manifests are applied. `INFERENCE` alone does **not** switch a hardened deploy to RHAII unless you use `hardened-rhaii` or `INFERENCE=rhaii` with `OVERLAY=.../hardened` (the deploy script remaps to `hardened-rhaii`).
 
 ```bash
 export VAULT_SECRET="$(openssl rand -hex 32)"
@@ -64,8 +71,11 @@ oc create secret generic helpdesk-secrets \
   --from-literal=INGEST_API_KEY="$INGEST_API_KEY" \
   -n helpdesk-email-triage --dry-run=client -o yaml | oc apply -f -
 
+# Hardened mock:
+OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift
+
+# Hardened RHAII CPU (also export HF_TOKEN and log in to registry.redhat.io):
 INFERENCE=rhaii OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift
-# maps hardened → hardened-rhaii when INFERENCE=rhaii
 ```
 
 With `REQUIRE_SECRETS=1`, the gateway refuses to start with demo-default `VAULT_SECRET` or a missing `INGEST_API_KEY`. HTTP ingest then requires header `X-Ingest-Key`. Ticket JSON on the gateway PVC is not encrypted at rest — use an encrypted storage class for regulated data.
