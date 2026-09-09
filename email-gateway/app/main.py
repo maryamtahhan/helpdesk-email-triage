@@ -4,14 +4,19 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 import threading
 import time
+import urllib.error
+import urllib.request
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Annotated
 
 from aiosmtpd.controller import Controller
-from fastapi import FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, field_validator
 
 from . import store
 from .pipeline import process_raw_email
@@ -30,11 +35,69 @@ INGEST_API_KEY = os.environ.get("INGEST_API_KEY", "")
 _DEMO_VAULT_SECRET = "helpdesk-demo-secret"
 # Streamlit UI origin; kept narrow so browsers can't make cross-origin vault requests.
 _DASHBOARD_ORIGIN = os.environ.get("DASHBOARD_ORIGIN", "http://localhost:8501")
+_DEFAULT_LIST_LIMIT = 100
+_MAX_LIST_LIMIT = 500
+
+
+class IngestRawRequest(BaseModel):
+    sender: str = "demo@example.com"
+    subject: str = "(no subject)"
+    body: str
+
+    @field_validator("body")
+    @classmethod
+    def body_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("body is required")
+        return value
+
+
+def _secrets_enabled() -> bool:
+    return os.environ.get("REQUIRE_SECRETS", "").lower() in {"1", "true", "yes"}
+
+
+def _secret_matches(provided: str, expected: str) -> bool:
+    if not expected:
+        return True
+    if not provided or len(provided) != len(expected):
+        return False
+    return secrets.compare_digest(provided, expected)
 
 
 def _require_ingest_key(x_ingest_key: str) -> None:
-    if INGEST_API_KEY and x_ingest_key != INGEST_API_KEY:
+    if INGEST_API_KEY and not _secret_matches(x_ingest_key, INGEST_API_KEY):
         raise HTTPException(status_code=401, detail="Invalid ingest API key")
+
+
+def _require_vault_access(x_vault_secret: str, x_ingest_key: str) -> None:
+    if not VAULT_SECRET:
+        return
+    if _secret_matches(x_vault_secret, VAULT_SECRET):
+        return
+    if INGEST_API_KEY and _secret_matches(x_ingest_key, INGEST_API_KEY):
+        return
+    raise HTTPException(status_code=401, detail="Invalid vault secret")
+
+
+def _check_inference() -> tuple[bool, str]:
+    base = os.environ.get(
+        "VLLM_BASE_URL",
+        os.environ.get(
+            "VLLM_ENDPOINT", "http://inference-mock:8000/v1/chat/completions"
+        ),
+    )
+    if "/chat/completions" in base:
+        base = base.replace("/chat/completions", "")
+    url = f"{base.rstrip('/')}/models"
+    try:
+        with urllib.request.urlopen(url, timeout=3) as response:
+            if response.status != 200:
+                return False, f"HTTP {response.status}"
+    except urllib.error.URLError as exc:
+        return False, str(exc.reason)
+    except Exception as exc:
+        return False, str(exc)
+    return True, "ok"
 
 
 def _validate_production_secrets() -> None:
@@ -115,14 +178,21 @@ async def lifespan(app: FastAPI):
             "VAULT_SECRET is still the demo default — replace before any real deployment."
         )
     if INGEST_API_KEY:
-        logger.info("HTTP ingest endpoints require X-Ingest-Key header")
-    elif os.environ.get("REQUIRE_SECRETS", "").lower() not in {"1", "true", "yes"}:
-        logger.warning(
-            "INGEST_API_KEY is not set — POST /ingest and /ingest/raw are unauthenticated."
+        logger.info(
+            "HTTP ingest and ticket list endpoints require X-Ingest-Key header"
         )
-    smtp = Controller(_SmtpHandler(), hostname=SMTP_BIND, port=SMTP_PORT)
-    smtp.start()
-    logger.info("SMTP ingest listening on %s:%s", SMTP_BIND, SMTP_PORT)
+    elif not _secrets_enabled():
+        logger.warning(
+            "INGEST_API_KEY is not set — POST /ingest, /ingest/raw, and GET /tickets "
+            "are unauthenticated."
+        )
+    smtp = None
+    if _secrets_enabled():
+        logger.info("SMTP ingest disabled (REQUIRE_SECRETS is set)")
+    else:
+        smtp = Controller(_SmtpHandler(), hostname=SMTP_BIND, port=SMTP_PORT)
+        smtp.start()
+        logger.info("SMTP ingest listening on %s:%s", SMTP_BIND, SMTP_PORT)
     watcher = None
     mode = os.environ.get("GATEWAY_MODE", "FILE_WATCHER").upper()
     if mode == "FILE_WATCHER":
@@ -130,7 +200,8 @@ async def lifespan(app: FastAPI):
         watcher.start()
         logger.info("Watching %s for .eml files", INPUT_DIR)
     yield
-    smtp.stop()
+    if smtp is not None:
+        smtp.stop()
 
 
 app = FastAPI(
@@ -151,13 +222,32 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/health/ready")
+def health_ready() -> dict[str, str]:
+    inference_ok, inference_detail = _check_inference()
+    if not inference_ok:
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "not ready", "inference": inference_detail},
+        )
+    return {"status": "ready", "inference": "ok"}
+
+
 @app.get("/tickets")
-def list_tickets() -> list[dict]:
-    return store.list_public_tickets()
+def list_tickets(
+    x_ingest_key: Annotated[str, Header()] = "",
+    limit: int = Query(default=_DEFAULT_LIST_LIMIT, ge=1, le=_MAX_LIST_LIMIT),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict]:
+    _require_ingest_key(x_ingest_key)
+    return store.list_public_tickets(limit=limit, offset=offset)
 
 
 @app.get("/tickets/{ticket_id}")
-def get_ticket(ticket_id: str) -> dict:
+def get_ticket(
+    ticket_id: str, x_ingest_key: Annotated[str, Header()] = ""
+) -> dict:
+    _require_ingest_key(x_ingest_key)
     ticket = store.get_ticket(ticket_id)
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
@@ -167,11 +257,11 @@ def get_ticket(ticket_id: str) -> dict:
 @app.get("/tickets/{ticket_id}/vault")
 def get_vault(
     ticket_id: str,
-    x_vault_secret: str = Header(default=""),
+    x_vault_secret: Annotated[str, Header()] = "",
+    x_ingest_key: Annotated[str, Header()] = "",
 ) -> dict:
     """Authorized rehydration: original body plus token map for this ticket."""
-    if VAULT_SECRET and x_vault_secret != VAULT_SECRET:
-        raise HTTPException(status_code=401, detail="Invalid vault secret")
+    _require_vault_access(x_vault_secret, x_ingest_key)
     ticket = store.get_ticket(ticket_id, include_vault=True)
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
@@ -190,7 +280,7 @@ _MAX_UPLOAD_BYTES = 1024 * 1024  # 1 MiB
 @app.post("/ingest")
 async def ingest_upload(
     file: UploadFile = File(...),
-    x_ingest_key: str = Header(default=""),
+    x_ingest_key: Annotated[str, Header()] = "",
 ) -> dict:
     _require_ingest_key(x_ingest_key)
     import asyncio
@@ -209,21 +299,16 @@ async def ingest_upload(
 
 @app.post("/ingest/raw")
 async def ingest_raw(
-    payload: dict,
-    x_ingest_key: str = Header(default=""),
+    payload: IngestRawRequest,
+    x_ingest_key: Annotated[str, Header()] = "",
 ) -> dict:
     """JSON ingest for demos: {sender, subject, body}."""
     _require_ingest_key(x_ingest_key)
-    sender = str(payload.get("sender") or "demo@example.com")
-    subject = str(payload.get("subject") or "(no subject)")
-    body = str(payload.get("body") or "")
-    if not body.strip():
-        raise HTTPException(status_code=400, detail="body is required")
     from .pipeline import process_parsed_email
 
     return process_parsed_email(
-        sender=sender,
-        subject=subject,
-        body=body,
+        sender=payload.sender,
+        subject=payload.subject,
+        body=payload.body,
         source="api",
     )
