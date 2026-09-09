@@ -52,6 +52,7 @@ curl -skI "https://${UI}" | head -5
 echo
 echo "==> Waiting for ticket (file watcher on sample_emails/)"
 export GATEWAY_URL
+export INGEST_API_KEY
 if count="$("${ROOT}/scripts/wait-for-tickets.sh" 30 2)"; then
   echo "==> Found ${count} ticket(s) from file watcher"
   exit 0
