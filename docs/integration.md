@@ -1,6 +1,6 @@
 # Integrating the email gateway
 
-**Overview, deploy paths, and quick start:** [README](../README.md)
+**Overview, deploy paths, and quick start:** [README](../README.md) · **Hands-on walkthrough:** [README Quickstart walkthrough](../README.md#quickstart-walkthrough)
 
 The **email gateway** is the reusable building block in this quickstart. It ingests RFC-822 mail, regex-tokenizes structured PII into a local vault, calls Red Hat AI Inference (or a mock) for category, urgency, summary, and residual name redaction, and exposes sanitized tickets over HTTP and SMTP.
 
@@ -54,7 +54,7 @@ After `make deploy-openshift`:
 make verify-openshift
 ```
 
-See [deploy-openshift.md](deploy-openshift.md).
+See [deploy-openshift.md](deploy-openshift.md). After verify, follow the [Quickstart walkthrough](../README.md#quickstart-walkthrough) (submit tickets, review redaction, classification speed, optional GuideLLM load test).
 
 ## Adoption paths
 
@@ -71,7 +71,7 @@ swaks --to support@localhost --server 127.0.0.1:3025 \
 
 The gateway accepts the message asynchronously and returns `250 Message accepted`. Poll `GET /tickets` (or `GET /tickets/{id}`) for the sanitized result.
 
-Set `SMTP_BIND=127.0.0.1` in production unless the listener sits behind a firewall or authenticated relay.
+Set `SMTP_BIND=127.0.0.1` in production unless the listener sits behind a firewall or authenticated relay. When `REQUIRE_SECRETS=1` (hardened OpenShift overlay), the SMTP listener is **not started** — use authenticated HTTP ingest instead.
 
 ### 2. HTTP ingest
 
@@ -95,6 +95,13 @@ curl -sS -X POST http://127.0.0.1:8080/ingest/raw \
 ```
 
 Both endpoints return a **`TriageResult`** — the same public ticket object as `GET /tickets/{id}`.
+
+When `INGEST_API_KEY` is set, send header `X-Ingest-Key: <secret>` on all ingest and ticket list requests:
+
+```bash
+curl -sS http://127.0.0.1:8080/tickets \
+  -H "X-Ingest-Key: ${INGEST_API_KEY}"
+```
 
 ### 3. Python library
 
@@ -290,13 +297,19 @@ Example response from `GET /tickets/TICKET-8921`:
 }
 ```
 
-List all tickets: `GET /tickets`  
-Single ticket: `GET /tickets/{id}`  
-Health: `GET /health`
+| Method | Path | Auth when `INGEST_API_KEY` set |
+|---|---|---|
+| `GET` | `/health` | None (liveness) |
+| `GET` | `/health/ready` | None (readiness — checks inference `/models`) |
+| `GET` | `/tickets?limit=100&offset=0` | `X-Ingest-Key` |
+| `GET` | `/tickets/{id}` | `X-Ingest-Key` |
+| `POST` | `/ingest`, `/ingest/raw` | `X-Ingest-Key` |
+
+Default list limit is **100** (max **500**). Use `offset` for pagination.
 
 ## Vault API (authorized agents only)
 
-`GET /tickets/{id}/vault` returns the original body, token map, and `original_sender` for reply routing. When `VAULT_SECRET` is set, callers must send `X-Vault-Secret: <secret>`.
+`GET /tickets/{id}/vault` returns the original body, token map, and `original_sender` for reply routing. When `VAULT_SECRET` is set, callers must send `X-Vault-Secret: <secret>` **or** `X-Ingest-Key: <INGEST_API_KEY>` (so the dashboard pod on hardened OpenShift can rehydrate without mounting `VAULT_SECRET`).
 
 ```json
 {
@@ -329,8 +342,8 @@ Do not expose this endpoint to untrusted consumers. The demo Streamlit UI gates 
 | `TICKET_SINK_SECRET` | *(unset)* | HMAC secret for webhook `X-Ticket-Signature` |
 | `TICKET_SINK_SYNC` | *(unset)* | Set to `1` for inline delivery (tests/debug) |
 | `DASHBOARD_ORIGIN` | `http://localhost:8501` | CORS origin (only needed if a browser UI calls the API) |
-| `INGEST_API_KEY` | *(unset)* | Require `X-Ingest-Key` on `POST /ingest` and `/ingest/raw` |
-| `REQUIRE_SECRETS` | *(unset)* | Set to `1` to refuse demo-default secrets at gateway startup |
+| `INGEST_API_KEY` | *(unset)* | Require `X-Ingest-Key` on ingest and `GET /tickets` endpoints |
+| `REQUIRE_SECRETS` | *(unset)* | Set to `1` to refuse demo-default secrets at startup and **disable SMTP** |
 
 ## SMTP durability note
 
@@ -358,7 +371,19 @@ python email-gateway/gateways/email_classification_gateway.py \
 
 That path classifies and sanitizes a single message but does not maintain the ticket vault or REST API. Use it when you only need MIME → JSON classification inside an existing MTA pipeline.
 
+## Production hardening (OpenShift)
+
+The `hardened` and `hardened-rhaii` overlays enable:
+
+- `REQUIRE_SECRETS=1` — non-demo `VAULT_SECRET` + `INGEST_API_KEY` required; SMTP disabled
+- **NetworkPolicies** — namespace ingress restrictions (see [deploy-openshift.md](deploy-openshift.md#production-checklist))
+- **OAuth on Routes** — gateway and dashboard public Routes protected by OpenShift OAuth
+- **Scoped dashboard secrets** — dashboard pod receives `INGEST_API_KEY` only (not `VAULT_SECRET`)
+
+Deploy commands: [README — OpenShift hardened](../README.md#openshift-hardened).
+
 ## Next steps
 
-- **Demo UI** — `podman compose -f compose.mock.demo.yml up --build` and open [http://127.0.0.1:8501](http://127.0.0.1:8501) to see the public JSON payload panel and agent vault workflow.
-- **Quality testing** — see [Testing locally](testing-locally.md) and the README walkthrough sections on classification quality and load testing.
+- **Quickstart walkthrough** — [README](../README.md#quickstart-walkthrough): submit tickets, review classification/redaction, classification speed, quality checks, GuideLLM load test
+- **Demo UI detail** — [testing-locally.md](testing-locally.md) for every sidebar feature
+- **OpenShift load test** — `make guidellm-openshift` after `make verify-openshift` ([Red Hat GuideLLM article](https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes))

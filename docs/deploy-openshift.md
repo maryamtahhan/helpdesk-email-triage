@@ -53,6 +53,8 @@ INFERENCE=mock make deploy-openshift
 
 First RHAII start downloads weights to the `rhaii-model-cache` PVC (several minutes). Increase wait: `RHAII_WAIT_TIMEOUT=1200s make deploy-openshift`. Workers need **x86_64 + AVX2** and **16 GiB+ allocatable RAM** (32 GiB recommended).
 
+**Gateway not Ready (`0/1`)** — if pod logs show `GET /health/ready HTTP/1.1" 404`, the published `helpdesk-email-gateway` image is older than the manifests. Rebuild and push the gateway image (`make build-images` + push to your registry), set `IMAGE_TAG`, and `oc rollout restart deployment/email-gateway`. Quick workaround: patch the readiness probe to `/health` (see `openshift_gateway_readiness_hint` in `scripts/openshift-lib.sh`).
+
 ## Verify
 
 ```bash
@@ -60,6 +62,10 @@ make verify-openshift
 ```
 
 Checks health, dashboard headers, file-watcher tickets, and falls back to `/ingest/raw`. Reads `INGEST_API_KEY` from `helpdesk-secrets` when set.
+
+## Quickstart walkthrough
+
+After verify succeeds, follow the [README Quickstart walkthrough](../README.md#quickstart-walkthrough): submit tickets (UI, SMTP, or `curl`), review classification and redaction, check classification speed, run quality checks, and optionally benchmark inference. On hardened overlays, use the Route URLs from verify and include `X-Ingest-Key` on gateway API calls.
 
 ## Load test inference (GuideLLM)
 
@@ -107,7 +113,8 @@ OVERLAY=deploy/openshift/overlays/mock-demo ./scripts/deploy-openshift.sh my-nam
 3. **Images** — `IMAGE_TAG=v1.2.3 make deploy-openshift` or Kustomize `images:` in your fork.
 4. **Vault storage** — `tickets.json` on the gateway PVC is **not encrypted at rest**.
 5. **SMTP** — disabled automatically when `REQUIRE_SECRETS=1`; prefer authenticated HTTP ingest.
-6. **NetworkPolicy** — demo overlays apply ingress-only policies. If your cluster enforces default-deny **egress**, allow DNS to `openshift-dns` / `kube-dns` (UDP/TCP port 53) and egress from `email-gateway` to inference on port 8000.
+6. **OAuth** — hardened overlays protect **both** gateway and dashboard Routes with OpenShift OAuth; the dashboard pod receives only `INGEST_API_KEY` (not `VAULT_SECRET`) and uses it for ticket list and vault rehydration.
+7. **NetworkPolicy** — demo overlays apply ingress-only policies. GuideLLM adds `allow-guidellm-to-inference` egress when you run `make guidellm-openshift`. If your cluster enforces default-deny **egress**, allow DNS to `openshift-dns` / `kube-dns` (UDP/TCP port 53) and egress from `email-gateway` to inference on port 8000.
 
 ### Hardened deploy
 
@@ -133,7 +140,8 @@ INFERENCE=rhaii OVERLAY=deploy/openshift/overlays/hardened ./scripts/deploy-open
 | Streamlit WebSocket host | `agent-dashboard/entrypoint.sh` reads Route `agent-dashboard` |
 | Gateway CORS | `email-gateway/entrypoint.sh` reads the same Route host |
 | RBAC | `components/route-reader/` grants `get/list routes` in-namespace |
-| Undeploy | `helpdesk-deploy-info` ConfigMap records overlay and image tag |
+| Undeploy | `helpdesk-deploy-info` ConfigMap records overlay (`applied-overlay`), inference mode, and image tag |
+| Readiness | Gateway probes `GET /health`; init container waits for inference `/models`. `GET /health/ready` is available on freshly built gateway images. |
 
 ## Uninstall
 
@@ -156,8 +164,11 @@ See [deploy/kind/README.md](../deploy/kind/README.md).
 |---|---|
 | `scripts/deploy-openshift.sh` | Deploy (`INFERENCE=auto\|mock\|rhaii`) |
 | `scripts/undeploy-openshift.sh` | Remove resources |
-| `scripts/openshift-verify.sh` | Smoke test |
+| `scripts/openshift-verify.sh` | Smoke test (`make verify-openshift`) |
 | `scripts/openshift-rhaii-secrets.sh` | Create HF + registry secrets |
+| `scripts/guidellm-openshift.sh` | GuideLLM benchmark Job (`make guidellm-openshift`) |
+| `scripts/test-openshift-overlay.sh` | Overlay / `INFERENCE` consistency (`make test-openshift-overlay`) |
+| `scripts/wait-for-tickets.sh` | Poll gateway until tickets appear (used by verify / e2e) |
 
 ## Related
 

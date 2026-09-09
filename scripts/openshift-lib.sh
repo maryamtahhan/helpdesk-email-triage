@@ -114,6 +114,43 @@ read_deploy_metadata() {
   export DEPLOY_INFERENCE_MODE DEPLOY_OVERLAY DEPLOY_APPLIED_OVERLAY DEPLOY_IMAGE_TAG
 }
 
+# True when the gateway Route is protected by OpenShift OAuth (hardened overlays).
+openshift_gateway_route_oauth() {
+  local namespace="$1"
+  local oauth
+  oauth="$(oc get route email-gateway -n "$namespace" \
+    -o jsonpath='{.metadata.annotations.haproxy\.router\.openshift\.io/oauth-expose}' 2>/dev/null || true)"
+  [[ "$oauth" == "true" ]]
+}
+
+# Start a local port-forward to svc/email-gateway; prints PID on stdout.
+openshift_gateway_port_forward() {
+  local namespace="$1"
+  local local_port="${2:-18080}"
+  oc port-forward -n "$namespace" "svc/email-gateway" "${local_port}:8080" >/dev/null 2>&1 &
+  echo $!
+}
+
+openshift_gateway_readiness_hint() {
+  local namespace="$1"
+  if ! oc get deployment email-gateway -n "$namespace" >/dev/null 2>&1; then
+    return 0
+  fi
+  local ready
+  ready="$(oc get deployment email-gateway -n "$namespace" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)"
+  if [[ "${ready:-0}" == "1" ]]; then
+    return 0
+  fi
+  if oc logs deployment/email-gateway -n "$namespace" --tail=30 2>/dev/null \
+    | grep -q 'GET /health/ready HTTP/1.1" 404'; then
+    echo "WARNING: email-gateway is not Ready — the running image lacks GET /health/ready." >&2
+    echo "         Rebuild and push quay.io/mtahhan/helpdesk-email-gateway:latest, then:" >&2
+    echo "           oc rollout restart deployment/email-gateway -n ${namespace}" >&2
+    echo "         Quick workaround (readiness on /health only):" >&2
+    echo '           oc patch deployment email-gateway -n '"${namespace}"' --type=json -p='"'"'[{"op":"replace","path":"/spec/template/spec/containers/0/readinessProbe/httpGet/path","value":"/health"}]'"'" >&2
+  fi
+}
+
 rhaii_preflight() {
   local namespace="$1"
   echo "==> Checking cluster capacity for RHAII CPU (requests: 4 CPU, 8Gi memory)"

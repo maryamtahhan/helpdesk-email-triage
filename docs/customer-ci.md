@@ -31,7 +31,7 @@ The gateway exposes a stable HTTP contract documented in [integration.md](integr
 
 | Workflow | Purpose |
 |---|---|
-| `.github/workflows/ci.yml` | ruff lint, unit tests, compose validation, Kustomize validation (pinned), container builds, compose e2e, kind e2e |
+| `.github/workflows/ci.yml` | ruff lint, shellcheck, unit tests, overlay consistency, compose validation, Kustomize validation (5.8.1), container builds, compose e2e, kind e2e |
 | `.github/workflows/publish-quay.yml` | Lint, tests, compose e2e, then build, smoke-test, and push images |
 | `.github/workflows/reusable-build.yml` | Callable workflow for customer repos |
 
@@ -75,15 +75,16 @@ jobs:
 
 Minimal stages any pipeline should include:
 
-1. **Lint** — `make lint`
+1. **Lint** — `make lint` and `make shellcheck`
 2. **Test** — `make test && make test-webhook`
-3. **Validate manifests** — `make validate-manifests`
+3. **Validate manifests** — `make validate-manifests` and `make test-openshift-overlay`
 4. **Kind e2e** — `make kind-e2e` (plain Kubernetes; no cluster required beyond Docker)
 5. **Build images** — build each `*/Containerfile` with your registry tag
 6. **Smoke test** — run container with import check (see `publish-quay.yml`)
 7. **Scan** — add your org's container scanner on push if required
 8. **Deploy** — `make deploy-openshift` (production: `OVERLAY=.../hardened` for mock, or `INFERENCE=rhaii OVERLAY=.../hardened` for RHAII CPU)
 9. **Verify** — `make verify-openshift` (health + ingest/ticket smoke test)
+10. **Load test** *(optional)* — `make guidellm-openshift` after deploy (OpenShift cluster; see [deploy-openshift.md](deploy-openshift.md#load-test-inference-guidellm))
 
 ## OpenShift deploy
 
@@ -102,8 +103,10 @@ Example Tekton-style steps map directly to the Makefile targets:
 
 ```bash
 make lint
+make shellcheck
 make test
 make validate-manifests
+make test-openshift-overlay
 # build & push images (podman or buildah)
 make kind-e2e      # Kubernetes mock stack (runs in GitHub Actions)
 make compose-e2e   # mock compose gate (not real RHAII / compose.yml)
@@ -121,8 +124,10 @@ See [deploy-openshift.md](deploy-openshift.md).
 
 ```bash
 make lint
+make shellcheck
 make test
 make validate-manifests
+make test-openshift-overlay
 make kind-e2e
 make compose-e2e
 ```

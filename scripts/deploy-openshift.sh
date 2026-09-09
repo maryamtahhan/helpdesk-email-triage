@@ -81,6 +81,7 @@ fi
 echo
 echo "Deployed to namespace: ${NAMESPACE} (inference: ${INFERENCE_MODE})"
 oc get pods,route -n "$NAMESPACE"
+openshift_gateway_readiness_hint "$NAMESPACE"
 
 GW="$(oc get route email-gateway -n "$NAMESPACE" -o jsonpath='{.spec.host}')"
 UI="$(oc get route agent-dashboard -n "$NAMESPACE" -o jsonpath='{.spec.host}')"

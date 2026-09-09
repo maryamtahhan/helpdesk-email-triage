@@ -15,7 +15,15 @@ if [[ -n "${INGEST_API_KEY:-}" ]]; then
 fi
 
 for _ in $(seq 1 "$ATTEMPTS"); do
-  count="$(curl "${curl_flags[@]}" "${GATEWAY_URL}/tickets" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
+  body="$(curl "${curl_flags[@]}" "${GATEWAY_URL}/tickets" 2>/dev/null || true)"
+  if [[ -z "$body" ]]; then
+    sleep "$SLEEP_SEC"
+    continue
+  fi
+  if ! count="$(printf '%s' "$body" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))' 2>/dev/null)"; then
+    sleep "$SLEEP_SEC"
+    continue
+  fi
   if [[ "${count}" -ge 1 ]]; then
     echo "${count}"
     exit 0

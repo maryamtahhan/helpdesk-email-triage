@@ -82,7 +82,9 @@ spec:
             failureThreshold: 36
           readinessProbe:
             httpGet:
-              path: /health/ready
+              # /health — matches published quay.io/mtahhan/helpdesk-email-gateway:latest.
+              # Use GET /health/ready manually or after republishing the gateway image.
+              path: /health
               port: http
             periodSeconds: 5
             failureThreshold: 6

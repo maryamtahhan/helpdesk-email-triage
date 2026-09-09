@@ -28,6 +28,7 @@ Open [http://127.0.0.1:8501](http://127.0.0.1:8501). Tickets from `sample_emails
 
 ```bash
 curl -sS http://127.0.0.1:8080/health
+curl -sS http://127.0.0.1:8080/health/ready
 curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
 ./scripts/ingest-sample.sh    # optional
 ```
@@ -73,9 +74,21 @@ swaks --to support@helpdesk.local --from test@example.com \
 
 Stop with Ctrl-C, or `podman compose -f compose.mock.demo.yml down` if processes linger.
 
+## Load testing (GuideLLM)
+
+**Laptop** — benchmark the mock inference container directly (see [README Quickstart walkthrough — Load testing](../README.md#load-testing)).
+
+**OpenShift** — after `make verify-openshift`:
+
+```bash
+make guidellm-openshift
+```
+
+Results land in `./results/guidellm-openshift/`. See [deploy-openshift.md](deploy-openshift.md#load-test-inference-guidellm).
+
 ## OpenShift
 
-Cluster deploy is documented in the [README](../README.md#openshift-quick-deploy) (step-by-step) and [deploy-openshift.md](deploy-openshift.md) (overlay catalog).
+Cluster deploy is documented in the [README](../README.md#openshift-quick-deploy) (step-by-step) and [deploy-openshift.md](deploy-openshift.md) (overlay catalog). After verify, continue with the [Quickstart walkthrough](../README.md#quickstart-walkthrough).
 
 ## Mock vs RHAII
 

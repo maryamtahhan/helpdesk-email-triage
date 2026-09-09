@@ -272,7 +272,7 @@ Full runbook (overlays, `INFERENCE` vs `OVERLAY`, Kind CI): [docs/deploy-openshi
 
 ### OpenShift hardened
 
-For pilots beyond demo defaults — NetworkPolicies, dashboard OAuth, non-demo secrets:
+For pilots beyond demo defaults — NetworkPolicies, OAuth on gateway and dashboard Routes, non-demo secrets:
 
 ```bash
 export VAULT_SECRET="$(openssl rand -hex 32)"
@@ -302,10 +302,12 @@ The reusable product is `email-gateway/` — Streamlit is optional.
 | Endpoint | Purpose |
 |---|---|
 | `GET /health` | Liveness |
+| `GET /health/ready` | Readiness (inference reachable) |
 | `POST /ingest` | Upload `.eml` file |
 | `POST /ingest/raw` | JSON `{sender, subject, body}` |
-| `GET /tickets` | List triaged tickets (`TriageResult` JSON) |
-| `GET /tickets/{id}/vault` | Rehydrate PII — header `X-Vault-Secret` |
+| `GET /tickets` | List tickets — `?limit=` / `?offset=`; `X-Ingest-Key` when configured |
+| `GET /tickets/{id}` | Single ticket — `X-Ingest-Key` when configured |
+| `GET /tickets/{id}/vault` | Rehydrate PII — `X-Vault-Secret` or `X-Ingest-Key` |
 
 **Ports:** HTTP `8080` · SMTP `3025` · inference `8000` · dashboard `8501`
 
@@ -328,7 +330,7 @@ Copy defaults once: `cp .env.example .env`
 | Variable | What it does |
 |---|---|
 | `VAULT_SECRET` | Gates vault rehydration — **change before production** |
-| `INGEST_API_KEY` | When set, requires `X-Ingest-Key` on HTTP ingest |
+| `INGEST_API_KEY` | When set, requires `X-Ingest-Key` on ingest and ticket list endpoints |
 | `REQUIRE_SECRETS` | Set `1` to refuse demo-default secrets (hardened overlay) |
 | `MODEL_NAME` | `Qwen/Qwen2.5-1.5B-Instruct` (RHAII) or `mock-triage` (demo) |
 | `TICKET_SINK` | `webhook:https://…` or `log` for push delivery |
@@ -344,9 +346,10 @@ See `.env.example` for the full list.
 
 | Guide | When to read it |
 |---|---|
-| [docs/testing-locally.md](docs/testing-locally.md) | Walkthrough of every demo UI feature |
-| [docs/integration.md](docs/integration.md) | Full HTTP/SMTP API, webhooks, compose matrix |
-| [docs/deploy-openshift.md](docs/deploy-openshift.md) | OpenShift overlays, production checklist, Kind CI |
+| [Quickstart walkthrough](#quickstart-walkthrough) | Submit tickets, review redaction, GuideLLM load test |
+| [docs/testing-locally.md](docs/testing-locally.md) | Every demo UI feature in detail |
+| [docs/integration.md](docs/integration.md) | Full HTTP/SMTP API, auth, webhooks, compose matrix |
+| [docs/deploy-openshift.md](docs/deploy-openshift.md) | OpenShift overlays, verify, GuideLLM, production checklist |
 | [docs/customer-ci.md](docs/customer-ci.md) | Fork the repo, Quay publish, pipeline adoption |
 | [deploy/openshift/README.md](deploy/openshift/README.md) | Kustomize layout and manifest notes |
 | [deploy/quadlet/README.md](deploy/quadlet/README.md) | systemd / Quadlet on a single RHEL host |
@@ -360,7 +363,9 @@ make test              # unit tests (no running stack)
 make test-webhook      # webhook sink e2e
 make compose-e2e       # full mock-stack smoke test
 make validate-manifests
+make test-openshift-overlay   # overlay / INFERENCE consistency (no cluster)
 make build-images      # build all three Containerfiles
+make guidellm-openshift     # GuideLLM benchmark Job (needs cluster + deploy)
 ```
 
 **CI** (on every PR): ruff lint, tests, compose e2e, kind e2e, container builds. CI uses mock inference only — not `registry.redhat.io`.
