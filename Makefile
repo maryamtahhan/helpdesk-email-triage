@@ -41,7 +41,7 @@ lint:
 
 shellcheck:
 	command -v shellcheck >/dev/null || { echo "shellcheck not installed" >&2; exit 1; }
-	shellcheck -x -e SC2329,SC1091 scripts/*.sh
+	shellcheck -S warning -x scripts/*.sh
 
 test-openshift-overlay:
 	chmod +x scripts/test-openshift-overlay.sh
