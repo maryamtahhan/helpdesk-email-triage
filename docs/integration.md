@@ -49,13 +49,10 @@ curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool
 After `make deploy-openshift`:
 
 ```bash
-curl -sk https://email-gateway-helpdesk-email-triage.apps.alpha.modelarch.org/health
-curl -skI https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org | head -5
+make verify-openshift
 ```
 
-Open: [https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org](https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org)
-
-Full runbook: [deploy-openshift.md](deploy-openshift.md).
+See [deploy-openshift.md](deploy-openshift.md).
 
 ## Adoption paths
 

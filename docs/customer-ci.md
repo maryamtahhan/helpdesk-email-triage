@@ -95,15 +95,10 @@ make compose-e2e   # mock compose gate (not real RHAII / compose.yml)
 ### Verify after OpenShift deploy
 
 ```bash
-oc get pods,route -n helpdesk-email-triage
-
-curl -sk https://email-gateway-helpdesk-email-triage.apps.alpha.modelarch.org/health
-curl -skI https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org | head -5
+make verify-openshift
 ```
 
-Open: [https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org](https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org)
-
-See [deploy-openshift.md](deploy-openshift.md) for dynamic hostname resolution on other clusters.
+See [deploy-openshift.md](deploy-openshift.md).
 
 ## Local parity with CI
 

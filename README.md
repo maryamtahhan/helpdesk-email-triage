@@ -246,22 +246,14 @@ OpenShift: `DELETE_NAMESPACE=1 make undeploy-openshift` or `oc delete project he
 
 ### OpenShift (`helpdesk-email-triage`)
 
-After `make deploy-openshift`, confirm pods and routes are up:
+After `make deploy-openshift`, resolve Route hostnames from the cluster (format: `{route}-{namespace}.apps.{cluster}`):
 
 ```bash
-oc get pods,route -n helpdesk-email-triage
+make verify-openshift
+# or: ./scripts/openshift-verify.sh helpdesk-email-triage
 ```
 
-Check the gateway API and dashboard Route (example hostnames on `apps.alpha.modelarch.org`):
-
-```bash
-curl -sk https://email-gateway-helpdesk-email-triage.apps.alpha.modelarch.org/health
-curl -skI https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org | head -5
-```
-
-Open: [https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org](https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org)
-
-For another namespace or cluster, resolve hosts dynamically:
+Manual equivalent:
 
 ```bash
 NS=helpdesk-email-triage
@@ -269,7 +261,15 @@ GW=$(oc get route email-gateway -n "$NS" -o jsonpath='{.spec.host}')
 UI=$(oc get route agent-dashboard -n "$NS" -o jsonpath='{.spec.host}')
 curl -sk "https://${GW}/health"
 curl -skI "https://${UI}" | head -5
-echo "Dashboard: https://${UI}"
+echo "Open: https://${UI}"
+```
+
+If you still see `*-mtahhan-quickstart.apps.*`, that is the **old project** — delete it and redeploy:
+
+```bash
+oc delete project mtahhan-quickstart   # if it still exists
+oc new-project helpdesk-email-triage
+make deploy-openshift
 ```
 
 Optional ingest smoke test:
@@ -438,6 +438,7 @@ See [docs/integration.md](docs/integration.md) for SMTP relay patterns, OpenShif
 | `make test` | Unit tests |
 | `make test-webhook` | Webhook sink e2e (no compose) |
 | `make deploy-openshift` | Apply overlay, wait for pods, print Route URLs |
+| `make verify-openshift` | Resolve Route hosts from cluster and run health checks |
 | `make undeploy-openshift` | Remove deployed resources (`DELETE_NAMESPACE=1` deletes project) |
 | `make run-on-kind` | Deploy mock stack on kind (keeps cluster running) |
 | `make destroy-kind` | Delete the local kind cluster (`helpdesk-ci`) |

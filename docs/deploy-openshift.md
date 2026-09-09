@@ -45,33 +45,28 @@ Worker nodes need **x86_64 with AVX2** and enough RAM (16 GiB minimum, 32 GiB re
 
 ## Verify
 
-Confirm workloads and routes:
+Route hostnames include the **OpenShift project name** (`{route}-{namespace}.apps.{cluster}`). Resolve them from the cluster — do not hardcode URLs.
 
 ```bash
-oc get pods,route -n helpdesk-email-triage
+make verify-openshift
 ```
 
-Check the gateway health endpoint and dashboard Route (example on `apps.alpha.modelarch.org`):
-
-```bash
-curl -sk https://email-gateway-helpdesk-email-triage.apps.alpha.modelarch.org/health
-curl -skI https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org | head -5
-```
-
-Open: [https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org](https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org)
-
-Expected gateway response: `{"status":"ok"}`. The dashboard `curl -I` should return `HTTP/1.1 200 OK`. Sample `.eml` files in the mounted ConfigMap should appear as tickets within a few seconds; the Streamlit queue auto-refreshes every 10 seconds.
-
-Resolve hosts dynamically for other namespaces:
+Or manually:
 
 ```bash
 NS=helpdesk-email-triage
 GW=$(oc get route email-gateway -n "$NS" -o jsonpath='{.spec.host}')
 UI=$(oc get route agent-dashboard -n "$NS" -o jsonpath='{.spec.host}')
-
 curl -sk "https://${GW}/health"
 curl -skI "https://${UI}" | head -5
 echo "Open: https://${UI}"
+```
+
+Still seeing `*-mtahhan-quickstart.apps.*`? Delete the old project and redeploy into `helpdesk-email-triage`:
+
+```bash
+oc delete project mtahhan-quickstart
+make deploy-openshift
 ```
 
 Optional ingest test:

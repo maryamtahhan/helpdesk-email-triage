@@ -51,15 +51,10 @@ Gateway CORS and Streamlit WebSocket settings are applied automatically at pod s
 ## Verify
 
 ```bash
-oc get pods,route -n helpdesk-email-triage
-
-curl -sk https://email-gateway-helpdesk-email-triage.apps.alpha.modelarch.org/health
-curl -skI https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org | head -5
+make verify-openshift
 ```
 
-Open: [https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org](https://agent-dashboard-helpdesk-email-triage.apps.alpha.modelarch.org)
-
-Dynamic hostnames (any namespace):
+Or:
 
 ```bash
 NS=helpdesk-email-triage

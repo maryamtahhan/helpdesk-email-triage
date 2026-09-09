@@ -97,7 +97,6 @@ if [[ "$INFERENCE_MODE" == "rhaii" ]]; then
   echo "Inference: RHAII CPU (registry.redhat.io/rhaii/vllm-cpu-rhel9) — first start may take several minutes"
 fi
 echo
-echo "## Verify"
-echo "curl -sk https://${GW}/health"
-echo "curl -skI https://${UI} | head -5"
-echo "Open: https://${UI}"
+echo "## Verify (hostname includes project name: ${NAMESPACE})"
+echo "  make verify-openshift"
+echo "  # or: ./scripts/openshift-verify.sh ${NAMESPACE}"
