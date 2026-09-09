@@ -4,23 +4,26 @@ from __future__ import annotations
 
 import html
 import json
-import os
 import pathlib
 import re
-import smtplib
-import urllib.parse
 from datetime import datetime
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
-import httpx
 import streamlit as st
 import streamlit.components.v1 as components
-
-GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://127.0.0.1:8080").rstrip("/")
-SMTP_HOST = os.environ.get("SMTP_HOST", "127.0.0.1")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "3025"))
-VAULT_SECRET = os.environ.get("VAULT_SECRET", "")
+from dashboard_api import (
+    SMTP_HOST,
+    SMTP_PORT,
+    check_gateway,
+    fetch_tickets,
+    fetch_vault,
+    gmail_compose_url,
+    ingest_text,
+    mailto_reply_url,
+    reply_recipient,
+    reply_subject,
+    send_via_smtp,
+)
+from dashboard_samples import SAMPLE_SCENARIOS
 
 CATEGORIES = ("All", "Billing", "Tech Support", "Account Access", "General")
 
@@ -40,76 +43,6 @@ def _load_arch_svg() -> str:
 _ARCH_SVG = _load_arch_svg()
 URGENCY_COLOR = {"High": "#C9190B", "Medium": "#F0AB00", "Low": "#3E8635"}
 URGENCY_ICON = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}
-
-# Quick-triage scenarios — bypass the file watcher, always available instantly
-SAMPLE_SCENARIOS = {
-    "💳 Double charge": {
-        "sender": "jane.martinez@example.com",
-        "subject": "Charged twice on my card",
-        "body": (
-            "Hi support, my name is Jane Martinez. My account ID is ACC-998877 "
-            "and I was charged twice on card 4111-1111-1111-1111. "
-            "Please call me at +1-212-555-0100 to resolve this urgently."
-        ),
-    },
-    "🔒 MFA lockout": {
-        "sender": "priya.shah@example.com",
-        "subject": "Locked out after MFA reset",
-        "body": (
-            "I'm Priya Shah and I cannot log in after my MFA was reset. "
-            "Account ID ACC-44012, SSN 000-00-0000 on file. "
-            "Please call +1-212-555-0199."
-        ),
-    },
-    "📶 VPN failure": {
-        "sender": "sam.okonkwo@example.com",
-        "subject": "VPN drops every 10 minutes",
-        "body": (
-            "This is Sam Okonkwo (sam.okonkwo@example.com). "
-            "Our corporate VPN disconnects every 10 minutes since last night's patch. "
-            "Call +1-212-555-0133. Urgent — blocking the entire team."
-        ),
-    },
-    "💬 General thanks": {
-        "sender": "jordan.lee@example.com",
-        "subject": "Thanks for last week's webinar",
-        "body": (
-            "Hi, this is Jordan Lee. No action needed — just wanted to say "
-            "the webinar last Tuesday was great and was provided without charge. "
-            "Really appreciated it!"
-        ),
-    },
-    "🏥 Healthcare billing": {
-        "sender": "sarah.johnson@patient.example.com",
-        "subject": "Question about my ER visit bill",
-        "body": (
-            "Hello, I'm Sarah Johnson. I received an unexpected invoice for my "
-            "emergency room visit. My SSN on file is 000-00-0003 and my patient "
-            "account is ACC-771234. The billed amount doesn't match what my "
-            "insurer told me. Please contact me at +1-617-555-0177 to clarify."
-        ),
-    },
-    "💼 HR payroll issue": {
-        "sender": "marcus.chen@employee.example.com",
-        "subject": "Payroll discrepancy — missing overtime",
-        "body": (
-            "I'm Marcus Chen (marcus.chen@employee.example.com). My employee "
-            "account ACC-33401 was not credited for 12 hours of overtime last "
-            "pay period. My SSN on file is 000-00-0004. "
-            "Please call me at +1-415-555-0218 urgently."
-        ),
-    },
-    "⚖️ GDPR deletion": {
-        "sender": "emma.thornton@example.com",
-        "subject": "GDPR right-to-erasure request",
-        "body": (
-            "I am Emma Thornton. I am exercising my right to erasure under GDPR "
-            "Article 17. Please delete all personal data for account ACC-55601. "
-            "Confirm to emma.thornton@example.com or call +1-312-555-0244. "
-            "You have 30 days to comply."
-        ),
-    },
-}
 
 _PAGE_CSS = """
 <style>
@@ -326,63 +259,6 @@ with st.expander("ℹ️ How to use this demo", expanded=False):
         )
 
 
-# ── Data helpers ──────────────────────────────────────────────────────
-def check_gateway() -> bool:
-    try:
-        httpx.get(f"{GATEWAY_URL}/health", timeout=2.0).raise_for_status()
-        return True
-    except Exception:
-        return False
-
-
-@st.cache_data(ttl=3)
-def fetch_tickets() -> list[dict]:
-    try:
-        r = httpx.get(f"{GATEWAY_URL}/tickets", timeout=10.0)
-        r.raise_for_status()
-        return r.json()
-    except httpx.HTTPError:
-        return []
-
-
-@st.cache_data(ttl=10)
-def fetch_vault(ticket_id: str) -> dict | None:
-    headers = {"X-Vault-Secret": VAULT_SECRET} if VAULT_SECRET else {}
-    try:
-        r = httpx.get(
-            f"{GATEWAY_URL}/tickets/{ticket_id}/vault",
-            headers=headers,
-            timeout=10.0,
-        )
-        r.raise_for_status()
-        return r.json()
-    except httpx.HTTPError:
-        return None
-
-
-def reply_recipient(original_sender: str) -> str:
-    """Extract the bare email address from a From header."""
-    match = re.search(r"<([^>]+)>", original_sender)
-    return match.group(1) if match else original_sender.strip()
-
-
-def reply_subject(subject: str) -> str:
-    return subject if re.match(r"^re:\s", subject, re.I) else f"Re: {subject}"
-
-
-def mailto_reply_url(recipient: str, subject: str) -> str:
-    """Build a mailto: link for replying to the customer after vault open."""
-    subj = reply_subject(subject)
-    return f"mailto:{recipient}?{urllib.parse.urlencode({'subject': subj})}"
-
-
-def gmail_compose_url(recipient: str, subject: str) -> str:
-    """Gmail web compose — works in Chrome without a mailto: OS handler."""
-    subj = reply_subject(subject)
-    params = urllib.parse.urlencode({"view": "cm", "fs": "1", "to": recipient, "su": subj})
-    return f"https://mail.google.com/mail/?{params}"
-
-
 def render_reply_actions(recipient: str, subject: str) -> None:
     """Offer mailto, Gmail web compose, and copy — Chrome often ignores mailto:."""
     subj = reply_subject(subject)
@@ -443,27 +319,6 @@ def render_reply_actions(recipient: str, subject: str) -> None:
         """,
         height=145,
     )
-
-
-def ingest_text(sender: str, subject: str, body: str) -> dict:
-    r = httpx.post(
-        f"{GATEWAY_URL}/ingest/raw",
-        json={"sender": sender, "subject": subject, "body": body},
-        timeout=120.0,
-    )
-    r.raise_for_status()
-    return r.json()
-
-
-def send_via_smtp(sender: str, subject: str, body: str) -> None:
-    """Send an email to the SMTP listener on port 3025."""
-    msg = MIMEMultipart()
-    msg["From"] = sender
-    msg["To"] = "support@helpdesk.local"
-    msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain"))
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=5) as s:
-        s.sendmail(sender, ["support@helpdesk.local"], msg.as_string())
 
 
 def highlight_tokens(text: str) -> str:

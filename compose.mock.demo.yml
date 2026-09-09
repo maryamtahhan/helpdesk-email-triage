@@ -11,12 +11,12 @@ version: "3.8"
 # Use --build to rebuild locally; podman compose pull to fetch from Quay.
 
 services:
-  rhaii-cpu-engine:
+  inference-mock:
     build:
       context: ./inference-mock
       dockerfile: Containerfile
     image: ${MOCK_IMAGE:-quay.io/mtahhan/helpdesk-inference-mock:latest}
-    container_name: rhaii-cpu-engine
+    container_name: helpdesk-inference-mock
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -40,14 +40,14 @@ services:
     container_name: rhaii-email-gateway
     restart: unless-stopped
     depends_on:
-      rhaii-cpu-engine:
+      inference-mock:
         condition: service_healthy
     ports:
       - "3025:3025"
       - "8080:8080"
     environment:
-      VLLM_BASE_URL: http://rhaii-cpu-engine:8000/v1
-      VLLM_ENDPOINT: http://rhaii-cpu-engine:8000/v1/chat/completions
+      VLLM_BASE_URL: http://inference-mock:8000/v1
+      VLLM_ENDPOINT: http://inference-mock:8000/v1/chat/completions
       MODEL_NAME: mock-triage
       GATEWAY_MODE: ${GATEWAY_MODE:-FILE_WATCHER}
       EMAIL_INPUT_DIR: /app/input_emails
