@@ -117,34 +117,67 @@ Load-test the **inference endpoint** (OpenAI-compatible `:8000`) with [GuideLLM]
 
 For end-to-end ingest load, run parallel `POST /ingest/raw` requests against port **8080** (add `X-Ingest-Key` when configured).
 
-#### Step 1: Install GuideLLM
+#### Step 1: Pull the GuideLLM container image
+
+No local Python install — use the same image as [Red Hat's GuideLLM on Kubernetes guide](https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes):
 
 ```bash
-python3 -m venv .venv-guidellm
-source .venv-guidellm/bin/activate
-pip install 'guidellm[recommended]'
-guidellm --version
+podman pull ghcr.io/vllm-project/guidellm:v0.5.0
+# or: docker pull ghcr.io/vllm-project/guidellm:v0.5.0
 ```
+
+On OpenShift the cluster pulls the image when the benchmark Job starts (`make guidellm-openshift`).
 
 #### Step 2: Run load test
 
-With `make demo` running, the mock inference service is exposed on port **8000**:
+**Laptop** — with `make demo` running, mock inference is on port **8000**:
 
 ```bash
-guidellm benchmark run \
+mkdir -p results/guidellm
+
+# Linux / RHEL — inference on localhost:8000
+podman run --rm --network host \
+  -v "$(pwd)/results/guidellm:/results:rw" \
+  -e HOME=/results -e HF_HOME=/results/.cache \
+  ghcr.io/vllm-project/guidellm:v0.5.0 \
+  benchmark run \
   --target http://127.0.0.1:8000 \
-  --backend-type openai_http \
   --model mock-triage \
-  --rate-type concurrent --rate 4 \
-  --max-requests 40 \
-  --data 'kind=synthetic_text,prompt_tokens=128,output_tokens=64'
+  --data '{"prompt_tokens":128,"output_tokens":64}' \
+  --rate-type concurrent --rate 2,4 \
+  --max-seconds 120 \
+  --output-dir /results \
+  --outputs benchmark-results.json,benchmark-results.html
 ```
 
-For RHAII (`compose.yml` or OpenShift `INFERENCE=rhaii`), use `--model Qwen/Qwen2.5-1.5B-Instruct` and point `--target` at the inference Service (port-forward or in-cluster URL). See [Red Hat Developer: benchmark vLLM with GuideLLM](https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes).
+On **macOS** (Podman/Docker Desktop), use `http://host.containers.internal:8000` (Podman) or `http://host.docker.internal:8000` (Docker) for `--target` instead of `--network host`.
+
+For **RHAII on a RHEL host** (`compose.yml`), use `--model` and `--processor` `Qwen/Qwen2.5-1.5B-Instruct`.
+
+**OpenShift** — after `make verify-openshift`, run an in-cluster Job (same pattern as the Red Hat article, targeting this project's `inference-mock` or `rhaii-cpu` Service):
+
+```bash
+make guidellm-openshift
+# or: ./scripts/guidellm-openshift.sh helpdesk-email-triage
+```
+
+The script:
+
+- Benchmarks via **internal Service DNS** (`http://inference-mock.<namespace>.svc.cluster.local:8000`) — not the public Route
+- Creates a **results PVC**, applies the GuideLLM **NetworkPolicy**, and runs `ghcr.io/vllm-project/guidellm:v0.5.0`
+- Copies `benchmark-results.json` and `.html` to `./results/guidellm-openshift/`
+
+Tune with `GUIDELLM_RATE`, `GUIDELLM_MAX_SECONDS`, `GUIDELLM_MODEL`, or `GUIDELLM_IMAGE`. For a longer production-style sweep matching the article: `GUIDELLM_RATE=1,2,4 GUIDELLM_MAX_SECONDS=300 make guidellm-openshift`.
+
+For end-to-end **gateway** load on OpenShift, send parallel `POST /ingest/raw` requests to the gateway Route (include `X-Ingest-Key` when the hardened overlay is used).
 
 #### Step 3: Review results
 
-GuideLLM prints a summary table: request throughput, time-to-first-token, and end-to-end latency at the chosen concurrency. Use it to compare mock vs RHAII CPU, tune replica counts on OpenShift, or validate a node size before a pilot.
+- **Console** — throughput, TTFT, and latency tables print in the Job log (`oc logs job/...` or the script output).
+- **HTML report** — open `./results/guidellm-openshift/<job>.html` in a browser for the interactive GuideLLM UI (latency charts, token stats).
+- **JSON** — `./results/guidellm-openshift/<job>.json` for archival or `guidellm benchmark from-file` (see the [Red Hat article Step 3](https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes)).
+
+Use the numbers to compare mock vs RHAII CPU or size nodes before a pilot.
 
 ### What you've accomplished
 

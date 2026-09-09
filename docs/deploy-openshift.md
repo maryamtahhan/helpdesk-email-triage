@@ -61,6 +61,16 @@ make verify-openshift
 
 Checks health, dashboard headers, file-watcher tickets, and falls back to `/ingest/raw`. Reads `INGEST_API_KEY` from `helpdesk-secrets` when set.
 
+## Load test inference (GuideLLM)
+
+After verify, benchmark `inference-mock` or `rhaii-cpu` using the in-cluster Job pattern from [How to deploy and benchmark vLLM with GuideLLM on Kubernetes](https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes):
+
+```bash
+make guidellm-openshift
+```
+
+Creates a results PVC, runs `ghcr.io/vllm-project/guidellm:v0.5.0` against the internal Service (not the Route), and copies `benchmark-results.html` / `.json` to `./results/guidellm-openshift/`. See [README Quickstart walkthrough — Load testing](../README.md#load-testing).
+
 Manual check:
 
 ```bash

@@ -1,5 +1,5 @@
 .PHONY: demo up down logs ingest test lint shellcheck demo-local gateway-only test-webhook webhook-receiver \
-        validate-manifests compose-e2e build-images deploy-openshift verify-openshift \
+        validate-manifests compose-e2e build-images deploy-openshift verify-openshift guidellm-openshift \
         undeploy-openshift run-on-kind destroy-kind kind-e2e test-openshift-overlay
 
 # demo          — mock inference + gateway + Streamlit UI
@@ -78,6 +78,10 @@ deploy-openshift:
 verify-openshift:
 	chmod +x scripts/openshift-verify.sh
 	./scripts/openshift-verify.sh
+
+guidellm-openshift:
+	chmod +x scripts/guidellm-openshift.sh
+	./scripts/guidellm-openshift.sh
 
 undeploy-openshift:
 	chmod +x scripts/undeploy-openshift.sh
