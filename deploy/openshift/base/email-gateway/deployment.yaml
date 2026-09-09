@@ -82,9 +82,10 @@ spec:
             failureThreshold: 36
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health/ready
               port: http
             periodSeconds: 5
+            failureThreshold: 6
           livenessProbe:
             httpGet:
               path: /health
