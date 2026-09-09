@@ -107,7 +107,7 @@ jobs:
           - image: helpdesk-triage-ui
             context: .
             dockerfile: agent-dashboard/Containerfile
-            smoke_test: python -c "import streamlit"
+            smoke_test: python -c "import streamlit, dashboard_render"
           - image: helpdesk-inference-mock
             context: inference-mock
             dockerfile: inference-mock/Containerfile
