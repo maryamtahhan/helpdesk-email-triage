@@ -1,0 +1,9 @@
+# Protect the gateway API with OpenShift OAuth on the public Route.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: email-gateway
+  annotations:
+    haproxy.router.openshift.io/oauth-expose: "true"
+    haproxy.router.openshift.io/oauth-token-delegate: "true"
+    haproxy.router.openshift.io/oauth-delegate-role: "view"

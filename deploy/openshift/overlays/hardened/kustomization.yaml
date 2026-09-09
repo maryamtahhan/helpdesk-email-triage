@@ -12,3 +12,5 @@ resources:
 patches:
   - path: ../../components/hardening/patch-require-secrets.yaml
   - path: ../../components/hardening/patch-route-dashboard-oauth.yaml
+  - path: ../../components/hardening/patch-route-gateway-oauth.yaml
+  - path: ../../components/hardening/patch-dashboard-scope-secrets.yaml
