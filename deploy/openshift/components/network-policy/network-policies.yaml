@@ -1,0 +1,81 @@
+# Restrict pod-to-pod traffic within the helpdesk namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  labels:
+    app.kubernetes.io/part-of: helpdesk-email-triage
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-openshift-ingress
+  labels:
+    app.kubernetes.io/part-of: helpdesk-email-triage
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - email-gateway
+          - agent-dashboard
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-to-inference
+  labels:
+    app.kubernetes.io/part-of: helpdesk-email-triage
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - inference-mock
+          - rhaii-cpu
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: email-gateway
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dashboard-to-gateway
+  labels:
+    app.kubernetes.io/part-of: helpdesk-email-triage
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: email-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agent-dashboard
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 3025

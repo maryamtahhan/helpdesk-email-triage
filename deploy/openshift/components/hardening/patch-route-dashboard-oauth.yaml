@@ -1,0 +1,10 @@
+# Protect the Streamlit UI with OpenShift OAuth before any real deployment.
+# Requires an OAuth client configured for the cluster (see docs/deploy-openshift.md).
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: agent-dashboard
+  annotations:
+    haproxy.router.openshift.io/oauth-expose: "true"
+    haproxy.router.openshift.io/oauth-token-delegate: "true"
+    haproxy.router.openshift.io/oauth-delegate-role: "view"

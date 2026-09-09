@@ -5,6 +5,7 @@ resources:
   - ../../base
   - ../../components/routes
   - ../../components/route-reader
+  - ../../components/network-policy
 
 configMapGenerator:
   - name: sample-emails

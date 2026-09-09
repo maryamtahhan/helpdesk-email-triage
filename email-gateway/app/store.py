@@ -1,4 +1,9 @@
-"""In-memory ticket store with JSON persistence and a PII vault."""
+"""In-memory ticket store with JSON persistence and a PII vault.
+
+Ticket JSON is written to TICKET_DATA_DIR/tickets.json without encryption.
+For regulated workloads, encrypt the volume, use a managed secret store, or
+replace this module with a database that supports encryption at rest.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +11,7 @@ import json
 import os
 import tempfile
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -84,7 +89,7 @@ def create_ticket(
             "classification_ms": round(classification_ms, 1),
             "source": source,
             "model": model,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
         _tickets.insert(0, ticket)
         _persist()

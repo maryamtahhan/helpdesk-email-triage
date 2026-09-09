@@ -26,8 +26,28 @@ WATCH_INTERVAL = float(os.environ.get("WATCH_INTERVAL_SECONDS", "2"))
 # Set VAULT_SECRET in the environment to require an X-Vault-Secret header on
 # vault requests. Leave unset for the demo path (a warning is logged on start).
 VAULT_SECRET = os.environ.get("VAULT_SECRET", "")
+INGEST_API_KEY = os.environ.get("INGEST_API_KEY", "")
+_DEMO_VAULT_SECRET = "helpdesk-demo-secret"
 # Streamlit UI origin; kept narrow so browsers can't make cross-origin vault requests.
 _DASHBOARD_ORIGIN = os.environ.get("DASHBOARD_ORIGIN", "http://localhost:8501")
+
+
+def _require_ingest_key(x_ingest_key: str) -> None:
+    if INGEST_API_KEY and x_ingest_key != INGEST_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid ingest API key")
+
+
+def _validate_production_secrets() -> None:
+    if os.environ.get("REQUIRE_SECRETS", "").lower() not in {"1", "true", "yes"}:
+        return
+    if not VAULT_SECRET or VAULT_SECRET == _DEMO_VAULT_SECRET:
+        raise RuntimeError(
+            "REQUIRE_SECRETS is set but VAULT_SECRET is missing or still the demo value"
+        )
+    if not INGEST_API_KEY:
+        raise RuntimeError(
+            "REQUIRE_SECRETS is set but INGEST_API_KEY is not configured"
+        )
 
 
 class _SmtpHandler:
@@ -42,7 +62,7 @@ class _SmtpHandler:
             None, process_raw_email, envelope.content, "smtp"
         )
 
-        def _log_exc(f: "asyncio.Future") -> None:
+        def _log_exc(f: asyncio.Future) -> None:
             exc = f.exception()
             if exc:
                 logger.error(
@@ -77,6 +97,7 @@ def _watch_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _validate_production_secrets()
     store.load()
     if SMTP_BIND == "0.0.0.0":
         logger.warning(
@@ -88,6 +109,16 @@ async def lifespan(app: FastAPI):
         logger.warning(
             "VAULT_SECRET is not set — vault endpoint is unauthenticated. "
             "Set VAULT_SECRET in the environment before any real deployment."
+        )
+    elif VAULT_SECRET == _DEMO_VAULT_SECRET:
+        logger.warning(
+            "VAULT_SECRET is still the demo default — replace before any real deployment."
+        )
+    if INGEST_API_KEY:
+        logger.info("HTTP ingest endpoints require X-Ingest-Key header")
+    elif os.environ.get("REQUIRE_SECRETS", "").lower() not in {"1", "true", "yes"}:
+        logger.warning(
+            "INGEST_API_KEY is not set — POST /ingest and /ingest/raw are unauthenticated."
         )
     smtp = Controller(_SmtpHandler(), hostname=SMTP_BIND, port=SMTP_PORT)
     smtp.start()
@@ -111,7 +142,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[_DASHBOARD_ORIGIN],
     allow_methods=["GET", "POST"],
-    allow_headers=["X-Vault-Secret"],
+    allow_headers=["X-Vault-Secret", "X-Ingest-Key"],
 )
 
 
@@ -157,7 +188,11 @@ _MAX_UPLOAD_BYTES = 1024 * 1024  # 1 MiB
 
 
 @app.post("/ingest")
-async def ingest_upload(file: UploadFile = File(...)) -> dict:
+async def ingest_upload(
+    file: UploadFile = File(...),
+    x_ingest_key: str = Header(default=""),
+) -> dict:
+    _require_ingest_key(x_ingest_key)
     import asyncio
 
     raw = await file.read(_MAX_UPLOAD_BYTES + 1)
@@ -173,8 +208,12 @@ async def ingest_upload(file: UploadFile = File(...)) -> dict:
 
 
 @app.post("/ingest/raw")
-async def ingest_raw(payload: dict) -> dict:
+async def ingest_raw(
+    payload: dict,
+    x_ingest_key: str = Header(default=""),
+) -> dict:
     """JSON ingest for demos: {sender, subject, body}."""
+    _require_ingest_key(x_ingest_key)
     sender = str(payload.get("sender") or "demo@example.com")
     subject = str(payload.get("subject") or "(no subject)")
     body = str(payload.get("body") or "")

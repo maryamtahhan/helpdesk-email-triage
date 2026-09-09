@@ -6,6 +6,7 @@ resources:
   - ../../components/routes
   - ../../components/route-reader
   - ../../components/rhaii-cpu
+  - ../../components/network-policy
 
 patches:
   - path: patch-remove-mock.yaml
