@@ -22,6 +22,7 @@ Classify support email by **category** and **urgency** while keeping raw PII out
 - [Track 1: Deploy to OpenShift (RHAII CPU)](#track-1-deploy-to-openshift-rhaii-cpu)
 - [Track 2: Run on RHEL with systemd (Quadlet)](#track-2-run-on-rhel-with-systemd-quadlet)
 - [Hands-on validation](#hands-on-validation)
+- [Benchmark inference with GuideLLM](#benchmark-inference-with-guidellm)
 - [Track 3: Local mock validation (maintainers)](#track-3-local-mock-validation-maintainers)
 - [Beyond the demo UI](#beyond-the-demo-ui)
 - [OpenShift hardened pilot](#openshift-hardened-pilot)
@@ -186,15 +187,9 @@ curl -sk -X POST "${GW}/ingest/raw" \
 
 When `INGEST_API_KEY` is set (hardened overlay), add `-H "X-Ingest-Key: …"` from `oc get secret helpdesk-secrets …`.
 
-### Step 5: Benchmark inference (recommended)
+### Step 5: Benchmark inference with GuideLLM
 
-Size nodes for a pilot with GuideLLM against in-cluster RHAII:
-
-```bash
-make guidellm-openshift
-```
-
-Results land in `./results/guidellm-openshift/`. See [docs/deploy-openshift.md](docs/deploy-openshift.md#load-test-inference-guidellm).
+After hands-on validation, run **[Benchmark inference with GuideLLM](#benchmark-inference-with-guidellm)** (OpenShift → `make guidellm-openshift`) to measure RHAII CPU throughput and latency before a pilot.
 
 ### What you get on OpenShift
 
@@ -285,6 +280,10 @@ Optional:
 ./scripts/ingest-sample.sh
 ```
 
+### Step 6: Benchmark inference with GuideLLM
+
+With `rhaii-cpu-engine` healthy on `:8000`, follow **[Benchmark inference with GuideLLM](#benchmark-inference-with-guidellm)** (RHEL / Quadlet → `podman run` against `http://127.0.0.1:8000`).
+
 ### Stop
 
 ```bash
@@ -348,13 +347,102 @@ Expected results for bundled samples (mock and RHAII should agree on these demos
 
 ### Step 5: Review classification speed
 
-Note per-ticket **classification time** and **Avg classification** in the inbox. On RHAII CPU, expect higher latency than mock — use Track 1 Step 5 (GuideLLM) to benchmark throughput for sizing.
+Note per-ticket **classification time** and **Avg classification** in the inbox. On RHAII CPU, expect higher latency than mock — continue with **[Benchmark inference with GuideLLM](#benchmark-inference-with-guidellm)** for throughput sizing.
 
 ### What you accomplished
 
 - End-to-end **ingest → tokenize → RHAII classify → ticket API**
 - Verified **category/urgency** and **PII tokenization** on real inference
 - Confirmed **vault** and **downstream JSON** contract
+
+---
+
+## Benchmark inference with GuideLLM
+
+*Part of the **customer quickstart** after Track 1 or Track 2 hands-on validation. Requires **RHAII** on port **8000** (not mock).*
+
+[GuideLLM](https://github.com/vllm-project/guidellm) load-tests the **OpenAI-compatible inference endpoint** — the same class of `chat/completions` call the email gateway makes after regex tokenization. Use the results to size CPU nodes and set expectations for classification latency at concurrency.
+
+| Path | When | Command |
+|---|---|---|
+| **OpenShift** | After `INFERENCE=rhaii` deploy + `make verify-openshift` | `make guidellm-openshift` |
+| **RHEL / Quadlet / Compose** | RHAII listening on `127.0.0.1:8000` | `podman run` (below) |
+
+Skip this section on mock-only deploys ([Track 3](#track-3-local-mock-validation-maintainers)).
+
+### Step 1: Pull the GuideLLM image
+
+**OpenShift** — the benchmark Job uses the Red Hat image (same registry login as RHAII CPU):
+
+```bash
+podman login registry.redhat.io
+# Default: registry.redhat.io/rhai/guidellm-rhel9 (override with GUIDELLM_IMAGE)
+```
+
+**RHEL / laptop with local RHAII:**
+
+```bash
+podman pull ghcr.io/vllm-project/guidellm:v0.7.1
+```
+
+### Step 2: Run the benchmark
+
+#### OpenShift (recommended for Track 1)
+
+Requires `rhaii-cpu` in the namespace (mock overlays are rejected).
+
+```bash
+make guidellm-openshift
+# Optional tuning:
+# GUIDELLM_RATE=1,2,4 GUIDELLM_MAX_SECONDS=300 make guidellm-openshift
+```
+
+- Targets **in-cluster Service DNS** (`rhaii-cpu:8000`), not the public gateway Route.
+- Creates a results PVC, runs a GuideLLM Job, copies artifacts to `./results/guidellm-openshift/`.
+- Red Hat image uses CLI `guidellm run`; upstream `ghcr.io/vllm-project/guidellm` uses `guidellm benchmark run` — set `GUIDELLM_IMAGE` to switch.
+
+Watch progress:
+
+```bash
+oc logs -n helpdesk-email-triage -l job-name --follow
+```
+
+#### RHEL host, Quadlet, or `compose.yml` (Track 2)
+
+With RHAII healthy on port 8000:
+
+```bash
+mkdir -p results/guidellm
+
+podman run --rm --network host \
+  -v "$(pwd)/results/guidellm:/results:rw" \
+  -e HOME=/results -e HF_HOME=/results/.cache \
+  -e HF_TOKEN="${HF_TOKEN}" \
+  ghcr.io/vllm-project/guidellm:v0.7.1 \
+  benchmark run \
+  --target http://127.0.0.1:8000 \
+  --model Qwen/Qwen2.5-1.5B-Instruct \
+  --processor Qwen/Qwen2.5-1.5B-Instruct \
+  --data '{"prompt_tokens":128,"output_tokens":64}' \
+  --rate-type concurrent --rate 2,4 \
+  --max-seconds 120 \
+  --output-dir /results \
+  --outputs benchmark-results.json,benchmark-results.html
+```
+
+On **macOS** with RHAII in Podman, use `--target http://host.containers.internal:8000` (Docker: `host.docker.internal`).
+
+### Step 3: Review results
+
+| Output | Where |
+|---|---|
+| **Console** | Job log (`oc logs …`) or `podman run` stdout — throughput, TTFT, latency tables |
+| **HTML report** | `./results/guidellm-openshift/*.html` or `./results/guidellm/benchmark-results.html` — charts in a browser |
+| **JSON** | Matching `.json` files for archival or comparison runs |
+
+Use these numbers alongside per-ticket **classification time** in the inbox when planning pilot capacity.
+
+More detail (NetworkPolicy, env vars, production sweeps): [docs/deploy-openshift.md](docs/deploy-openshift.md#load-test-inference-guidellm) · [Red Hat GuideLLM on Kubernetes](https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes).
 
 ---
 
