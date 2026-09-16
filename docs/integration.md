@@ -380,7 +380,7 @@ The `hardened` and `hardened-rhaii` overlays enable:
 - **OAuth on Routes** — gateway and dashboard public Routes protected by OpenShift OAuth
 - **Scoped dashboard secrets** — dashboard pod receives `INGEST_API_KEY` only (not `VAULT_SECRET`)
 
-Deploy commands: [README — OpenShift hardened](../README.md#openshift-hardened).
+Deploy commands: [README — OpenShift hardened pilot](../README.md#openshift-hardened-pilot).
 
 ## Next steps
 

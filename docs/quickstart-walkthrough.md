@@ -1,5 +1,7 @@
 # Quickstart walkthrough
 
+**Catalog reviewers:** the step-by-step tracks live in the [README](../README.md) (Track 1–3). This document keeps the same material in one place for deep links and extended GuideLLM commands.
+
 Use this after the stack is running:
 
 | Environment | How to start | UI |

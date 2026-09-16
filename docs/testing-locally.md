@@ -1,6 +1,6 @@
 # Running the demo locally
 
-**Fastest path:** [README Try it now](../README.md#try-it-now-about-2-minutes) — `make demo`, open port 8501, done.
+**Fastest path:** [README Track 1](../README.md#track-1-run-locally) — `make demo`, open `/welcome`, done.
 
 **Hands-on walkthrough:** [quickstart-walkthrough.md](quickstart-walkthrough.md) — submit tickets, review classification/redaction, classification speed, quality checks, and optional GuideLLM load testing.
 
@@ -88,7 +88,7 @@ Results land in `./results/guidellm-openshift/`. See [deploy-openshift.md](deplo
 
 ## OpenShift
 
-Cluster deploy is documented in the [README](../README.md#openshift-quick-deploy) (step-by-step) and [deploy-openshift.md](deploy-openshift.md) (overlay catalog). After verify, continue with [Hands-on validation](../README.md#hands-on-validation) or the full [quickstart walkthrough](quickstart-walkthrough.md).
+Cluster deploy is documented in [README Track 2](../README.md#track-2-deploy-to-openshift) and [deploy-openshift.md](deploy-openshift.md) (overlay catalog). After verify, continue with the README UI steps or [quickstart-walkthrough.md](quickstart-walkthrough.md).
 
 ## Mock vs RHAII
 
