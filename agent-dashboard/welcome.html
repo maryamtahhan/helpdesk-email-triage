@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Welcome — Helpdesk triage</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #ffffff;
+      --ink: #1a1a1a;
+      --muted: #6a6e73;
+      --line: #e0e0e0;
+      --line-strong: #8a8d90;
+      --brand: #c9190b;
+      --brand-hover: #a31107;
+      --brand-soft: #fff8f7;
+      --token: #0066cc;
+      --token-bg: #e7f1ff;
+      --token-border: #bee1f4;
+      --success: #3e8635;
+      --warn-bg: #fff8e6;
+      --warn-border: #f0ab00;
+      --panel-bg: #fafafa;
+      --arch-bg: #f8f8f8;
+      --code-bg: #0e1117;
+      --radius: 4px;
+      --radius-lg: 8px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font: 15px/1.55 "Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    a:focus-visible, button:focus-visible {
+      outline: 2px solid var(--brand);
+      outline-offset: 2px;
+    }
+    .shell { max-width: 1120px; margin: 0 auto; padding: 0 28px 88px; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      margin: 0 -28px;
+      padding: 0 28px;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid transparent;
+    }
+    .topbar.scrolled { border-bottom-color: var(--line); }
+    .topnav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      min-height: 64px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--ink);
+      text-decoration: none;
+    }
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: var(--radius);
+      background: var(--brand);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+    .nav-end {
+      display: flex;
+      align-items: center;
+      gap: 8px 20px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .navlinks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 16px;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    .navlinks a { color: var(--muted); text-decoration: none; padding: 6px 2px; }
+    .navlinks a:hover { color: var(--ink); }
+    .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: var(--radius);
+      background: var(--brand);
+      color: #fff !important;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .nav-cta:hover { background: var(--brand-hover); color: #fff !important; }
+    .hero {
+      padding: 48px 0 40px;
+      max-width: 40em;
+    }
+    @media (max-width: 900px) { .navlinks { display: none; } }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--brand);
+      background: var(--brand-soft);
+      border: 1px solid #f9b8b1;
+      border-radius: 999px;
+      padding: 5px 12px;
+      margin-bottom: 18px;
+    }
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--brand);
+    }
+    h1 {
+      margin: 0 0 18px;
+      font-size: clamp(2rem, 4vw, 2.75rem);
+      line-height: 1.1;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+    .lead { color: var(--muted); font-size: 1.0625rem; margin: 0 0 28px; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: var(--brand);
+      color: #fff;
+      font-weight: 600;
+      font-size: 0.9375rem;
+      padding: 12px 20px;
+      border-radius: var(--radius);
+      text-decoration: none;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: var(--brand-hover); }
+    .btn-ghost {
+      background: var(--surface);
+      color: var(--ink);
+      border-color: var(--line);
+    }
+    .btn-ghost:hover { background: var(--panel-bg); }
+    .section { padding: 8px 0 32px; }
+    .section-head h2 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin: 0 0 10px;
+    }
+    .section-head p {
+      color: var(--muted);
+      max-width: 46em;
+      margin: 0 0 20px;
+      font-size: 1rem;
+    }
+    .example-row {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 12px 16px;
+      align-items: stretch;
+    }
+    @media (max-width: 820px) {
+      .example-row { grid-template-columns: 1fr; }
+      .example-arrow { display: none; }
+    }
+    .example-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 1.5rem;
+      font-weight: 300;
+      padding-top: 2rem;
+    }
+    .example-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .example-card h3 {
+      margin: 0;
+      padding: 12px 16px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      background: var(--panel-bg);
+      border-bottom: 1px solid var(--line);
+    }
+    .example-inner { padding: 14px 16px 16px; font-size: 0.9rem; }
+    .mail-meta, .ticket-meta {
+      font-size: 0.84rem;
+      color: var(--muted);
+      margin-bottom: 10px;
+      line-height: 1.55;
+    }
+    .mail-meta strong, .ticket-meta strong { color: var(--ink); font-weight: 600; }
+    .mail-body, .ticket-body {
+      background: var(--panel-bg);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      font-size: 0.88rem;
+    }
+    .pii-raw {
+      background: #fdf3f2;
+      color: #c9190b;
+      border: 1px solid #f9b8b1;
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-weight: 600;
+    }
+    .pii-token {
+      background: var(--token-bg);
+      color: var(--token);
+      border: 1px solid var(--token-border);
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 0.92em;
+      font-weight: 600;
+    }
+    .ticket-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .ticket-id {
+      font-family: ui-monospace, monospace;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .badge-cat { background: #f0f0f0; color: #333; border: 1px solid var(--line); }
+    .badge-high { background: #c9190b; color: #fff; }
+    .ticket-caption { font-size: 0.78rem; color: var(--muted); margin-top: 10px; }
+
+    /* Animated architecture (light Streamlit palette) */
+    .arch-live {
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-lg);
+      background: var(--arch-bg);
+      overflow: hidden;
+    }
+    .arch-canvas { padding: 20px 16px 8px; overflow-x: auto; }
+    .arch-canvas svg { display: block; width: 100%; min-width: 640px; height: auto; }
+    .arch-live .label {
+      fill: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      font-family: inherit;
+    }
+    .arch-live .title {
+      fill: var(--ink);
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+    }
+    .arch-live .small {
+      fill: var(--muted);
+      font-size: 11px;
+      font-family: inherit;
+    }
+    .arch-live .box {
+      fill: var(--surface);
+      stroke: var(--line-strong);
+      stroke-width: 1.5;
+    }
+    .arch-live .box-accent { stroke: var(--brand); fill: var(--brand-soft); }
+    .arch-live .box-token { stroke: var(--token); fill: var(--token-bg); }
+    .arch-live .box-optional {
+      fill: var(--surface);
+      stroke: var(--line-strong);
+      stroke-width: 1.5;
+      stroke-dasharray: 6 5;
+    }
+    .arch-live .pill {
+      fill: var(--panel-bg);
+      stroke: var(--line);
+      stroke-width: 1;
+    }
+    .arch-live .pill-text {
+      fill: var(--ink);
+      font-size: 10px;
+      font-weight: 600;
+      font-family: ui-monospace, monospace;
+    }
+    .arch-live .flow,
+    .arch-live line.flow {
+      fill: none;
+      stroke: var(--brand);
+      stroke-width: 2.5;
+      marker-end: url(#arrow-brand);
+    }
+    .arch-live .flow-token,
+    .arch-live line.flow-token {
+      fill: none;
+      stroke: var(--token);
+      stroke-width: 2.5;
+      stroke-dasharray: 7 6;
+      marker-end: url(#arrow-token);
+    }
+    .arch-live .packet-path { fill: none; stroke: none; }
+    .arch-live .packet {
+      filter: drop-shadow(0 0 4px rgba(201, 25, 11, 0.35));
+      pointer-events: none;
+    }
+    .arch-legend {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 20px 28px;
+      padding: 14px 20px 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .arch-legend span { display: inline-flex; align-items: center; gap: 8px; }
+    .swatch { width: 22px; height: 3px; border-radius: 4px; background: var(--brand); }
+    .swatch.token { background: var(--token); }
+
+    .block {
+      padding: 36px 0;
+      border-top: 1px solid var(--line);
+    }
+    .block h2 { margin: 0 0 8px; font-size: 1.25rem; font-weight: 700; }
+    .block > p { margin: 0 0 16px; color: var(--muted); }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
+    .code-label { font-weight: 600; margin: 0 0 8px; font-size: 0.875rem; }
+    .codecard {
+      background: var(--code-bg);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      position: relative;
+      border: 1px solid #31333b;
+    }
+    .codecard pre {
+      margin: 0;
+      padding-right: 52px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 0.78rem;
+      line-height: 1.55;
+      color: #fafafa;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .copy {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid #4a4d55;
+      background: #262730;
+      color: #fafafa;
+      cursor: pointer;
+    }
+    .copy:hover { background: #31333b; }
+    .callout {
+      background: var(--warn-bg);
+      border-left: 4px solid var(--warn-border);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      padding: 12px 14px;
+      font-size: 0.875rem;
+      color: var(--ink);
+      margin-top: 14px;
+      line-height: 1.5;
+    }
+    .block ul {
+      color: var(--muted);
+      margin: 0;
+      padding-left: 1.15em;
+      line-height: 1.65;
+    }
+    .block li { margin-bottom: 6px; }
+    .block li strong { color: var(--ink); font-weight: 600; }
+    table.routes {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    table.routes th, table.routes td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+    }
+    table.routes th {
+      background: #f0f0f0;
+      font-weight: 600;
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    table.routes tr:last-child td { border-bottom: none; }
+    code.inline {
+      font-family: ui-monospace, monospace;
+      font-size: 0.85em;
+      background: var(--token-bg);
+      padding: 2px 6px;
+      border-radius: 3px;
+      color: var(--token);
+      border: 1px solid var(--token-border);
+    }
+    .cta-footer {
+      text-align: center;
+      padding: 48px 0 8px;
+      border-top: 1px solid var(--line);
+      margin-top: 16px;
+    }
+    .cta-footer p { color: var(--muted); margin: 0 0 22px; max-width: 36em; margin-left: auto; margin-right: auto; }
+    .cta-footer .hero-actions { justify-content: center; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .arch-live .packet { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar" id="topbar">
+      <header class="topnav">
+        <a class="brand" href="/welcome">
+          <span class="brand-mark" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+          </span>
+          Helpdesk triage
+        </a>
+        <div class="nav-end">
+          <nav class="navlinks" aria-label="Sections">
+            <a href="#architecture">Architecture</a>
+            <a href="#ingest">Ingest</a>
+            <a href="#inbox">Inbox</a>
+            <a href="#api">API</a>
+          </nav>
+          <a class="nav-cta" href="/">Open inbox ↗</a>
+        </div>
+      </header>
+    </div>
+
+    <section class="hero">
+      <div class="pill"><span class="pill-dot" aria-hidden="true"></span> <span id="mode-pill">Checking stack…</span></div>
+      <h1>You’re connected</h1>
+      <p class="lead" id="lead-text">
+        The stack is already running. Support mail is ingested by the gateway, structured PII is vaulted,
+        and <strong id="lead-inference">the configured classifier</strong> labels category and urgency on tokenized text only.
+        Open the inbox to review tickets, or send more mail below.
+      </p>
+      <div class="hero-actions">
+        <a class="btn" href="/">Open the inbox ↗</a>
+        <a class="btn btn-ghost" href="#architecture">See the pipeline ↓</a>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Raw email in. Sanitized tickets out.</h2>
+        <p>Same message before and after the gateway — structured PII is vaulted; the queue and classifier only see tokens.</p>
+      </div>
+      <div class="example-row">
+        <article class="example-card">
+          <h3>Inbound email</h3>
+          <div class="example-inner">
+            <div class="mail-meta">
+              <div><strong>From:</strong> jane.martinez@example.com</div>
+              <div><strong>Subject:</strong> Charged twice on my card</div>
+            </div>
+            <div class="mail-body">Hi support, my name is <span class="pii-raw">Jane Martinez</span>. My account ID is ACC-998877 and I was charged twice on card <span class="pii-raw">4111-1111-1111-1111</span>.
+Please call me at <span class="pii-raw">+1-212-555-0100</span> to resolve this urgently.</div>
+          </div>
+        </article>
+        <div class="example-arrow" aria-hidden="true">→</div>
+        <article class="example-card">
+          <h3>Ticket in the agent inbox</h3>
+          <div class="example-inner">
+            <div class="ticket-head">
+              <span class="ticket-id">TKT-7f3a9c2e</span>
+              <span class="badge badge-cat">Billing</span>
+              <span class="badge badge-high">High</span>
+            </div>
+            <div class="ticket-meta">
+              <div><strong>From:</strong> jane.martinez@example.com</div>
+              <div><strong>Subject:</strong> Charged twice on my card</div>
+            </div>
+            <p style="margin:0 0 6px;font-size:0.84rem;font-weight:600">Sanitized body</p>
+            <div class="ticket-body">Hi support, my name is <span class="pii-token">[NAME_1]</span>. My account ID is ACC-998877 and I was charged twice on card <span class="pii-token">[CARD_LAST4_1]</span>.
+Please call me at <span class="pii-token">[PHONE_1]</span> to resolve this urgently.</div>
+            <p class="ticket-caption">Original values live in the vault for this ticket ID — open <strong>View original PII vault</strong> in the inbox to rehydrate.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="architecture">
+      <div class="section-head">
+        <h2>Live pipeline</h2>
+        <p id="arch-blurb">One message through this deployment — ingest, vault tokenization, classification on tokenized text, optional agent inbox.</p>
+      </div>
+      <div class="arch-live" aria-label="Animated helpdesk triage architecture">
+        <div class="arch-canvas">
+          <svg viewBox="0 0 880 176" role="img" aria-labelledby="arch-title arch-desc">
+            <title id="arch-title">Helpdesk email triage pipeline</title>
+            <desc id="arch-desc">Four stages: ingestion, email gateway with PII vault, inference, optional Streamlit inbox.</desc>
+            <defs>
+              <marker id="arrow-brand" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                <path d="M0,0 L10,3 L0,6 z" fill="#c9190b"/>
+              </marker>
+              <marker id="arrow-token" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                <path d="M0,0 L10,3 L0,6 z" fill="#0066cc"/>
+              </marker>
+            </defs>
+
+            <path id="path-1" class="packet-path" d="M 110 28 V 88 H 322"/>
+            <path id="path-2" class="packet-path" d="M 416 88 H 534"/>
+            <path id="path-3" class="packet-path" d="M 628 88 H 758"/>
+            <circle id="packet-dot" class="packet" r="6" fill="#c9190b" cx="110" cy="28"/>
+
+            <text x="16" y="40" class="label">STAGE 1</text>
+            <rect x="16" y="52" width="188" height="72" rx="8" class="box"/>
+            <text x="110" y="78" text-anchor="middle" class="title">Ingestion</text>
+            <text x="110" y="96" text-anchor="middle" class="small">HTTP · SMTP · .eml</text>
+            <text x="110" y="112" text-anchor="middle" class="small">Raw body in memory</text>
+
+            <line x1="204" y1="88" x2="228" y2="88" class="flow"/>
+
+            <text x="228" y="40" class="label">STAGE 2</text>
+            <rect x="228" y="52" width="188" height="72" rx="8" class="box-accent"/>
+            <text x="322" y="78" text-anchor="middle" class="title">Email gateway</text>
+            <text x="322" y="96" text-anchor="middle" class="small">Regex → vault</text>
+            <text x="322" y="112" text-anchor="middle" class="small">[NAME_1] · [PHONE_1]</text>
+
+            <line x1="416" y1="88" x2="440" y2="88" class="flow-token"/>
+
+            <text x="440" y="40" class="label">STAGE 3</text>
+            <rect x="440" y="52" width="188" height="72" rx="8" class="box-token"/>
+            <text x="534" y="78" text-anchor="middle" class="title" id="infer-title">Inference</text>
+            <text x="534" y="96" text-anchor="middle" class="small" id="infer-sub">Tokenized text only</text>
+            <text x="534" y="112" text-anchor="middle" class="small">Category · urgency</text>
+
+            <line x1="628" y1="88" x2="652" y2="88" class="flow"/>
+
+            <text x="652" y="40" class="label">STAGE 4</text>
+            <rect x="652" y="52" width="212" height="72" rx="8" class="box-optional"/>
+            <text x="758" y="78" text-anchor="middle" class="title">Agent inbox</text>
+            <text x="758" y="96" text-anchor="middle" class="small">Streamlit · you are here</text>
+            <text x="758" y="112" text-anchor="middle" class="small">Queue · vault · JSON</text>
+
+            <rect x="16" y="140" width="848" height="28" rx="4" fill="#fff8f7" stroke="#f9b8b1" stroke-width="1"/>
+            <text x="32" y="158" class="small" fill="#1a1a1a">Vault stays on-host — integrators receive sanitized <tspan font-family="ui-monospace, monospace" fill="#0066cc">GET /tickets/{id}</tspan> JSON.</text>
+          </svg>
+        </div>
+        <footer class="arch-legend">
+          <span><i class="swatch"></i> mail &amp; ticket path</span>
+          <span><i class="swatch token"></i> <span id="legend-token-label">tokenized text to classifier</span></span>
+        </footer>
+      </div>
+    </section>
+
+    <section class="block" id="ingest">
+      <h2>Send more mail</h2>
+      <p>Sample messages may already be in the queue. Use the inbox sidebar, or call the gateway API directly.</p>
+      <div class="grid2">
+        <div>
+          <p class="code-label">HTTP ingest</p>
+          <div class="codecard">
+            <button type="button" class="copy" data-copy>copy</button>
+            <pre id="curl-ingest">curl -sS -X POST http://127.0.0.1:8080/ingest/raw \
+  -H "Content-Type: application/json" \
+  -d '{"sender":"you@example.com","subject":"VPN issue","body":"Cannot connect from home."}'</pre>
+          </div>
+        </div>
+        <div>
+          <p class="code-label">List tickets</p>
+          <div class="codecard">
+            <button type="button" class="copy" data-copy>copy</button>
+            <pre>curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20</pre>
+          </div>
+        </div>
+      </div>
+      <div class="callout">Use your cluster gateway Route URL instead of <code class="inline">127.0.0.1:8080</code> on OpenShift. Add <code class="inline">X-Ingest-Key</code> when the hardened overlay is enabled.</div>
+    </section>
+
+    <section class="block" id="inbox">
+      <h2>Agent inbox</h2>
+      <p>Human-facing view of the same tickets the API exposes.</p>
+      <ul>
+        <li><strong>Quick demo scenarios</strong> — billing, MFA lockout, VPN, GDPR in one click.</li>
+        <li><strong>Sanitized body</strong> — PII tokens highlighted in blue.</li>
+        <li><strong>PII vault</strong> — authorized rehydration (demo secret: <code class="inline">helpdesk-demo-secret</code> where configured).</li>
+        <li><strong>Downstream payload</strong> — exact JSON integrators poll or receive via webhook.</li>
+      </ul>
+      <div class="hero-actions" style="margin-top:20px">
+        <a class="btn" href="/">Open the inbox ↗</a>
+      </div>
+    </section>
+
+    <section class="block" id="api">
+      <h2>Endpoints in this stack</h2>
+      <p>Integrators can skip the inbox entirely and use the gateway API.</p>
+      <table class="routes">
+        <thead>
+          <tr><th>Service</th><th>Typical access</th><th>Role</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Email gateway</td><td><code class="inline">:8080</code> or Route URL</td><td><code class="inline">POST /ingest</code>, <code class="inline">GET /tickets</code>, vault</td></tr>
+          <tr id="api-infer-row"><td id="api-infer-name">Inference</td><td><code class="inline">:8000</code> (internal)</td><td id="api-infer-detail">Gateway calls the classifier; you rarely hit it directly</td></tr>
+          <tr><td>SMTP</td><td><code class="inline">:3025</code> (demo)</td><td><code class="inline">support@helpdesk.local</code> when enabled</td></tr>
+          <tr><td>Agent UI</td><td><code class="inline">/welcome</code>, <code class="inline">/</code></td><td>This page and the Streamlit inbox</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer class="cta-footer">
+      <p>Classification is AI-generated on sanitized text — verify redaction before production routing.</p>
+      <div class="hero-actions">
+        <a class="btn" href="/">Open the inbox ↗</a>
+        <a class="btn btn-ghost" href="#architecture">Back to pipeline</a>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      const bar = document.getElementById("topbar");
+      window.addEventListener("scroll", () => {
+        bar.classList.toggle("scrolled", window.scrollY > 6);
+      }, { passive: true });
+
+      document.querySelectorAll("[data-copy]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const pre = btn.parentElement.querySelector("pre");
+          if (!pre) return;
+          navigator.clipboard.writeText(pre.textContent.trim()).then(() => {
+            const prev = btn.textContent;
+            btn.textContent = "copied";
+            setTimeout(() => { btn.textContent = prev; }, 1500);
+          });
+        });
+      });
+
+      function inferenceMode(classifyModel) {
+        const name = (classifyModel || "").toLowerCase();
+        if (name.includes("mock")) return "mock";
+        if (name) return "rhaii";
+        return "unknown";
+      }
+
+      async function loadDeployment() {
+        let mode = "unknown";
+        let model = "";
+        try {
+          const live = await fetch("/api/gateway/health");
+          if (live.ok) {
+            const health = await live.json();
+            model = health.classify_model || "";
+            mode = inferenceMode(model);
+          }
+        } catch (_) { /* same-origin proxy only when stack is up */ }
+        if (mode === "unknown") {
+          try {
+            const cached = await fetch("/runtime/welcome-config.json");
+            if (cached.ok) {
+              const cfg = await cached.json();
+              mode = cfg.inference || mode;
+              model = cfg.classifyModel || model;
+            }
+          } catch (_) {}
+        }
+
+        const pill = document.getElementById("mode-pill");
+        const leadInfer = document.getElementById("lead-inference");
+        const inferTitle = document.getElementById("infer-title");
+        const inferSub = document.getElementById("infer-sub");
+        const apiName = document.getElementById("api-infer-name");
+        const apiDetail = document.getElementById("api-infer-detail");
+
+        if (mode === "mock") {
+          pill.textContent = "Local mock · tokenized PII";
+          leadInfer.textContent = "the built-in mock classifier";
+          inferTitle.textContent = "Mock classifier";
+          inferSub.textContent = model || "mock-triage";
+          apiName.textContent = "Mock inference";
+          apiDetail.textContent = "OpenAI-compatible mock on :8000 — same contract as RHAII";
+        } else if (mode === "rhaii") {
+          pill.textContent = "RHAII · CPU · tokenized PII";
+          leadInfer.textContent = "Red Hat AI Inference 3.5";
+          inferTitle.textContent = "RHAII 3.5 CPU";
+          inferSub.textContent = model || "Qwen2.5 instruct";
+          apiName.textContent = "RHAII inference";
+          apiDetail.textContent = "vLLM on CPU — gateway calls it internally";
+        } else {
+          pill.textContent = "Tokenized PII";
+          leadInfer.textContent = "the configured classifier";
+        }
+      }
+
+      loadDeployment();
+
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+      const dot = document.getElementById("packet-dot");
+      const paths = [
+        document.getElementById("path-1"),
+        document.getElementById("path-2"),
+        document.getElementById("path-3"),
+      ];
+      const colors = ["#c9190b", "#0066cc", "#c9190b"];
+      const durations = [550, 600, 650];
+
+      function travel(path, color, duration) {
+        const length = path.getTotalLength();
+        dot.setAttribute("fill", color);
+        const started = performance.now();
+        return new Promise((resolve) => {
+          function frame(now) {
+            const t = Math.min((now - started) / duration, 1);
+            const pt = path.getPointAtLength(length * t);
+            dot.setAttribute("cx", pt.x);
+            dot.setAttribute("cy", pt.y);
+            if (t < 1) requestAnimationFrame(frame);
+            else resolve();
+          }
+          requestAnimationFrame(frame);
+        });
+      }
+
+      async function loop() {
+        while (true) {
+          for (let i = 0; i < paths.length; i += 1) {
+            await travel(paths[i], colors[i], durations[i]);
+          }
+          await new Promise((r) => setTimeout(r, 450));
+        }
+      }
+      loop();
+    })();
+  </script>
+</body>
+</html>

@@ -21,11 +21,40 @@ fi
 
 STREAMLIT_ARGS=(
   run app.py
-  --server.port=8501
-  --server.address=0.0.0.0
+  --server.port=8502
+  --server.address=127.0.0.1
   --server.headless=true
   --server.enableCORS=false
   --server.enableXsrfProtection="${STREAMLIT_ENABLE_XSRF}"
 )
 
-exec streamlit "${STREAMLIT_ARGS[@]}"
+streamlit "${STREAMLIT_ARGS[@]}" &
+STREAMLIT_PID=$!
+
+cleanup() {
+  kill "$STREAMLIT_PID" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+python3 - <<'PY'
+import time
+import urllib.request
+
+for _ in range(80):
+    try:
+        urllib.request.urlopen("http://127.0.0.1:8502/_stcore/health", timeout=1)
+        break
+    except OSError:
+        time.sleep(0.25)
+PY
+
+mkdir -p /tmp/helpdesk-runtime
+cp -f /app/nginx.gateway.conf /tmp/helpdesk-runtime/nginx.gateway.conf
+for _ in $(seq 1 40); do
+  if python3 /app/bootstrap_welcome.py; then
+    break
+  fi
+  sleep 0.5
+done
+
+exec nginx -c /app/nginx.conf -g 'daemon off;'

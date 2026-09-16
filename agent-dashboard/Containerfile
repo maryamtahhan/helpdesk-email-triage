@@ -5,7 +5,17 @@ WORKDIR /app
 COPY agent-dashboard/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY agent-dashboard/app.py agent-dashboard/dashboard_api.py agent-dashboard/dashboard_samples.py .
+USER root
+RUN dnf install -y nginx \
+    && dnf clean all \
+    && mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi \
+    && chmod -R g+rwX /tmp/nginx
+USER 1001
+
+COPY agent-dashboard/app.py agent-dashboard/dashboard_api.py agent-dashboard/dashboard_samples.py agent-dashboard/dashboard_render.py .
+COPY agent-dashboard/welcome.html agent-dashboard/nginx.conf agent-dashboard/bootstrap_welcome.py ./
+COPY agent-dashboard/nginx.gateway.stub.conf ./nginx.gateway.conf
+COPY docs/images/architecture-overview.svg ./static/architecture-overview.svg
 COPY agent-dashboard/.streamlit ./.streamlit
 COPY scripts/openshift_route_host.py ./scripts/openshift_route_host.py
 COPY --chmod=755 agent-dashboard/entrypoint.sh ./entrypoint.sh

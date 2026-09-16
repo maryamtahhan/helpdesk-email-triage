@@ -28,7 +28,7 @@ def test_health(client):
     test_client, _, _ = client
     response = test_client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "ok", "classify_model": ""}
 
 
 def test_health_ready_checks_inference(client, monkeypatch):

@@ -56,10 +56,9 @@ st.set_page_config(
 st.markdown(PAGE_CSS, unsafe_allow_html=True)
 
 # ── Static header ─────────────────────────────────────────────────────
+st.link_button("← Back to home", "/welcome", type="secondary")
 st.title("Helpdesk triage inbox")
-st.caption(
-    "Local CPU classification · Red Hat AI Inference 3.5 · Tokenized PII"
-)
+st.caption("Local CPU classification · Red Hat AI Inference 3.5 · Tokenized PII")
 st.markdown(
     '<div class="ai-banner">'
     "<strong>AI-generated content.</strong> "
@@ -113,6 +112,7 @@ with st.expander("ℹ️ How to use this demo", expanded=False):
     )
     if _ARCH_SVG:
         st.markdown("#### Architecture")
+        st.caption("Animated pipeline on the [welcome page](/welcome#architecture).")
         st.markdown(
             f'<div style="overflow-x:auto;margin-top:0.5rem">{_ARCH_SVG}</div>',
             unsafe_allow_html=True,

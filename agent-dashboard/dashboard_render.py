@@ -13,6 +13,11 @@ PAGE_CSS = """
 <style>
   .block-container { padding-top: 1rem; }
 
+  /* Welcome page link (st.link_button) */
+  [data-testid="stLinkButton"] a {
+    font-weight: 600;
+  }
+
   /* ── AI disclaimer ──────────────────────────────────── */
   .ai-banner {
     background: #fff8f7;

@@ -219,7 +219,10 @@ app.add_middleware(
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "classify_model": os.environ.get("MODEL_NAME", ""),
+    }
 
 
 @app.get("/health/ready")
