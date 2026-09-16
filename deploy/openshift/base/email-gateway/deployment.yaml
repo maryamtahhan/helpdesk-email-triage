@@ -82,8 +82,12 @@ spec:
             failureThreshold: 36
           readinessProbe:
             httpGet:
-              # /health — matches published quay.io/mtahhan/helpdesk-email-gateway:latest.
-              # Use GET /health/ready manually or after republishing the gateway image.
+              # Intentionally /health, not /health/ready. The gateway degrades to
+              # heuristic triage when inference is down and must keep serving, so
+              # tying readiness to inference availability would drop the pod from
+              # the rotation exactly when the fallback path matters. Initial
+              # inference availability is already gated by the wait-for-inference
+              # initContainer; GET /health/ready can be used for ad-hoc checks.
               path: /health
               port: http
             periodSeconds: 5

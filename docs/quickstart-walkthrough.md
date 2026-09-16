@@ -1,14 +1,15 @@
 # Quickstart walkthrough
 
-**Catalog reviewers:** the step-by-step tracks live in the [README](../README.md) (Track 1–3). This document keeps the same material in one place for deep links and extended GuideLLM commands.
+**Catalog reviewers:** customer tracks (OpenShift RHAII, RHEL Quadlet) and [Hands-on validation](../README.md#hands-on-validation) live in the [README](../README.md). This document keeps extended steps and GuideLLM commands in one place.
 
 Use this after the stack is running:
 
 | Environment | How to start | UI |
 |---|---|---|
-| **Laptop demo** | `make demo` | [http://127.0.0.1:8501/welcome](http://127.0.0.1:8501/welcome) then inbox |
-| **OpenShift** | `make deploy-openshift` then `make verify-openshift` | Dashboard Route from verify output (`/welcome`) |
-| **RHEL / Compose** | `podman compose -f compose.yml up` | `http://127.0.0.1:8501` |
+| **OpenShift (RHAII)** | `INFERENCE=rhaii make deploy-openshift` then `make verify-openshift` | Dashboard Route `/welcome` |
+| **RHEL Quadlet** | Quadlet units — [deploy/quadlet/README.md](../deploy/quadlet/README.md) | `http://127.0.0.1:8501/welcome` |
+| **Local mock (maintainers)** | `make demo` | `http://127.0.0.1:8501/welcome` |
+| **RHEL Compose** | `podman compose -f compose.yml up` | `http://127.0.0.1:8501` |
 
 **OpenShift:** use the **gateway Route URL** from `make verify-openshift` instead of `127.0.0.1:8080`. Add header `X-Ingest-Key` when the hardened overlay is deployed.
 

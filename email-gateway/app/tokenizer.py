@@ -13,7 +13,7 @@ TOKEN_TYPES = ("CARD_LAST4", "PHONE", "EMAIL", "ACCOUNT_ID", "SSN", "NAME")
 
 _CARD_RE = re.compile(r"\b(?:\d[ \-]?){13,19}\b")
 _PHONE_RE = re.compile(
-    r"(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b"
+    r"(?<!\d)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b"
 )
 _EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 _SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
@@ -72,6 +72,16 @@ def tokenize_structured_pii(
         vault = TokenVault()
     sanitized = text
 
+    def _sub_generic(token_type: str):
+        def _replace(match: re.Match[str]) -> str:
+            return vault.add(token_type, match.group(0))
+
+        return _replace
+
+    # Account IDs first: an "ACC-<digits>" id must be consumed as one token
+    # before the card/phone passes can match a numeric substring inside it.
+    sanitized = _ACCOUNT_RE.sub(_sub_generic("ACCOUNT_ID"), sanitized)
+
     def _sub_card(match: re.Match[str]) -> str:
         raw = match.group(0)
         digits = re.sub(r"\D", "", raw)
@@ -84,20 +94,9 @@ def tokenize_structured_pii(
 
     sanitized = _CARD_RE.sub(_sub_card, sanitized)
 
-    def _sub_generic(token_type: str):
-        def _replace(match: re.Match[str]) -> str:
-            return vault.add(token_type, match.group(0))
-
-        return _replace
-
     sanitized = _SSN_RE.sub(_sub_generic("SSN"), sanitized)
     sanitized = _PHONE_RE.sub(_sub_generic("PHONE"), sanitized)
     sanitized = _EMAIL_RE.sub(_sub_generic("EMAIL"), sanitized)
-
-    def _sub_account(match: re.Match[str]) -> str:
-        return vault.add("ACCOUNT_ID", match.group(0))
-
-    sanitized = _ACCOUNT_RE.sub(_sub_account, sanitized)
 
     def _sub_name(match: re.Match[str]) -> str:
         full = match.group(0)
@@ -211,6 +210,22 @@ def tokenize_from_header(raw_from: str, vault: TokenVault) -> str:
     return result
 
 
+def _leaks_raw_value(text: str, token: str, raw_value: str) -> bool:
+    """True if a raw vault value appears verbatim in model or summary output.
+
+    - CARD_LAST4 masks are already redacted — always skipped.
+    - Person-name tokens are matched on word boundaries so short names
+      (e.g. "Li Na") are still caught.
+    - Other tokens keep a >= 6-char substring rule to avoid false positives
+      on common words.
+    """
+    if not raw_value or token.startswith("[CARD_LAST4_"):
+        return False
+    if token.startswith("[NAME_"):
+        return re.search(rf"\b{re.escape(raw_value)}\b", text) is not None
+    return len(raw_value) >= 6 and raw_value in text
+
+
 def merge_model_sanitization(
     regex_text: str,
     model_text: str,
@@ -246,9 +261,7 @@ def merge_model_sanitization(
         return regex_text
 
     for token, raw_value in vault.mapping.items():
-        if token.startswith("[CARD_LAST4_"):
-            continue
-        if len(raw_value) >= 6 and raw_value in model_text:
+        if _leaks_raw_value(model_text, token, raw_value):
             logger.warning(
                 "RHAII output contains raw vault value for %s — using regex output",
                 token,
@@ -329,9 +342,7 @@ def sanitize_model_summary(summary: str, vault: TokenVault) -> str:
         return ""
 
     for token, raw_value in vault.mapping.items():
-        if token.startswith("[CARD_LAST4_"):
-            continue
-        if len(raw_value) >= 6 and raw_value in summary:
+        if _leaks_raw_value(summary, token, raw_value):
             logger.warning(
                 "Summary contains raw vault value for %s — clearing summary",
                 token,

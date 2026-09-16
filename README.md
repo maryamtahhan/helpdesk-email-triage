@@ -2,6 +2,8 @@
 
 Classify support email by **category** and **urgency** while keeping raw PII out of logs, models, and downstream tools. Structured data (cards, phones, SSNs, emails, account IDs) is swapped for reversible tokens in a local vault before anything reaches inference.
 
+**Customer evaluation** runs **Red Hat AI Inference (RHAII) 3.5 on CPU** — on OpenShift (Track 1) or a single RHEL host with systemd (Track 2). A **local mock stack** (Track 3) is for quick UI/CI checks without a cluster; it does not replace trying the real classifier.
+
 **Authors:** Maryam Tahhan · Anton Ivanov · Michael Dawson
 
 ## Table of Contents
@@ -17,9 +19,10 @@ Classify support email by **category** and **urgency** while keeping raw PII out
   - [Minimum software](#minimum-software)
   - [Permissions](#permissions)
 - [Choose your track](#choose-your-track)
-- [Track 1: Run locally](#track-1-run-locally)
-- [Track 2: Deploy to OpenShift](#track-2-deploy-to-openshift)
-- [Track 3: Run on RHEL with systemd (Quadlet)](#track-3-run-on-rhel-with-systemd-quadlet)
+- [Track 1: Deploy to OpenShift (RHAII CPU)](#track-1-deploy-to-openshift-rhaii-cpu)
+- [Track 2: Run on RHEL with systemd (Quadlet)](#track-2-run-on-rhel-with-systemd-quadlet)
+- [Hands-on validation](#hands-on-validation)
+- [Track 3: Local mock validation (maintainers)](#track-3-local-mock-validation-maintainers)
 - [Beyond the demo UI](#beyond-the-demo-ui)
 - [OpenShift hardened pilot](#openshift-hardened-pilot)
 - [Gateway API summary](#gateway-api-summary)
@@ -34,12 +37,9 @@ Classify support email by **category** and **urgency** while keeping raw PII out
 
 ### Who is this for?
 
-This quickstart is designed for:
+**Platform engineers, AI engineers, and architects** who want to learn **CPU inference with [Red Hat AI Inference (RHAII) 3.5](https://docs.redhat.com/en/documentation/red_hat_ai_inference/3.5/html/getting_started/about-cpu-inference_getting-started)** on OpenShift or RHEL: pull and run an instruction-tuned model on **x86_64 + AVX512** (no GPU), wire an app to an OpenAI-compatible endpoint, observe readiness and latency, and optionally benchmark with GuideLLM.
 
-- **AI engineers** learning privacy-preserving inference: tokenize structured PII, classify on sanitized text only, and rehydrate from a vault when authorized.
-- **Solution architects** evaluating helpdesk triage on Red Hat OpenShift or RHEL who need a working pipeline, not a slide deck.
-- **Platform engineers** deploying the email gateway and optional Streamlit inbox with mock inference (laptop/CI) or Red Hat AI Inference (RHAII) CPU on cluster or single host.
-- **System integrators** wiring CRMs, queues, or webhooks to `GET /tickets` and `POST /ingest` without adopting the demo UI.
+The sample app is **helpdesk email triage** (ingest → tokenize PII → classify on sanitized text). That domain shows a realistic gateway in front of RHAII; integrators can use the API without the Streamlit inbox. **Track 3 (local mock)** is for UI/CI smoke tests only — it is not a substitute for trying RHAII.
 
 ### What this quickstart provides
 
@@ -51,9 +51,10 @@ By the end of the tracks below, you will have:
 
 - An email gateway that ingests HTTP, SMTP (demo), or file-watched `.eml` drops
 - Regex tokenization with a per-ticket PII vault (`[EMAIL_1]`, `[CARD_LAST4_1]`, `[ACCOUNT_ID_1]`, …)
-- Category and urgency labels from mock inference (Track 1) or RHAII 3.5 CPU (Tracks 2–3 when configured)
+- Category and urgency labels from **RHAII 3.5 CPU** (`Qwen/Qwen2.5-1.5B-Instruct` on tokenized text)
 - An optional Streamlit inbox with queue filters, vault rehydration, and downstream JSON preview
-- Understanding of how to harden ingest auth and deploy on OpenShift or systemd-managed RHEL
+- Optional GuideLLM benchmarking on OpenShift to size inference for a pilot
+- Understanding of how to harden ingest auth on OpenShift overlays
 
 ### Key patterns you'll learn
 
@@ -69,181 +70,92 @@ By the end of the tracks below, you will have:
 
 ### Architecture
 
-![Four-stage pipeline: ingestion → gateway vault → inference → optional agent inbox](docs/images/architecture-overview.svg)
+![Four-stage pipeline: ingestion → gateway vault → inference → optional agent inbox](docs/images/architecture-overview.png)
 
 1. **Ingest** — HTTP `:8080`, SMTP `:3025` (demo), or file watcher on `.eml` drops.
 2. **Gateway** — Tokenizes structured PII into a vault; exposes `TriageResult` JSON and `/health/ready`.
-3. **Inference** — RHAII 3.5 CPU (production) or built-in mock (laptop demo / CI). **Tokenized text only.**
+3. **Inference** — **RHAII 3.5 CPU** (customer tracks) or built-in mock (Track 3 / CI only). **Tokenized text only.**
 4. **Agent inbox** *(optional)* — Streamlit on `:8501` (`/welcome` onboarding + inbox). Integrators can skip this.
 
 **Privacy guarantee:** Raw card numbers, phones, and names do not reach the model. Downstream systems get tokens; authorized agents rehydrate locally.
 
 ## Requirements
 
-### Minimum hardware
+### RHAII CPU hardware (Tracks 1 and 2)
 
-- **Track 1 (local):** 2 CPU cores, 4 GiB memory, Podman or Docker
-- **Track 2 (OpenShift, mock):** Cluster with routes; modest worker nodes
-- **Track 2 (OpenShift, RHAII CPU):** Workers with **x86_64 + AVX2**, **16 GiB+ allocatable RAM** per inference node (32 GiB recommended); model cache PVC
-- **Track 3 (Quadlet / RHEL):** Same as RHAII CPU on a single host; 16 GiB+ RAM recommended
+Plan for **real** inference, not the mock:
+
+| | OpenShift (Track 1) | RHEL host (Track 2) |
+|---|---|---|
+| **CPU** | **x86_64 + AVX512** on inference worker(s) | **x86_64 + AVX512** |
+| **Memory** | **16 GiB+ allocatable RAM** on the inference node (**32 GiB recommended**) | **16 GiB+ system RAM** (**32 GiB recommended**) |
+| **Storage** | `rhaii-model-cache` PVC for downloaded weights | `~/rhaii-cache` (or path in Quadlet unit) |
+| **Registry** | `podman login registry.redhat.io` | Same |
+| **Model access** | Hugging Face token (`HF_TOKEN` / `hf-secret`) | `HUGGING_FACE_HUB_TOKEN` in `secrets.env` |
+
+First start downloads **Qwen2.5-1.5B-Instruct** weights — allow **several minutes** (longer on slow networks). No GPU required.
 
 ### Minimum software
 
-- **Track 1:** `podman` or `docker` with Compose, `make`, `curl`, `python3`
-- **Track 2:** `oc` CLI, OpenShift 4.x, `podman login registry.redhat.io` when using RHAII
-- **Track 3:** RHEL 9.4+, rootless Podman, user systemd, Hugging Face token for RHAII
+- **Track 1:** `oc` CLI, OpenShift 5.x, `make`, `podman login registry.redhat.io`, `HF_TOKEN`
+- **Track 2:** RHEL 9.4+, rootless Podman, user systemd, registry login, Hugging Face token
+- **Track 3 (optional):** `podman` or `docker` with Compose — **no** registry or HF token
 
 ### Permissions
 
-- **Track 1:** Local user only
-- **Track 2:** Namespace admin (or equivalent) to create Routes, Deployments, Secrets
-- **Track 3:** User systemd (`systemctl --user`); `podman login registry.redhat.io`
+- **Track 1:** Namespace admin (or equivalent) for Routes, Deployments, Secrets, PVCs
+- **Track 2:** User systemd (`systemctl --user`); linger enabled if the host should survive logout
+- **Track 3:** Local user only
 
 ## Choose your track
 
-| | Track 1: Local | Track 2: OpenShift | Track 3: RHEL Quadlet |
+| | **Track 1: OpenShift** | **Track 2: RHEL Quadlet** | Track 3: Local mock |
 |---|---|---|---|
-| **Goal** | Learn the pipeline in minutes | Deploy like a customer cluster | Production-style single host |
-| **Time** | ~15 minutes | ~30 minutes (+ model download) | ~45 minutes (+ model download) |
-| **Inference** | Mock (no registry) | Mock or RHAII CPU | RHAII CPU |
-| **Start command** | `make demo` | `make deploy-openshift` | `systemctl --user enable --now …` |
-| **UI** | `http://127.0.0.1:8501/welcome` | Dashboard Route `/welcome` | `http://127.0.0.1:8501/welcome` |
+| **Priority** | **Primary** — cluster deploy | **Primary** — single-host production style | Optional — maintainers / CI |
+| **Goal** | Try the real stack on OpenShift | Try the real stack on RHEL + systemd | Validate UI and ingest without RHAII |
+| **Time** | ~30–45 min (+ model download) | ~45 min (+ model download) | ~15 min |
+| **Inference** | **RHAII 3.5 CPU** | **RHAII 3.5 CPU** | Mock only |
+| **Start** | `INFERENCE=rhaii make deploy-openshift` | `systemctl --user enable --now …` | `make demo` |
+| **UI** | Dashboard Route `/welcome` | `http://127.0.0.1:8501/welcome` | `http://127.0.0.1:8501/welcome` |
 
-Start with **Track 1**. Use **Track 2** for OpenShift validation. Use **Track 3** when you need systemd lifecycle on RHEL instead of Compose.
+**Customers:** complete **Track 1** or **Track 2**, then **[Hands-on validation](#hands-on-validation)**. Use **Track 3** only when you lack cluster/RHEL capacity or need a fast regression check.
 
 ---
 
-## Track 1: Run locally
+## Track 1: Deploy to OpenShift (RHAII CPU)
 
-*~15 minutes. Mock inference — no GPU, Hugging Face token, or Red Hat registry.*
+*~30–45 minutes. **Recommended customer path** — Routes, RHAII 3.5 CPU, optional GuideLLM.*
 
 ### Prerequisites
 
-- `podman` or `docker` with Compose support
+- `oc` logged into a cluster that meets the [RHAII CPU hardware](#rhaii-cpu-hardware-tracks-1-and-2) requirements
 - `git`, `make`, `curl`, `python3`
+- `export HF_TOKEN="your_huggingface_token"`
+- `podman login registry.redhat.io`
 
-### Step 1: Start the stack
+### Step 1: Deploy with RHAII CPU
 
 ```bash
 git clone <repo-url> && cd helpdesk-email-triage
-make demo
-```
-
-This builds and runs mock inference, the email gateway, and the agent dashboard (nginx on `:8501`, gateway on `:8080`, SMTP on `:3025`).
-
-You should see containers become healthy and sample mail from `sample_emails/` ingested automatically.
-
-Optional terminal check:
-
-```bash
-curl -sS http://127.0.0.1:8080/health
-curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -10
-```
-
-**What's happening:** The file watcher reads `.eml` files from `sample_emails/`, the gateway tokenizes PII, calls the mock classifier, and stores tickets on disk.
-
-### Step 2: Open the welcome page and inbox
-
-1. Open **[http://127.0.0.1:8501/welcome](http://127.0.0.1:8501/welcome)** — onboarding, live pipeline diagram, before/after redaction example. The pill should show **local mock**.
-2. Click **Open the inbox** (or go to `/`).
-3. Confirm sample tickets appear in the left **Queue** column.
-
-### Step 3: Submit support tickets
-
-Try at least two ingest paths:
-
-| Method | How |
-|---|---|
-| **Sidebar scenarios** | Click a **Quick demo scenario** (billing, MFA, VPN, …) |
-| **Custom message** | Sidebar form → **Triage →** |
-| **HTTP API** | See curl below |
-| **SMTP** | Sidebar **↪** buttons, or send to `support@helpdesk.local` on port **3025** |
-
-```bash
-curl -sS -X POST http://127.0.0.1:8080/ingest/raw \
-  -H "Content-Type: application/json" \
-  -d '{"sender":"you@example.com","subject":"VPN issue","body":"Cannot connect from home office."}'
-```
-
-**What to look for:** New tickets in the queue within a few seconds.
-
-### Step 4: Review classification by category
-
-1. Set **Queue** to each category: `Billing`, `Tech Support`, `Account Access`, `General`, then `All`.
-2. Set **Urgency** to `High` — urgent samples (double charge, MFA lockout) should surface.
-3. Open tickets and confirm **category**, **urgency**, and subject in the detail pane.
-4. Expand **Category breakdown** above the queue.
-
-Expected results for file-watcher samples:
-
-| Email | Category | Urgency |
-|---|---|---|
-| Double charge on card | Billing | High |
-| MFA lockout | Account Access | High |
-| VPN dropping | Tech Support | Medium |
-| GDPR erasure request | General | Low |
-
-### Step 5: Check redaction and the vault
-
-1. Open the **billing / double charge** ticket.
-2. In **Sanitized body**, confirm tokens such as `[NAME_1]`, `[EMAIL_1]`, `[CARD_LAST4_1]`, `[PHONE_1]`, `[ACCOUNT_ID_1]` — not raw values. **From** should be tokenized (e.g. `[EMAIL_1]`).
-3. Click **View original PII vault** — compare the map to the original (demo secret: `helpdesk-demo-secret`).
-4. Expand **What downstream systems see** — no `original_text` or vault in that JSON.
-
-### Step 6: Review classification speed
-
-1. Note **classification time** on each ticket in the queue (e.g. `42 ms classification`).
-2. Check **Avg classification** in the metrics row at the top.
-
-On mock inference, expect tens of milliseconds per ticket.
-
-### Step 7: Test quality (optional)
-
-1. Submit a custom message with a card number, phone, email, and `ACC-12345` — distinct tokens in body and vault.
-2. Stop mock inference: `podman stop helpdesk-inference-mock` — ingest still works; `model` shows `heuristic-fallback`. Restart with `make demo` if needed.
-
-### What you learned
-
-1. **Multi-path ingest** into one ticket store
-2. **Vault tokenization** before inference
-3. **Classification** on sanitized text only
-4. **Agent inbox** filters and vault rehydration
-5. **Public ticket JSON** safe for webhooks and CRMs
-
-Stop the stack:
-
-```bash
-make down
-```
-
----
-
-## Track 2: Deploy to OpenShift
-
-*~30 minutes. Routes, optional RHAII CPU, same hands-on validation as Track 1.*
-
-### Prerequisites
-
-- `oc` logged into your cluster
-- For **RHAII CPU:** `export HF_TOKEN="…"`, `podman login registry.redhat.io`
-- Completed Track 1 recommended (same UI steps, different URLs)
-
-### Step 1: Choose mock or RHAII
-
-| Goal | Command |
-|---|---|
-| Auto (RHAII if creds exist, else mock) | `make deploy-openshift` |
-| Mock only | `INFERENCE=mock make deploy-openshift` |
-| RHAII CPU | `INFERENCE=rhaii make deploy-openshift` |
-
-```bash
 oc new-project helpdesk-email-triage    # once
-export HF_TOKEN="your_huggingface_token"   # optional for mock
-podman login registry.redhat.io            # optional for mock
-make deploy-openshift
+export HF_TOKEN="your_huggingface_token"
+podman login registry.redhat.io
+INFERENCE=rhaii make deploy-openshift
 ```
 
-First RHAII start can take several minutes while weights download to the `rhaii-model-cache` PVC. Increase wait: `RHAII_WAIT_TIMEOUT=1200s make deploy-openshift`.
+Weights download to the `rhaii-model-cache` PVC on first start. Increase wait if needed: `RHAII_WAIT_TIMEOUT=1200s INFERENCE=rhaii make deploy-openshift`.
+
+<details>
+<summary>Mock on OpenShift (smoke only — not a customer evaluation)</summary>
+
+Use when the cluster cannot run RHAII yet, or for overlay/CI checks:
+
+```bash
+INFERENCE=mock make deploy-openshift
+```
+
+The inbox welcome pill shows **local mock**. For full UI regression without a cluster, prefer [Track 3](#track-3-local-mock-validation-maintainers).
+</details>
 
 ### Step 2: Verify deployment
 
@@ -251,21 +163,17 @@ First RHAII start can take several minutes while weights download to the `rhaii-
 make verify-openshift
 ```
 
-You should see **Gateway** and **Dashboard** Route URLs, gateway `/health` JSON, dashboard HTTP headers, and at least one ticket (file watcher or verify ingest).
+You should see **Gateway** and **Dashboard** Route URLs, gateway `/health` JSON (with a real model name when RHAII is up), dashboard headers, and at least one ticket.
 
-Save the dashboard host for the next steps: `https://<dashboard-route>/welcome`.
+Open **`https://<dashboard-route>/welcome`** — the pill should show **RHAII**, not mock.
 
 If the gateway Route is OAuth-protected (hardened overlay), verify uses in-cluster port-forward for API smoke tests — follow the script output.
 
-### Step 3: Explore the UI on the cluster
+### Step 3: Complete hands-on validation
 
-Repeat **Track 1 Steps 2–6** on the dashboard Route:
+Follow **[Hands-on validation](#hands-on-validation)** on the dashboard Route. Use the cluster `VAULT_SECRET` from `helpdesk-secrets` for vault rehydration.
 
-- `/welcome` — pill shows **mock** or **RHAII** for this deploy
-- Submit scenarios, filter queue/urgency, verify redaction and vault
-- Use your cluster **vault secret** from `helpdesk-secrets` (not necessarily `helpdesk-demo-secret`)
-
-### Step 4: Ingest from outside the pod
+### Step 4: Ingest from outside the cluster
 
 Use the **gateway Route URL** from verify (not `127.0.0.1:8080`):
 
@@ -278,22 +186,22 @@ curl -sk -X POST "${GW}/ingest/raw" \
 
 When `INGEST_API_KEY` is set (hardened overlay), add `-H "X-Ingest-Key: …"` from `oc get secret helpdesk-secrets …`.
 
-### Step 5: Load test inference (RHAII only)
+### Step 5: Benchmark inference (recommended)
 
-Skip on mock-only deploys.
+Size nodes for a pilot with GuideLLM against in-cluster RHAII:
 
 ```bash
 make guidellm-openshift
 ```
 
-Results land in `./results/guidellm-openshift/`. See [docs/deploy-openshift.md](docs/deploy-openshift.md#load-test-inference-guidellm) for tuning.
+Results land in `./results/guidellm-openshift/`. See [docs/deploy-openshift.md](docs/deploy-openshift.md#load-test-inference-guidellm).
 
 ### What you get on OpenShift
 
-- **Routes** for gateway and dashboard with CORS/WebSocket discovery at pod startup
-- **Kustomize overlays** for mock, RHAII CPU, and hardened pilots
-- **Optional GuideLLM Job** against in-cluster inference Service DNS
-- **NetworkPolicies and API keys** on hardened overlays
+- **RHAII 3.5 CPU** serving `Qwen/Qwen2.5-1.5B-Instruct` on tokenized ticket text
+- **Routes** for gateway and dashboard; CORS/WebSockets discovered from the dashboard Route at startup
+- **Kustomize overlays** including hardened pilots ([below](#openshift-hardened-pilot))
+- **GuideLLM Job** against internal inference Service DNS
 
 ### Delete
 
@@ -307,16 +215,15 @@ Full overlay catalog: [docs/deploy-openshift.md](docs/deploy-openshift.md).
 
 ---
 
-## Track 3: Run on RHEL with systemd (Quadlet)
+## Track 2: Run on RHEL with systemd (Quadlet)
 
-*~45 minutes. Real RHAII CPU on a single host, containers managed by user systemd.*
+*~45 minutes. **Recommended for single-host evaluation** — RHAII 3.5 CPU via user systemd.*
 
 ### Prerequisites
 
-- RHEL 9.4+ with rootless Podman
+- RHEL 9.4+ with rootless Podman meeting [RHAII CPU hardware](#rhaii-cpu-hardware-tracks-1-and-2) requirements
 - `podman login registry.redhat.io`
 - Hugging Face token and a strong `VAULT_SECRET`
-- Completed Track 1 recommended
 
 ### Step 1: Prepare secrets and sample mail
 
@@ -368,9 +275,9 @@ curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
 
 Open **[http://127.0.0.1:8501/welcome](http://127.0.0.1:8501/welcome)** — pill should reflect **RHAII**, not mock.
 
-### Step 5: Hands-on validation
+### Step 5: Complete hands-on validation
 
-Repeat **Track 1 Steps 3–6**. Vault rehydration uses `VAULT_SECRET` from `secrets.env`.
+Follow **[Hands-on validation](#hands-on-validation)** at `http://127.0.0.1:8501`. Vault rehydration uses `VAULT_SECRET` from `secrets.env`.
 
 Optional:
 
@@ -385,6 +292,102 @@ systemctl --user stop agent-dashboard email-gateway rhaii-cpu-engine
 ```
 
 **Compose alternative** on RHEL (no systemd): see [Production RHEL with Compose](#production-rhel-with-compose) below. Full Quadlet notes: [deploy/quadlet/README.md](deploy/quadlet/README.md).
+
+---
+
+## Hands-on validation
+
+*Complete after **Track 1** or **Track 2**. Same UI and API checks; only URLs and secrets differ.*
+
+| | Track 1 (OpenShift) | Track 2 (Quadlet) |
+|---|---|---|
+| **Welcome / inbox** | `https://<dashboard-route>/welcome` | `http://127.0.0.1:8501/welcome` |
+| **Gateway API** | `https://<gateway-route>` (+ `X-Ingest-Key` if hardened) | `http://127.0.0.1:8080` |
+| **Vault secret** | `helpdesk-secrets` / `VAULT_SECRET` | `~/.config/helpdesk/secrets.env` |
+| **Welcome pill** | **RHAII** | **RHAII** |
+
+### Step 1: Open the welcome page and inbox
+
+1. Open the welcome URL — pipeline diagram and before/after redaction example.
+2. Open the inbox; confirm sample tickets from `sample_emails/` (file watcher).
+3. Confirm the welcome pill shows **RHAII** (not mock).
+
+### Step 2: Submit support tickets
+
+Try at least two ingest paths (sidebar **Quick demo scenarios**, custom form, `POST /ingest/raw`, or SMTP where exposed):
+
+```bash
+# Track 2 example — use your gateway Route on Track 1
+curl -sS -X POST http://127.0.0.1:8080/ingest/raw \
+  -H "Content-Type: application/json" \
+  -d '{"sender":"you@example.com","subject":"VPN issue","body":"Cannot connect from home office."}'
+```
+
+**What to look for:** New tickets in the queue within a few seconds (RHAII classification may take hundreds of ms to a few seconds per ticket).
+
+### Step 3: Review classification by category
+
+1. Filter **Queue** by category and **Urgency** (e.g. `High` for double-charge / MFA samples).
+2. Open tickets; confirm **category**, **urgency**, and subject.
+
+Expected results for bundled samples (mock and RHAII should agree on these demos):
+
+| Email | Category | Urgency |
+|---|---|---|
+| Double charge on card | Billing | High |
+| MFA lockout | Account Access | High |
+| VPN dropping | Tech Support | Medium |
+| GDPR erasure request | General | Low |
+
+### Step 4: Check redaction and the vault
+
+1. Open the **billing / double charge** ticket.
+2. **Sanitized body:** tokens `[NAME_1]`, `[EMAIL_1]`, `[CARD_LAST4_1]`, `[PHONE_1]`, `[ACCOUNT_ID_1]` — not raw PII. **From** is tokenized.
+3. **View original PII vault** — map matches originals using your deploy secret.
+4. **What downstream systems see** — no `original_text` or vault map.
+
+### Step 5: Review classification speed
+
+Note per-ticket **classification time** and **Avg classification** in the inbox. On RHAII CPU, expect higher latency than mock — use Track 1 Step 5 (GuideLLM) to benchmark throughput for sizing.
+
+### What you accomplished
+
+- End-to-end **ingest → tokenize → RHAII classify → ticket API**
+- Verified **category/urgency** and **PII tokenization** on real inference
+- Confirmed **vault** and **downstream JSON** contract
+
+---
+
+## Track 3: Local mock validation (maintainers)
+
+*~15 minutes. **Not a customer evaluation path** — mock classifier, no registry or HF token. Use for UI smoke tests, docs screenshots, and `make compose-e2e` / CI.*
+
+### Prerequisites
+
+- `podman` or `docker` with Compose, `make`, `curl`, `python3`
+
+### Step 1: Start the mock stack
+
+```bash
+git clone <repo-url> && cd helpdesk-email-triage
+make demo
+```
+
+Gateway `:8080`, dashboard `:8501`, SMTP `:3025`. Sample mail ingests automatically. Welcome pill shows **local mock**.
+
+```bash
+curl -sS http://127.0.0.1:8080/health   # classify_model: mock-triage
+```
+
+### Step 2: Smoke-test the inbox
+
+Walk **[Hands-on validation](#hands-on-validation)** at `http://127.0.0.1:8501`. Vault demo secret: `helpdesk-demo-secret`.
+
+Optional maintainer checks: stop mock inference (`podman stop helpdesk-inference-mock`) and confirm **heuristic-fallback** ingest.
+
+```bash
+make down
+```
 
 ---
 
@@ -428,14 +431,14 @@ oc create secret generic helpdesk-secrets \
   --from-literal=INGEST_API_KEY="$INGEST_API_KEY" \
   -n helpdesk-email-triage --dry-run=client -o yaml | oc apply -f -
 
-# Mock + hardening:
-OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift
-
-# RHAII CPU + hardening (HF_TOKEN + registry login):
+# RHAII CPU + hardening (recommended pilot):
 INFERENCE=rhaii OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift
+
+# Mock + hardening (overlay smoke only):
+OVERLAY=deploy/openshift/overlays/hardened INFERENCE=mock make deploy-openshift
 ```
 
-> `OVERLAY=.../hardened` alone deploys **mock** inference. Add `INFERENCE=rhaii` for RHAII CPU.
+> `OVERLAY=.../hardened` without `INFERENCE=rhaii` deploys **mock** inference.
 
 HTTP ingest then requires `X-Ingest-Key`. Pin images: `IMAGE_TAG=v1.2.3 make deploy-openshift`.
 

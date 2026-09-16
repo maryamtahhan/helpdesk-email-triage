@@ -59,8 +59,13 @@ def main() -> int:
         json.dump(config, fh)
 
     host, port = _upstream_host_port()
-    snippet = f"""    location /api/gateway/ {{
-        proxy_pass http://{host}:{port}/;
+    # Expose ONLY the unauthenticated health probe to browsers through the
+    # dashboard Route. Do not proxy the full gateway API here: /tickets,
+    # /ingest and the vault endpoint are gated by the gateway's own auth and,
+    # on OpenShift, by the gateway Route's OAuth — proxying them via the
+    # dashboard would bypass those controls.
+    snippet = f"""    location = /api/gateway/health {{
+        proxy_pass http://{host}:{port}/health;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

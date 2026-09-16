@@ -2,7 +2,7 @@
 
 Kustomize layouts for the helpdesk email triage stack.
 
-**Deploy commands and decision guide:** [README Track 2](../../README.md#track-2-deploy-to-openshift) · **Runbook:** [docs/deploy-openshift.md](../../docs/deploy-openshift.md)
+**Deploy commands and decision guide:** [README Track 1 (OpenShift RHAII)](../../README.md#track-1-deploy-to-openshift-rhaii-cpu) · **Runbook:** [docs/deploy-openshift.md](../../docs/deploy-openshift.md)
 
 ## Layout
 

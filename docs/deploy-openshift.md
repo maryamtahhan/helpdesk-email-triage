@@ -65,7 +65,7 @@ Checks health, dashboard headers, file-watcher tickets, and falls back to `/inge
 
 ## Quickstart walkthrough
 
-After verify succeeds, continue [README Track 2](../README.md#track-2-deploy-to-openshift) (Steps 3–4) or this [quickstart walkthrough](quickstart-walkthrough.md). On hardened overlays, use the Route URLs from verify and include `X-Ingest-Key` on gateway API calls.
+After verify succeeds, continue [README Track 1](../README.md#track-1-deploy-to-openshift-rhaii-cpu) and [Hands-on validation](../README.md#hands-on-validation), or this [quickstart walkthrough](quickstart-walkthrough.md). On hardened overlays, use the Route URLs from verify and include `X-Ingest-Key` on gateway API calls.
 
 ## Load test inference (GuideLLM)
 
@@ -172,7 +172,7 @@ See [deploy/kind/README.md](../deploy/kind/README.md).
 
 ## Related
 
-- [README — Track 2: OpenShift](../README.md#track-2-deploy-to-openshift)
+- [README — Track 1: OpenShift RHAII](../README.md#track-1-deploy-to-openshift-rhaii-cpu)
 - [Manifest layout](../deploy/openshift/README.md)
 - [Customer CI](customer-ci.md)
 - [Integration guide](integration.md)
