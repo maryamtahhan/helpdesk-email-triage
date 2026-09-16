@@ -24,6 +24,16 @@ _executor: concurrent.futures.ThreadPoolExecutor | None = None
 _executor_lock = threading.Lock()
 
 
+def _parse_sink_max_workers() -> int:
+    raw = os.environ.get("TICKET_SINK_MAX_WORKERS", "4").strip()
+    try:
+        workers = int(raw)
+    except ValueError:
+        logger.warning("Invalid TICKET_SINK_MAX_WORKERS=%r; using 4", raw)
+        workers = 4
+    return max(1, workers)
+
+
 def _get_executor() -> concurrent.futures.ThreadPoolExecutor:
     """Lazily create a shared, bounded sink worker pool.
 
@@ -35,12 +45,20 @@ def _get_executor() -> concurrent.futures.ThreadPoolExecutor:
     if _executor is None:
         with _executor_lock:
             if _executor is None:
-                workers = int(os.environ.get("TICKET_SINK_MAX_WORKERS", "4"))
                 _executor = concurrent.futures.ThreadPoolExecutor(
-                    max_workers=max(1, workers),
+                    max_workers=_parse_sink_max_workers(),
                     thread_name_prefix="ticket-sink",
                 )
     return _executor
+
+
+def _shutdown_executor(wait: bool = True) -> None:
+    """Release the sink worker pool (tests and graceful reload)."""
+    global _executor
+    with _executor_lock:
+        if _executor is not None:
+            _executor.shutdown(wait=wait)
+            _executor = None
 
 
 def parse_sinks(raw: str | None = None) -> list[str]:

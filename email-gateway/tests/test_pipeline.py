@@ -449,8 +449,11 @@ def test_long_account_id_is_one_token_not_phone_fragment():
 
 def test_long_digit_run_is_not_partially_phoned():
     """A non-Luhn 15-digit run must not be partially matched as a phone."""
-    sanitized, vault = tokenize_structured_pii("serial 123456789012345 here")
+    raw = "123456789012345"
+    sanitized, vault = tokenize_structured_pii(f"serial {raw} here")
     assert "[PHONE" not in sanitized
+    assert raw in sanitized
+    assert not vault.mapping
 
 
 def test_standard_phone_still_tokenized():
@@ -485,3 +488,15 @@ def test_parse_raw_email_strips_html_only_body():
     assert "<" not in parsed["body"]
     assert "Hello" in parsed["body"]
     assert "Jane" in parsed["body"]
+
+
+def test_parse_raw_email_drops_script_bodies():
+    raw = (
+        b"From: a@b.com\r\n"
+        b"Subject: Hi\r\n"
+        b"Content-Type: text/html; charset=utf-8\r\n\r\n"
+        b"<p>Visible</p><script>alert('secret')</script>"
+    )
+    parsed = parse_raw_email(raw)
+    assert "secret" not in parsed["body"]
+    assert "Visible" in parsed["body"]

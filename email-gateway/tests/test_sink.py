@@ -5,8 +5,23 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
-from app.sink import dispatch, parse_sinks, post_webhook, sign_payload, webhook_urls
+from app.sink import (
+    _parse_sink_max_workers,
+    _shutdown_executor,
+    dispatch,
+    parse_sinks,
+    post_webhook,
+    sign_payload,
+    webhook_urls,
+)
 from app.triage_result import TriageResult
+
+
+@pytest.fixture(autouse=True)
+def _reset_sink_executor():
+    _shutdown_executor()
+    yield
+    _shutdown_executor()
 
 
 def _sample_result() -> TriageResult:
@@ -182,4 +197,24 @@ def test_dispatch_log_sink(monkeypatch, caplog):
 
     caplog.set_level(logging.INFO)
     dispatch(_sample_result(), sync=True)
+    assert any("TriageResult" in record.message for record in caplog.records)
+
+
+def test_parse_sink_max_workers_invalid_falls_back(monkeypatch, caplog):
+    import logging
+
+    caplog.set_level(logging.WARNING)
+    monkeypatch.setenv("TICKET_SINK_MAX_WORKERS", "lots")
+    assert _parse_sink_max_workers() == 4
+    assert any("TICKET_SINK_MAX_WORKERS" in record.message for record in caplog.records)
+
+
+def test_dispatch_async_log_sink(monkeypatch, caplog):
+    monkeypatch.setenv("TICKET_SINK", "log")
+    monkeypatch.delenv("TICKET_SINK_SYNC", raising=False)
+    import logging
+
+    caplog.set_level(logging.INFO)
+    dispatch(_sample_result(), sync=False)
+    _shutdown_executor()
     assert any("TriageResult" in record.message for record in caplog.records)

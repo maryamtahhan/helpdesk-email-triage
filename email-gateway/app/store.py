@@ -38,6 +38,7 @@ def load() -> None:
     global _tickets, _next_id
     path = _tickets_path()
     if not path.exists():
+        _reindex()
         return
     with path.open(encoding="utf-8") as handle:
         payload = json.load(handle)

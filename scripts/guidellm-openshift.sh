@@ -329,4 +329,5 @@ if [[ -f "${RESULTS_DIR}/${JOB_NAME}.html" ]]; then
 else
   echo "==> HTML not copied — use the JSON file from ${RESULTS_DIR}/"
 fi
+echo "==> Re-fetch Job logs: oc logs -n ${NAMESPACE} job/${JOB_NAME}"
 echo "==> Done. Methodology: https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes"

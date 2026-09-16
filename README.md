@@ -401,10 +401,10 @@ make guidellm-openshift
 - Creates a results PVC, runs a GuideLLM Job, copies artifacts to `./results/guidellm-openshift/`.
 - Red Hat image uses CLI `guidellm run`; upstream `ghcr.io/vllm-project/guidellm` uses `guidellm benchmark run` — set `GUIDELLM_IMAGE` to switch.
 
-Watch progress:
+Watch progress (use the Job name printed by the script, e.g. `guidellm-benchmark-1730000000`):
 
 ```bash
-oc logs -n helpdesk-email-triage -l job-name --follow
+oc logs -n helpdesk-email-triage job/guidellm-benchmark-<timestamp> --follow
 ```
 
 #### RHEL host, Quadlet, or `compose.yml` (Track 2)
@@ -565,6 +565,7 @@ Copy defaults: `cp .env.example .env`
 | `INFERENCE` | OpenShift: `auto`, `mock`, or `rhaii` |
 | `IMAGE_TAG` | Pin container tags on OpenShift deploy |
 | `TICKET_SINK` | `webhook:https://…` or `log` |
+| `TICKET_SINK_MAX_WORKERS` | Async webhook pool size (default `4`) |
 
 See `.env.example` for the full list.
 

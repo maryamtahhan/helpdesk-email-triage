@@ -341,6 +341,7 @@ Do not expose this endpoint to untrusted consumers. The demo Streamlit UI gates 
 | `TICKET_SINK` | *(unset)* | Comma-separated sinks: `log`, `webhook:https://…` |
 | `TICKET_SINK_SECRET` | *(unset)* | HMAC secret for webhook `X-Ticket-Signature` |
 | `TICKET_SINK_SYNC` | *(unset)* | Set to `1` for inline delivery (tests/debug) |
+| `TICKET_SINK_MAX_WORKERS` | `4` | Bounded thread pool for async webhook delivery |
 | `DASHBOARD_ORIGIN` | `http://localhost:8501` | CORS origin (only needed if a browser UI calls the API) |
 | `INGEST_API_KEY` | *(unset)* | Require `X-Ingest-Key` on ingest and `GET /tickets` endpoints |
 | `REQUIRE_SECRETS` | *(unset)* | Set to `1` to refuse demo-default secrets at startup and **disable SMTP** |

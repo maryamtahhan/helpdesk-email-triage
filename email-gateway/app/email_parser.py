@@ -7,15 +7,35 @@ import re
 from email import policy
 from email.message import EmailMessage
 from email.parser import BytesParser
+from html.parser import HTMLParser
 
-_TAG_RE = re.compile(r"<[^>]+>")
+_SCRIPT_STYLE_RE = re.compile(
+    r"<(script|style)\b[^>]*>.*?</\1>",
+    re.IGNORECASE | re.DOTALL,
+)
 _WS_RE = re.compile(r"[ \t\f\r]+\n?\s*|\n{3,}")
 
 
+class _HTMLTextExtractor(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        if data:
+            self._parts.append(data)
+
+    def text(self) -> str:
+        return " ".join(self._parts)
+
+
 def _html_to_text(content: str) -> str:
-    """Best-effort tag stripping so HTML markup never reaches the classifier."""
-    text = _TAG_RE.sub(" ", content)
-    text = html.unescape(text)
+    """Strip HTML so markup and script bodies do not reach the classifier."""
+    without_blocks = _SCRIPT_STYLE_RE.sub(" ", content)
+    parser = _HTMLTextExtractor()
+    parser.feed(without_blocks)
+    parser.close()
+    text = html.unescape(parser.text())
     return _WS_RE.sub(" ", text).strip()
 
 

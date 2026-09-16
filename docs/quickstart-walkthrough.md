@@ -143,7 +143,7 @@ Benchmarks via in-cluster Service DNS (not the public Route). Results land in `.
 
 ### Step 3: Review results
 
-- **Console** — throughput and latency in Job logs (`oc logs job/...` on OpenShift).
+- **Console** — throughput and latency in Job logs (`oc logs -n helpdesk-email-triage job/<name>`; name printed by `make guidellm-openshift`).
 - **HTML** — open the `.html` report for charts.
 - **JSON** — archive or compare runs.
 
