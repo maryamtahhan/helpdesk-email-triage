@@ -65,7 +65,7 @@ Checks health, dashboard headers, file-watcher tickets, and falls back to `/inge
 
 ## Quickstart walkthrough
 
-After verify succeeds, follow the [README Quickstart walkthrough](../README.md#quickstart-walkthrough): submit tickets (UI, SMTP, or `curl`), review classification and redaction, check classification speed, run quality checks, and optionally benchmark inference. On hardened overlays, use the Route URLs from verify and include `X-Ingest-Key` on gateway API calls.
+After verify succeeds, follow [README Hands-on validation](../README.md#hands-on-validation) or the full [quickstart walkthrough](quickstart-walkthrough.md). On hardened overlays, use the Route URLs from verify and include `X-Ingest-Key` on gateway API calls.
 
 ## Load test inference (GuideLLM)
 
@@ -75,7 +75,7 @@ After verify on an **RHAII** overlay (`rhaii-cpu` deployed), benchmark inference
 make guidellm-openshift
 ```
 
-Creates a results PVC, runs `registry.redhat.io/rhai/guidellm-rhel9:3.5.0-1787154406` against the internal Service (not the Route; uses `redhat-registry-pull` like `rhaii-cpu`). The Red Hat image uses `guidellm run` (not `guidellm benchmark run`) and writes JSON + HTML in one Job. Override with `GUIDELLM_IMAGE=ghcr.io/vllm-project/guidellm:v0.7.1` for upstream (legacy `benchmark` CLI). See [README Quickstart walkthrough — Load testing](../README.md#load-testing).
+Creates a results PVC, runs `registry.redhat.io/rhai/guidellm-rhel9:3.5.0-1787154406` against the internal Service (not the Route; uses `redhat-registry-pull` like `rhaii-cpu`). The Red Hat image uses `guidellm run` (not `guidellm benchmark run`) and writes JSON + HTML in one Job. Override with `GUIDELLM_IMAGE=ghcr.io/vllm-project/guidellm:v0.7.1` for upstream (legacy `benchmark` CLI). See [quickstart-walkthrough — Load testing](quickstart-walkthrough.md#load-testing).
 
 Manual check:
 

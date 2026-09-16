@@ -515,7 +515,7 @@
               <div><strong>From:</strong> jane.martinez@example.com</div>
               <div><strong>Subject:</strong> Charged twice on my card</div>
             </div>
-            <div class="mail-body">Hi support, my name is <span class="pii-raw">Jane Martinez</span>. My account ID is ACC-998877 and I was charged twice on card <span class="pii-raw">4111-1111-1111-1111</span>.
+            <div class="mail-body">Hi support, my name is <span class="pii-raw">Jane Martinez</span>. My account ID is <span class="pii-raw">ACC-998877</span> and I was charged twice on card <span class="pii-raw">4111-1111-1111-1111</span>.
 Please call me at <span class="pii-raw">+1-212-555-0100</span> to resolve this urgently.</div>
           </div>
         </article>
@@ -529,11 +529,11 @@ Please call me at <span class="pii-raw">+1-212-555-0100</span> to resolve this u
               <span class="badge badge-high">High</span>
             </div>
             <div class="ticket-meta">
-              <div><strong>From:</strong> jane.martinez@example.com</div>
+              <div><strong>From:</strong> <span class="pii-token">[EMAIL_1]</span></div>
               <div><strong>Subject:</strong> Charged twice on my card</div>
             </div>
             <p style="margin:0 0 6px;font-size:0.84rem;font-weight:600">Sanitized body</p>
-            <div class="ticket-body">Hi support, my name is <span class="pii-token">[NAME_1]</span>. My account ID is ACC-998877 and I was charged twice on card <span class="pii-token">[CARD_LAST4_1]</span>.
+            <div class="ticket-body">Hi support, my name is <span class="pii-token">[NAME_1]</span>. My account ID is <span class="pii-token">[ACCOUNT_ID_1]</span> and I was charged twice on card <span class="pii-token">[CARD_LAST4_1]</span>.
 Please call me at <span class="pii-token">[PHONE_1]</span> to resolve this urgently.</div>
             <p class="ticket-caption">Original values live in the vault for this ticket ID — open <strong>View original PII vault</strong> in the inbox to rehydrate.</p>
           </div>

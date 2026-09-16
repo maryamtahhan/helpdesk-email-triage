@@ -2,7 +2,7 @@
 
 **Fastest path:** [README Try it now](../README.md#try-it-now-about-2-minutes) — `make demo`, open port 8501, done.
 
-**Hands-on walkthrough:** [README Quickstart walkthrough](../README.md#quickstart-walkthrough) — submit tickets, review classification/redaction, classification speed, quality checks, and optional GuideLLM load testing.
+**Hands-on walkthrough:** [quickstart-walkthrough.md](quickstart-walkthrough.md) — submit tickets, review classification/redaction, classification speed, quality checks, and optional GuideLLM load testing.
 
 This guide walks through every feature in the demo UI and alternative run methods. No Red Hat subscription, registry login, GPU, or Hugging Face token required.
 
@@ -76,7 +76,7 @@ Stop with Ctrl-C, or `podman compose -f compose.mock.demo.yml down` if processes
 
 ## Load testing (GuideLLM)
 
-**Laptop** — benchmark the mock inference container directly (see [README Quickstart walkthrough — Load testing](../README.md#load-testing)).
+**Laptop** — benchmark the mock inference container directly (see [quickstart-walkthrough — Load testing](quickstart-walkthrough.md#load-testing)).
 
 **OpenShift** — after `make verify-openshift` on an **RHAII** deploy (`INFERENCE=rhaii` or rhaii-demo / hardened-rhaii overlay):
 
@@ -88,7 +88,7 @@ Results land in `./results/guidellm-openshift/`. See [deploy-openshift.md](deplo
 
 ## OpenShift
 
-Cluster deploy is documented in the [README](../README.md#openshift-quick-deploy) (step-by-step) and [deploy-openshift.md](deploy-openshift.md) (overlay catalog). After verify, continue with the [Quickstart walkthrough](../README.md#quickstart-walkthrough).
+Cluster deploy is documented in the [README](../README.md#openshift-quick-deploy) (step-by-step) and [deploy-openshift.md](deploy-openshift.md) (overlay catalog). After verify, continue with [Hands-on validation](../README.md#hands-on-validation) or the full [quickstart walkthrough](quickstart-walkthrough.md).
 
 ## Mock vs RHAII
 

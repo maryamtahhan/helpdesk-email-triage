@@ -1,6 +1,6 @@
 # Integrating the email gateway
 
-**Overview, deploy paths, and quick start:** [README](../README.md) · **Hands-on walkthrough:** [README Quickstart walkthrough](../README.md#quickstart-walkthrough)
+**Overview, deploy paths, and quick start:** [README](../README.md) · **Hands-on walkthrough:** [quickstart-walkthrough.md](quickstart-walkthrough.md)
 
 The **email gateway** is the reusable building block in this quickstart. It ingests RFC-822 mail, regex-tokenizes structured PII into a local vault, calls Red Hat AI Inference (or a mock) for category, urgency, summary, and residual name redaction, and exposes sanitized tickets over HTTP and SMTP.
 
@@ -54,7 +54,7 @@ After `make deploy-openshift`:
 make verify-openshift
 ```
 
-See [deploy-openshift.md](deploy-openshift.md). After verify, follow the [Quickstart walkthrough](../README.md#quickstart-walkthrough) (submit tickets, review redaction, classification speed, optional GuideLLM load test).
+See [deploy-openshift.md](deploy-openshift.md). After verify, follow the [quickstart walkthrough](quickstart-walkthrough.md) (submit tickets, review redaction, classification speed, optional GuideLLM load test).
 
 ## Adoption paths
 
@@ -384,6 +384,6 @@ Deploy commands: [README — OpenShift hardened](../README.md#openshift-hardened
 
 ## Next steps
 
-- **Quickstart walkthrough** — [README](../README.md#quickstart-walkthrough): submit tickets, review classification/redaction, classification speed, quality checks, GuideLLM load test
+- **Quickstart walkthrough** — [quickstart-walkthrough.md](quickstart-walkthrough.md): submit tickets, review classification/redaction, classification speed, quality checks, GuideLLM load test
 - **Demo UI detail** — [testing-locally.md](testing-locally.md) for every sidebar feature
 - **OpenShift load test (RHAII only)** — `make guidellm-openshift` after `make verify-openshift` on an RHAII overlay ([Red Hat GuideLLM article](https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes))
