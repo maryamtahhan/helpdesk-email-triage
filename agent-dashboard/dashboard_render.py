@@ -13,9 +13,17 @@ PAGE_CSS = """
 <style>
   .block-container { padding-top: 1rem; }
 
-  /* Welcome page link (st.link_button) */
-  [data-testid="stLinkButton"] a {
+  /* Welcome link — sidebar only (visible on dark theme) */
+  section[data-testid="stSidebar"] [data-testid="stLinkButton"] a {
     font-weight: 600;
+    background-color: #c9190b !important;
+    color: #ffffff !important;
+    border: 1px solid #c9190b !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stLinkButton"] a:hover {
+    background-color: #a31107 !important;
+    border-color: #a31107 !important;
+    color: #ffffff !important;
   }
 
   /* ── AI disclaimer ──────────────────────────────────── */

@@ -56,7 +56,6 @@ st.set_page_config(
 st.markdown(PAGE_CSS, unsafe_allow_html=True)
 
 # ── Static header ─────────────────────────────────────────────────────
-st.link_button("← Back to home", "/welcome", type="secondary")
 st.title("Helpdesk triage inbox")
 st.caption("Local CPU classification · Red Hat AI Inference 3.5 · Tokenized PII")
 st.markdown(
@@ -121,6 +120,13 @@ with st.expander("ℹ️ How to use this demo", expanded=False):
 
 # ── Sidebar ───────────────────────────────────────────────────────────
 with st.sidebar:
+    st.link_button(
+        "← Back to home",
+        "/welcome",
+        type="primary",
+        use_container_width=True,
+    )
+    st.markdown("---")
     st.header("Filters")
     st.selectbox("Queue", CATEGORIES, key="category_filter")
     st.multiselect(
