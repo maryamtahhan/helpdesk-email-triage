@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 from app.email_parser import parse_raw_email
 from app.inference import extract_json_object
-from app.tokenizer import heuristic_triage, tokenize_structured_pii
+from app.tokenizer import heuristic_triage, merge_model_sanitization, tokenize_structured_pii
 
 SAMPLE = b"""From: Jane Martinez <jane.martinez@example.com>
 To: support@example.com
@@ -433,3 +433,55 @@ def test_summary_sanitization_clears_raw_pan(tmp_path, monkeypatch):
 
     assert "4111-1111-1111-1111" not in ticket.get("summary", "")
     assert ticket.get("summary", "") == ""
+
+
+# ── Regression coverage for hardening fixes ───────────────────────────
+
+
+def test_long_account_id_is_one_token_not_phone_fragment():
+    """A long ACC-<digits> id must tokenize as a single ACCOUNT_ID token."""
+    sanitized, vault = tokenize_structured_pii("Account ACC-1234567890123 expired.")
+    assert "[ACCOUNT_ID_1]" in sanitized
+    assert "[PHONE" not in sanitized
+    assert "1234567890123" not in sanitized
+    assert vault.mapping["[ACCOUNT_ID_1]"] == "ACC-1234567890123"
+
+
+def test_long_digit_run_is_not_partially_phoned():
+    """A non-Luhn 15-digit run must not be partially matched as a phone."""
+    sanitized, vault = tokenize_structured_pii("serial 123456789012345 here")
+    assert "[PHONE" not in sanitized
+
+
+def test_standard_phone_still_tokenized():
+    sanitized, vault = tokenize_structured_pii("call +1-212-555-0100 now")
+    assert "[PHONE_1]" in sanitized
+    assert vault.mapping["[PHONE_1]"] == "+1-212-555-0100"
+
+
+def test_merge_rejects_short_name_reintroduction():
+    """A person-name vault value is caught by word boundary even when < 6 chars."""
+    from app.tokenizer import TokenVault
+
+    vault = TokenVault()
+    vault.mapping["[NAME_1]"] = "Li Na"
+    vault._counts["NAME"] = 1
+
+    regex_text = "[NAME_1] asks about a refund at [PHONE_1]."
+    model_text = "Li Na asks about a refund at [PHONE_1]."
+
+    assert merge_model_sanitization(regex_text, model_text, vault) == regex_text
+
+
+def test_parse_raw_email_strips_html_only_body():
+    """HTML-only messages must not leak raw markup to the classifier."""
+    raw = (
+        b"From: a@b.com\r\n"
+        b"Subject: Hi\r\n"
+        b"Content-Type: text/html; charset=utf-8\r\n\r\n"
+        b"<p>Hello <b>Jane</b>, call 555-0100.</p>"
+    )
+    parsed = parse_raw_email(raw)
+    assert "<" not in parsed["body"]
+    assert "Hello" in parsed["body"]
+    assert "Jane" in parsed["body"]

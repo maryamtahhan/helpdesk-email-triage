@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import hashlib
 import hmac
 import json
@@ -18,6 +19,28 @@ logger = logging.getLogger(__name__)
 
 _WEBHOOK_PREFIX = "webhook:"
 _DEFAULT_RETRIES = 3
+
+_executor: concurrent.futures.ThreadPoolExecutor | None = None
+_executor_lock = threading.Lock()
+
+
+def _get_executor() -> concurrent.futures.ThreadPoolExecutor:
+    """Lazily create a shared, bounded sink worker pool.
+
+    Bounding the pool keeps webhook retries from spawning an unbounded number
+    of threads when many tickets arrive at once. Tune with
+    TICKET_SINK_MAX_WORKERS.
+    """
+    global _executor
+    if _executor is None:
+        with _executor_lock:
+            if _executor is None:
+                workers = int(os.environ.get("TICKET_SINK_MAX_WORKERS", "4"))
+                _executor = concurrent.futures.ThreadPoolExecutor(
+                    max_workers=max(1, workers),
+                    thread_name_prefix="ticket-sink",
+                )
+    return _executor
 
 
 def parse_sinks(raw: str | None = None) -> list[str]:
@@ -94,9 +117,4 @@ def dispatch(result: TriageResult, *, sync: bool = False) -> None:
         _run()
         return
 
-    thread = threading.Thread(
-        target=_run,
-        daemon=True,
-        name=f"ticket-sink-{result.id}",
-    )
-    thread.start()
+    _get_executor().submit(_run)

@@ -19,6 +19,8 @@ from .triage_result import TriageResult
 
 _lock = threading.Lock()
 _tickets: list[dict[str, Any]] = []
+_by_id: dict[str, dict[str, Any]] = {}
+_sources: set[str] = set()
 _next_id = 8921
 
 
@@ -41,6 +43,18 @@ def load() -> None:
         payload = json.load(handle)
     _tickets = payload.get("tickets", [])
     _next_id = int(payload.get("next_id", 8921))
+    _reindex()
+
+
+def _reindex() -> None:
+    """Rebuild the id and source lookup indexes from _tickets."""
+    _by_id.clear()
+    _sources.clear()
+    for ticket in _tickets:
+        _by_id[ticket["id"]] = ticket
+        source = ticket.get("source")
+        if source:
+            _sources.add(source)
 
 
 def _persist() -> None:
@@ -92,13 +106,16 @@ def create_ticket(
             "created_at": datetime.now(UTC).isoformat(),
         }
         _tickets.insert(0, ticket)
+        _by_id[ticket_id] = ticket
+        if source:
+            _sources.add(source)
         _persist()
         return ticket
 
 
 def has_source(source: str) -> bool:
     with _lock:
-        return any(ticket.get("source") == source for ticket in _tickets)
+        return source in _sources
 
 
 def list_public_tickets(
@@ -115,10 +132,10 @@ def list_public_tickets(
 
 def get_ticket(ticket_id: str, include_vault: bool = False) -> dict[str, Any] | None:
     with _lock:
-        for ticket in _tickets:
-            if ticket["id"] == ticket_id:
-                return ticket if include_vault else _public(ticket)
-    return None
+        ticket = _by_id.get(ticket_id)
+        if ticket is None:
+            return None
+        return ticket if include_vault else _public(ticket)
 
 
 def _public(ticket: dict[str, Any]) -> dict[str, Any]:
