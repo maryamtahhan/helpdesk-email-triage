@@ -103,8 +103,8 @@ First start downloads **Qwen2.5-1.5B-Instruct** weights — allow **several minu
 ### Minimum software
 
 - **Track 1:** `oc` CLI, OpenShift 5.x, `make`, `podman login registry.redhat.io`, `HF_TOKEN`
-- **Track 2:** RHEL 9.4+, rootless Podman, user systemd, registry login, Hugging Face token
-- **Track 3 (optional):** `podman` or `docker` with Compose — **no** registry or HF token
+- **Track 2:** RHEL 9.4+ (including RHEL 10), `podman` from `dnf`, user systemd, registry login, Hugging Face token — **Quadlet does not need Compose**
+- **Track 3 (optional):** `podman` or `docker` with Compose — on RHEL 10 install the Compose CLI with `python3 -m pip install --user podman-compose` if `podman compose` is unavailable; **no** registry or HF token for mock
 
 ### Permissions
 
@@ -339,27 +339,32 @@ Full overlay catalog: [docs/deploy-openshift.md](docs/deploy-openshift.md).
 
 ### Prerequisites
 
-- RHEL 9.4+ with rootless Podman meeting [RHAII CPU hardware](#rhaii-cpu-hardware-tracks-1-and-2) requirements
+- RHEL 9.4+ (including **RHEL 10**) with rootless Podman meeting [RHAII CPU hardware](#rhaii-cpu-hardware-tracks-1-and-2) requirements
+- **Podman** from `dnf` (`sudo dnf install -y podman` if missing). Quadlet ships with Podman — **you do not need Compose for this track**
+- **Compose (optional)** — only for [Track 3](#track-3-local-mock-validation-maintainers) or [Compose on RHEL](#production-rhel-with-compose) on the same host. On RHEL 10 when `podman compose` is unavailable: `sudo dnf install -y python3-pip` then `pip install --user podman-compose` (add `~/.local/bin` to `PATH`)
 - `podman login registry.redhat.io`
 - Hugging Face token and a strong `VAULT_SECRET`
 
-### Step 1: Prepare secrets and sample mail
+### Step 1: One-time setup (repo root)
 
 ```bash
-mkdir -p ~/.config/helpdesk ~/helpdesk/sample_emails ~/rhaii-cache
+mkdir -p ~/.config/containers/systemd ~/.config/helpdesk \
+  ~/helpdesk/sample_emails ~/helpdesk/docs ~/rhaii-cache
+
 cat > ~/.config/helpdesk/secrets.env <<'EOF'
 HUGGING_FACE_HUB_TOKEN=hf_your_token_here
 VAULT_SECRET=change-me-before-deploy
 EOF
 chmod 600 ~/.config/helpdesk/secrets.env
 
+podman login registry.redhat.io
 cp -r sample_emails/. ~/helpdesk/sample_emails/
 cp -r docs/. ~/helpdesk/docs/
 ```
 
 ### Step 2: Build images
 
-From the repo root (gateway `Containerfile` expects repo context):
+Gateway and UI `Containerfile`s expect **repo root** as build context:
 
 ```bash
 podman build -f email-gateway/Containerfile -t localhost/helpdesk-email-gateway:prod .
@@ -373,25 +378,39 @@ cp deploy/quadlet/*.container deploy/quadlet/*.network deploy/quadlet/*.volume \
    ~/.config/containers/systemd/
 
 systemctl --user daemon-reload
-systemctl --user enable --now rhaii-cpu-engine.service email-gateway.service agent-dashboard.service
+systemctl --user start rhaii-cpu-engine.service email-gateway.service agent-dashboard.service
 ```
 
-Watch RHAII come up (first start downloads weights):
+Quadlet units show as **`generated`** in `systemctl --user list-unit-files`. Do **not** use `systemctl --user enable` if systemd reports *transient or generated* — use **`start`** above, then for boot / after SSH logout:
 
 ```bash
-journalctl --user -u rhaii-cpu-engine -f
+sudo loginctl enable-linger "$USER"
+systemctl --user add-wants default.target \
+  rhaii-cpu-engine.service email-gateway.service agent-dashboard.service
+```
+
+Watch RHAII come up (first start downloads weights). If `journalctl --user` prints **No journal files were found**, use **Podman logs** (always works) or enable linger and open a new SSH session:
+
+```bash
+podman logs -f rhaii-cpu-engine
+# or, once user journal exists:
+journalctl --user -u rhaii-cpu-engine.service -f
 ```
 
 ### Step 4: Verify
 
 ```bash
 systemctl --user status rhaii-cpu-engine email-gateway agent-dashboard
+podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 curl -sS http://127.0.0.1:8080/health
 curl -sS http://127.0.0.1:8080/health/ready
 curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
+curl -sI http://127.0.0.1:8501/welcome | head -5
 ```
 
-Open **[http://127.0.0.1:8501/welcome](http://127.0.0.1:8501/welcome)** — pill should reflect **RHAII**, not mock.
+Open **[http://127.0.0.1:8501/welcome](http://127.0.0.1:8501/welcome)** — pill should reflect **RHAII**, not mock. From a laptop, SSH port-forward: `ssh -L 8501:127.0.0.1:8501 -L 8080:127.0.0.1:8080 ec2-user@<host>`.
+
+**Troubleshooting:** If `rhaii-cpu-engine` is `activating (auto-restart)` and `curl …/health` shows `"classify_model":""`, run `podman logs rhaii-cpu-engine --tail 80` (not only `journalctl --user`, which may print *No journal files were found* until linger is enabled). Check `HUGGING_FACE_HUB_TOKEN` in `secrets.env`, registry login, and **≥16 GiB RAM**. After updating `deploy/quadlet/rhaii-cpu-engine.container`, `cp` it again and `systemctl --user daemon-reload && systemctl --user restart rhaii-cpu-engine`. Details: [deploy/quadlet/README.md](deploy/quadlet/README.md).
 
 ### Step 5: Hands-on validation (same checklist as Track 1)
 

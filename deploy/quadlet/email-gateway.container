@@ -1,7 +1,7 @@
 # Podman Quadlet container unit — place in ~/.config/containers/systemd/
 #
 # Build the image first:
-#   podman build -t localhost/helpdesk-email-gateway:prod ./email-gateway
+#   podman build -f email-gateway/Containerfile -t localhost/helpdesk-email-gateway:prod .
 #
 # Enable:
 #   systemctl --user daemon-reload

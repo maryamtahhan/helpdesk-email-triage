@@ -1,7 +1,7 @@
 # Podman Quadlet container unit — place in ~/.config/containers/systemd/
 #
 # Build the image first:
-#   podman build -t localhost/helpdesk-triage-ui:prod ./agent-dashboard
+#   podman build -f agent-dashboard/Containerfile -t localhost/helpdesk-triage-ui:prod .
 #
 # Enable:
 #   systemctl --user daemon-reload
