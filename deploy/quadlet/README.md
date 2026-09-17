@@ -53,6 +53,8 @@ until curl -sf http://127.0.0.1:8000/v1/models >/dev/null; do sleep 15; done
 systemctl --user start email-gateway.service agent-dashboard.service
 ```
 
+**Maintainers:** automated scenario tests — [E2E.md](E2E.md) (`make quadlet-e2e`).
+
 ## Makefile targets
 
 | Target | Purpose |
@@ -67,6 +69,7 @@ systemctl --user start email-gateway.service agent-dashboard.service
 | `make quadlet-deploy` | `setup` + `build` + `up` |
 | `make quadlet-relaunch` | `quadlet-reset` + `quadlet-deploy` (`QUADLET_RESET_CONFIRM=1`) |
 | `make guidellm-quadlet` | Load-test RHAII on `:8000` (same Red Hat GuideLLM image as OpenShift) |
+| `make quadlet-e2e` | Run maintainer validation scenarios (see [E2E.md](E2E.md)) |
 
 Increase inference wait: `RHAII_WAIT_TIMEOUT=1200 make quadlet-up`.
 

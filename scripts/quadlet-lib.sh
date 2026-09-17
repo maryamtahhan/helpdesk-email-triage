@@ -180,8 +180,32 @@ quadlet_start_engine() {
   fi
 }
 
+quadlet_start_gateway() {
+  quadlet_user_systemctl start email-gateway.service
+}
+
+quadlet_start_dashboard() {
+  quadlet_user_systemctl start agent-dashboard.service
+}
+
 quadlet_start_gateway_stack() {
-  quadlet_user_systemctl start email-gateway.service agent-dashboard.service
+  quadlet_start_gateway
+  quadlet_start_dashboard
+}
+
+quadlet_stop_dashboard() {
+  quadlet_user_systemctl stop agent-dashboard.service 2>/dev/null || true
+}
+
+quadlet_clear_ticket_store() {
+  if ! podman volume inspect gateway-data &>/dev/null; then
+    return 0
+  fi
+  local mount
+  mount="$(podman volume inspect gateway-data --format '{{.Mountpoint}}' 2>/dev/null || true)"
+  if [[ -n "$mount" && -d "$mount" ]]; then
+    rm -f "${mount}/tickets.json"
+  fi
 }
 
 quadlet_stop_all() {

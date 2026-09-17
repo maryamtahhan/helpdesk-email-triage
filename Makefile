@@ -2,7 +2,7 @@
         validate-manifests compose-e2e build-images deploy-openshift verify-openshift guidellm-openshift \
         undeploy-openshift run-on-kind destroy-kind kind-e2e test-openshift-overlay \
         quadlet-setup quadlet-build quadlet-up quadlet-down quadlet-reset quadlet-verify quadlet-ingest \
-        quadlet-deploy quadlet-relaunch guidellm-quadlet
+        quadlet-deploy quadlet-relaunch guidellm-quadlet quadlet-e2e
 
 # demo          — mock inference + gateway + Streamlit UI
 # gateway-only  — mock inference + gateway (integrator path, no UI)
@@ -145,3 +145,9 @@ quadlet-relaunch:
 guidellm-quadlet:
 	chmod +x scripts/guidellm-quadlet.sh scripts/quadlet-lib.sh
 	./scripts/guidellm-quadlet.sh
+
+# Maintainer-only Quadlet validation on a RHEL host (see deploy/quadlet/E2E.md)
+quadlet-e2e:
+	chmod +x scripts/quadlet-e2e.sh scripts/quadlet-e2e-*.sh scripts/quadlet-lib.sh \
+		scripts/wait-for-tickets.sh scripts/guidellm-quadlet.sh
+	./scripts/quadlet-e2e.sh
