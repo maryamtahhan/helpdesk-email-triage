@@ -104,8 +104,15 @@ rhaii_prereqs_met() {
 
 explain_rhaii_prereqs() {
   local namespace="${1:?namespace required}"
+  if has_redhat_pull_secret "$namespace"; then
+    echo "  ✓ registry.redhat.io credentials detected" >&2
+  fi
+  if has_hf_secret "$namespace"; then
+    echo "  ✓ Hugging Face token detected" >&2
+  fi
   if ! has_hf_secret "$namespace"; then
-    echo "  • Hugging Face: export HF_TOKEN=hf_... (or oc create secret hf-secret in ${namespace})" >&2
+    echo "  • Hugging Face: set HF_TOKEN in repo .env (see .env.example), or export HF_TOKEN=hf_..." >&2
+    echo "    (or oc create secret generic hf-secret --from-literal=HF_TOKEN=... -n ${namespace})" >&2
   fi
   if ! has_redhat_pull_secret "$namespace"; then
     echo "  • Red Hat registry: podman login registry.redhat.io" >&2

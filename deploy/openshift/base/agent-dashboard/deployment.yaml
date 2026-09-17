@@ -26,7 +26,7 @@ spec:
       containers:
         - name: agent-dashboard
           image: quay.io/mtahhan/helpdesk-triage-ui:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8501
@@ -42,18 +42,18 @@ spec:
               drop: [ALL]
           startupProbe:
             httpGet:
-              path: /inbox/_stcore/health
+              path: /_stcore/health
               port: http
             periodSeconds: 5
             failureThreshold: 36
           readinessProbe:
             httpGet:
-              path: /inbox/_stcore/health
+              path: /_stcore/health
               port: http
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /inbox/_stcore/health
+              path: /_stcore/health
               port: http
             initialDelaySeconds: 20
             periodSeconds: 20

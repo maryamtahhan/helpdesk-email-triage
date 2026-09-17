@@ -129,7 +129,12 @@ jobs:
       - name: Test container image
         run: |
           IMAGE="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ env.IMAGE_TAG }}"
-          docker run --rm "$IMAGE" ${{ matrix.smoke_test }}
+          if [[ "${{ matrix.image }}" == "helpdesk-triage-ui" ]]; then
+            chmod +x agent-dashboard/smoke-container.sh
+            SMOKE_PORT=28501 agent-dashboard/smoke-container.sh "$IMAGE"
+          else
+            docker run --rm "$IMAGE" ${{ matrix.smoke_test }}
+          fi
 
       - name: Push container image
         if: github.event_name != 'pull_request'

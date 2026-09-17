@@ -71,8 +71,23 @@ if ! curl -sf "${GATEWAY_URL}/health/ready" >/dev/null 2>&1; then
 fi
 
 echo
-echo "==> Dashboard headers"
-curl -skI "https://${UI}" | head -5
+echo "==> Dashboard /welcome"
+welcome_code="$(curl -sko /dev/null -w '%{http_code}' "https://${UI}/welcome")"
+if [[ "$welcome_code" != "200" ]]; then
+  echo "GET /welcome returned HTTP ${welcome_code} (expected 200)." >&2
+  openshift_dashboard_readiness_hint "$NAMESPACE"
+  exit 1
+fi
+if ! curl -sk "https://${UI}/welcome" | grep -q "You.re connected"; then
+  echo "/welcome did not return the onboarding page (UI image may be stale Streamlit-only)." >&2
+  openshift_dashboard_readiness_hint "$NAMESPACE"
+  exit 1
+fi
+echo "OK — onboarding page reachable"
+
+echo
+echo "==> Dashboard headers (/)"
+curl -skI "https://${UI}/" | head -5
 
 echo
 echo "==> Waiting for ticket (file watcher on sample_emails/)"

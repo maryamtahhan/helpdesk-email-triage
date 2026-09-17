@@ -57,6 +57,8 @@ First RHAII start downloads weights to the `rhaii-model-cache` PVC (several minu
 
 **Dashboard has no welcome page or “Open inbox” buttons** — the Route should open **`/welcome`** (root redirects there). If you land straight in Streamlit with no welcome CTAs, the cluster is likely running an older `helpdesk-triage-ui` image (Streamlit-only, no nginx). Rebuild and push the UI image (`podman build -f agent-dashboard/Containerfile -t …`), redeploy with `IMAGE_TAG=… make deploy-openshift`, or `oc rollout restart deployment/agent-dashboard` after the image is updated.
 
+**`make deploy-openshift` hangs after `email-gateway`** — usually `agent-dashboard` probes failing. Check `oc describe pod -l app.kubernetes.io/name=agent-dashboard` (look for probe 404 on `/inbox/_stcore/health`). Probes use `/_stcore/health`, which works on both legacy Streamlit-only images and the nginx + `/inbox` layout once the current UI image is on Quay.
+
 ## Verify
 
 ```bash

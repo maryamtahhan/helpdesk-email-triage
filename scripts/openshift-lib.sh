@@ -151,6 +151,22 @@ openshift_gateway_readiness_hint() {
   fi
 }
 
+openshift_dashboard_readiness_hint() {
+  local namespace="$1"
+  if ! oc get deployment agent-dashboard -n "$namespace" >/dev/null 2>&1; then
+    return 0
+  fi
+  local ready replicas
+  ready="$(oc get deployment agent-dashboard -n "$namespace" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)"
+  replicas="$(oc get deployment agent-dashboard -n "$namespace" -o jsonpath='{.status.replicas}' 2>/dev/null || echo 0)"
+  echo "WARNING: agent-dashboard not serving /welcome (readyReplicas=${ready:-0}/${replicas:-0})." >&2
+  echo "         Check probes: oc describe pod -l app.kubernetes.io/name=agent-dashboard -n ${namespace} | tail -25" >&2
+  echo "         Probes must use GET /_stcore/health on port 8501; pull a fresh UI image:" >&2
+  echo "           quay.io/mtahhan/helpdesk-triage-ui:latest (imagePullPolicy: Always)" >&2
+  echo "           oc rollout restart deployment/agent-dashboard -n ${namespace}" >&2
+  echo "         If the pod is Ready but /welcome is 404, the node may still have a cached Streamlit-only image." >&2
+}
+
 rhaii_preflight() {
   local namespace="$1"
   echo "==> Checking cluster capacity for RHAII CPU (requests: 4 CPU, 8Gi memory)"

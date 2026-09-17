@@ -6,6 +6,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NAMESPACE="${1:-helpdesk-email-triage}"
 INFERENCE="${INFERENCE:-rhaii}"
+
+if [[ -f "${ROOT}/.env" && -z "${HF_TOKEN:-}" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "${ROOT}/.env"
+  set +a
+fi
+if [[ -z "${HF_TOKEN:-}" && -n "${HUGGING_FACE_HUB_TOKEN:-}" ]]; then
+  export HF_TOKEN="$HUGGING_FACE_HUB_TOKEN"
+fi
 WAIT_TIMEOUT="${WAIT_TIMEOUT:-300s}"
 RHAII_WAIT_TIMEOUT="${RHAII_WAIT_TIMEOUT:-900s}"
 
@@ -23,6 +33,11 @@ if ! command -v kustomize >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! oc get namespace "$NAMESPACE" >/dev/null 2>&1; then
+  oc new-project "$NAMESPACE"
+fi
+oc project "$NAMESPACE" >/dev/null
+
 resolve_inference_mode() {
   case "$INFERENCE" in
     mock) echo "mock" ;;
@@ -30,6 +45,7 @@ resolve_inference_mode() {
       if ! rhaii_prereqs_met "$NAMESPACE"; then
         echo "INFERENCE=rhaii requires Hugging Face and registry.redhat.io credentials." >&2
         explain_rhaii_prereqs "$NAMESPACE"
+        echo "  • Demo without creds: INFERENCE=mock make deploy-openshift" >&2
         exit 1
       fi
       echo "rhaii"
@@ -57,11 +73,6 @@ if [[ "$INFERENCE_MODE" == "rhaii" ]]; then
   WAIT_TIMEOUT="$RHAII_WAIT_TIMEOUT"
 fi
 
-if ! oc get namespace "$NAMESPACE" >/dev/null 2>&1; then
-  oc new-project "$NAMESPACE"
-fi
-oc project "$NAMESPACE"
-
 if [[ "$INFERENCE_MODE" == "rhaii" ]]; then
   rhaii_preflight "$NAMESPACE"
   echo "==> Preparing RHAII CPU secrets (registry.redhat.io + Hugging Face)"
@@ -80,8 +91,12 @@ echo "==> Waiting for deployments"
 if [[ "$INFERENCE_MODE" == "rhaii" ]]; then
   oc wait deployment/rhaii-cpu -n "$NAMESPACE" --for=condition=Available --timeout="$WAIT_TIMEOUT"
 fi
-oc wait deployment/email-gateway deployment/agent-dashboard \
-  -n "$NAMESPACE" --for=condition=Available --timeout="$WAIT_TIMEOUT"
+if ! oc wait deployment/email-gateway deployment/agent-dashboard \
+  -n "$NAMESPACE" --for=condition=Available --timeout="$WAIT_TIMEOUT"; then
+  openshift_dashboard_readiness_hint "$NAMESPACE"
+  openshift_gateway_readiness_hint "$NAMESPACE"
+  exit 1
+fi
 if [[ "$INFERENCE_MODE" == "mock" ]]; then
   oc wait deployment/inference-mock -n "$NAMESPACE" --for=condition=Available --timeout="$WAIT_TIMEOUT"
 fi
