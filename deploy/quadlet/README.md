@@ -11,6 +11,19 @@ This is an **enterprise single-host** deploy path. Change default secrets, restr
 **One-time setup** (from repo root):
 
 ```bash
+podman login registry.redhat.io
+# Edit ~/.config/helpdesk/secrets.env if the template was created (real HF token + VAULT_SECRET)
+vi ~/.config/helpdesk/secrets.env
+
+make quadlet-setup quadlet-build
+make quadlet-up
+```
+
+`make quadlet-up` starts **network → inference → waits for `/v1/models` → gateway + UI**, then copies sample `.eml` files only after `/health/ready` (avoids `heuristic-fallback` on cold start). Skip auto-ingest: `SKIP_INGEST=1 make quadlet-up`. Enable linger on boot: `ENABLE_LINGER=1 make quadlet-up`.
+
+Manual equivalent (no Make):
+
+```bash
 mkdir -p ~/.config/containers/systemd ~/.config/helpdesk \
   ~/helpdesk/sample_emails ~/helpdesk/docs ~/rhaii-cache
 
@@ -20,30 +33,35 @@ VAULT_SECRET=change-me-before-deploy
 EOF
 chmod 600 ~/.config/helpdesk/secrets.env
 
-podman login registry.redhat.io
 cp -r sample_emails/. ~/helpdesk/sample_emails/
 cp -r docs/. ~/helpdesk/docs/
 
 podman build -f email-gateway/Containerfile -t localhost/helpdesk-email-gateway:prod .
 podman build -f agent-dashboard/Containerfile -t localhost/helpdesk-triage-ui:prod .
-```
-
-## Install and start
-
-```bash
-# Copy unit files to the Quadlet directory (create it on first install)
-mkdir -p ~/.config/containers/systemd
 cp deploy/quadlet/*.container deploy/quadlet/*.network deploy/quadlet/*.volume \
    ~/.config/containers/systemd/
-
-# Reload systemd and start the stack (order: inference → gateway → UI)
 systemctl --user daemon-reload
-systemctl --user start rhaii-cpu-engine.service email-gateway.service agent-dashboard.service
-
-# Boot after logout/reboot (`enable` often fails on generated Quadlet units):
-sudo loginctl enable-linger "$USER"
-systemctl --user add-wants default.target rhaii-cpu-engine.service email-gateway.service agent-dashboard.service
+systemctl --user start helpdesk-network.service gateway-data-volume.service
+systemctl --user start rhaii-cpu-engine.service
+until curl -sf http://127.0.0.1:8000/v1/models >/dev/null; do sleep 15; done
+systemctl --user start email-gateway.service agent-dashboard.service
 ```
+
+## Makefile targets
+
+| Target | Purpose |
+|--------|---------|
+| `make quadlet-setup` | Dirs, copy Quadlet units + samples/docs, create `secrets.env` only if missing |
+| `make quadlet-build` | Build `localhost/helpdesk-*:prod` images |
+| `make quadlet-up` | Ordered start + wait for inference + ingest samples |
+| `make quadlet-verify` | Status, health, ticket models |
+| `make quadlet-ingest` | Re-copy samples after stack is ready |
+| `make quadlet-down` | Stop services (keep data) |
+| `make quadlet-reset` | Full teardown (`QUADLET_RESET_CONFIRM=1`; optional `WIPE_RHAII_CACHE=1`) |
+| `make quadlet-deploy` | `setup` + `build` + `up` |
+| `make quadlet-relaunch` | `quadlet-reset` + `quadlet-deploy` (`QUADLET_RESET_CONFIRM=1`) |
+
+Increase inference wait: `RHAII_WAIT_TIMEOUT=1200 make quadlet-up`.
 
 ## Verify
 
@@ -98,8 +116,8 @@ podman logs -f rhaii-cpu-engine
 ## Stop and remove
 
 ```bash
-systemctl --user stop agent-dashboard email-gateway rhaii-cpu-engine
-systemctl --user disable agent-dashboard email-gateway rhaii-cpu-engine
+make quadlet-down
+QUADLET_RESET_CONFIRM=1 make quadlet-reset   # full clean slate; then quadlet-setup + quadlet-build + quadlet-up
 ```
 
 ## Changing the model

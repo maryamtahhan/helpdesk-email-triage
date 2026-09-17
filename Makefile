@@ -1,6 +1,8 @@
 .PHONY: demo up down logs ingest test lint shellcheck demo-local gateway-only test-webhook webhook-receiver \
         validate-manifests compose-e2e build-images deploy-openshift verify-openshift guidellm-openshift \
-        undeploy-openshift run-on-kind destroy-kind kind-e2e test-openshift-overlay
+        undeploy-openshift run-on-kind destroy-kind kind-e2e test-openshift-overlay \
+        quadlet-setup quadlet-build quadlet-up quadlet-down quadlet-reset quadlet-verify quadlet-ingest \
+        quadlet-deploy quadlet-relaunch
 
 # demo          — mock inference + gateway + Streamlit UI
 # gateway-only  — mock inference + gateway (integrator path, no UI)
@@ -98,3 +100,44 @@ destroy-kind:
 kind-e2e:
 	chmod +x scripts/kind-e2e.sh scripts/kind-lib.sh scripts/destroy-kind.sh scripts/wait-for-tickets.sh
 	./scripts/kind-e2e.sh
+
+# quadlet-* — rootless systemd + Podman on RHEL (see deploy/quadlet/README.md)
+quadlet-setup:
+	chmod +x scripts/quadlet-*.sh
+	./scripts/quadlet-setup.sh
+
+quadlet-build:
+	chmod +x scripts/quadlet-*.sh
+	./scripts/quadlet-build.sh
+
+quadlet-up:
+	chmod +x scripts/quadlet-*.sh
+	./scripts/quadlet-up.sh
+
+quadlet-down:
+	chmod +x scripts/quadlet-*.sh
+	./scripts/quadlet-down.sh
+
+quadlet-reset:
+	chmod +x scripts/quadlet-*.sh
+	./scripts/quadlet-reset.sh
+
+quadlet-verify:
+	chmod +x scripts/quadlet-*.sh
+	./scripts/quadlet-verify.sh
+
+quadlet-ingest:
+	chmod +x scripts/quadlet-*.sh
+	./scripts/quadlet-ingest-samples.sh
+
+quadlet-deploy: quadlet-setup quadlet-build quadlet-up
+
+# Full teardown then setup + build + up (requires QUADLET_RESET_CONFIRM=1)
+quadlet-relaunch:
+	@test "$(QUADLET_RESET_CONFIRM)" = "1" || { \
+	  echo "Set QUADLET_RESET_CONFIRM=1 to wipe Quadlet state, e.g.:" >&2; \
+	  echo "  QUADLET_RESET_CONFIRM=1 make quadlet-relaunch" >&2; \
+	  exit 1; \
+	}
+	$(MAKE) quadlet-reset
+	$(MAKE) quadlet-deploy
