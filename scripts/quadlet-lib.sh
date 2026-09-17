@@ -80,7 +80,59 @@ quadlet_sync_repo_assets() {
 }
 
 quadlet_start_deps() {
-  quadlet_user_systemctl start helpdesk-network.service gateway-data-volume.service
+  local unit
+  for unit in helpdesk-network.service helpdesk.service; do
+    if quadlet_user_systemctl cat "${unit}" &>/dev/null; then
+      quadlet_user_systemctl start "${unit}"
+      break
+    fi
+  done
+  if quadlet_user_systemctl cat gateway-data-volume.service &>/dev/null; then
+    quadlet_user_systemctl start gateway-data-volume.service
+  elif quadlet_user_systemctl cat gateway-data.service &>/dev/null; then
+    quadlet_user_systemctl start gateway-data.service
+  fi
+  quadlet_ensure_podman_network
+  quadlet_ensure_data_volume
+}
+
+quadlet_ensure_podman_network() {
+  if podman network inspect helpdesk &>/dev/null; then
+    return 0
+  fi
+  echo "quadlet: podman network helpdesk missing after network unit start; creating..." >&2
+  podman network create helpdesk
+}
+
+quadlet_ensure_data_volume() {
+  if podman volume inspect gateway-data &>/dev/null; then
+    return 0
+  fi
+  podman volume create gateway-data
+}
+
+quadlet_diagnose_engine_start() {
+  echo "quadlet: --- diagnose (podman exit 125 = run failed immediately) ---" >&2
+  quadlet_user_systemctl list-unit-files '*helpdesk*' '*gateway*' '*rhaii*' 2>/dev/null || true
+  echo "quadlet: networks:" >&2
+  podman network ls 2>/dev/null || true
+  podman network inspect helpdesk 2>&1 || true
+  echo "quadlet: port 8000:" >&2
+  ss -tlnp 2>/dev/null | grep ':8000 ' || true
+  echo "quadlet: cache dir ${QUADLET_CACHE}:" >&2
+  ls -ld "${QUADLET_CACHE}" 2>&1 || true
+  if [[ -f "${QUADLET_SECRETS}" ]]; then
+    echo "quadlet: secrets.env (names only):" >&2
+    grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "${QUADLET_SECRETS}" | cut -d= -f1 >&2 || true
+  fi
+  echo "quadlet: try: podman logs rhaii-cpu-engine --tail 40" >&2
+  echo "quadlet: or re-run engine start with stderr:" >&2
+  echo "  systemctl --user stop rhaii-cpu-engine.service" >&2
+  echo "  podman run --rm --network helpdesk --shm-size 4g \\" >&2
+  echo "    -v ${QUADLET_CACHE}:/opt/app-root/src/.cache:Z \\" >&2
+  echo "    --env-file ${QUADLET_SECRETS} \\" >&2
+  echo "    registry.redhat.io/rhaii/vllm-cpu-rhel9:3.5.0-1786546771 \\" >&2
+  echo "    --model Qwen/Qwen2.5-1.5B-Instruct --host 0.0.0.0 --port 8000" >&2
 }
 
 quadlet_wait_inference() {
@@ -115,12 +167,15 @@ quadlet_wait_gateway_ready() {
 }
 
 quadlet_start_engine() {
+  quadlet_user_systemctl stop rhaii-cpu-engine.service 2>/dev/null || true
   quadlet_user_systemctl reset-failed rhaii-cpu-engine.service 2>/dev/null || true
   podman rm -f rhaii-cpu-engine 2>/dev/null || true
+  mkdir -p "${QUADLET_CACHE}"
   if ! quadlet_user_systemctl start rhaii-cpu-engine.service; then
     echo "quadlet: rhaii-cpu-engine.service failed to start" >&2
     quadlet_user_systemctl status rhaii-cpu-engine.service --no-pager -l || true
     journalctl --user -u rhaii-cpu-engine.service -n 40 --no-pager 2>/dev/null || true
+    quadlet_diagnose_engine_start
     return 1
   fi
 }

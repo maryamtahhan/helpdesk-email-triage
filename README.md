@@ -103,7 +103,7 @@ First start downloads **Qwen2.5-1.5B-Instruct** weights — allow **several minu
 ### Minimum software
 
 - **Track 1:** `oc` CLI, OpenShift 5.x, `make`, `podman login registry.redhat.io`, `HF_TOKEN`
-- **Track 2:** RHEL 9.4+ (including RHEL 10), `podman` from `dnf`, user systemd, registry login, Hugging Face token — **Quadlet does not need Compose**
+- **Track 2:** RHEL 9.4+ (including RHEL 10), `podman` and `make` from `dnf`, user systemd, registry login, Hugging Face token — **Quadlet does not need Compose**
 - **Track 3 (optional):** `podman` or `docker` with Compose — on RHEL 10 install the Compose CLI with `python3 -m pip install --user podman-compose` if `podman compose` is unavailable; **no** registry or HF token for mock
 
 ### Permissions
@@ -340,7 +340,7 @@ Full overlay catalog: [docs/deploy-openshift.md](docs/deploy-openshift.md).
 ### Prerequisites
 
 - RHEL 9.4+ (including **RHEL 10**) with rootless Podman meeting [RHAII CPU hardware](#rhaii-cpu-hardware-tracks-1-and-2) requirements
-- **Podman** from `dnf` (`sudo dnf install -y podman` if missing). Quadlet ships with Podman — **you do not need Compose for this track**
+- **Podman** and **make** from `dnf` (`sudo dnf install -y podman make` on minimal hosts). Quadlet ships with Podman — **you do not need Compose for this track**
 - **Compose (optional)** — only for [Track 3](#track-3-local-mock-validation-maintainers) or [Compose on RHEL](#production-rhel-with-compose) on the same host. On RHEL 10 when `podman compose` is unavailable: `sudo dnf install -y python3-pip` then `pip install --user podman-compose` (add `~/.local/bin` to `PATH`)
 - `podman login registry.redhat.io`
 - Hugging Face token and a strong `VAULT_SECRET`

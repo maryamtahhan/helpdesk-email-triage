@@ -6,7 +6,13 @@ This is an **enterprise single-host** deploy path. Change default secrets, restr
 
 ## Prerequisites
 
-**Packages:** `podman` from `dnf` (Quadlet included). Compose is **not** required for Quadlet. For `compose.yml` on RHEL 10 only: `sudo dnf install -y python3-pip` and `pip install --user podman-compose`.
+**Packages:** `podman` and `make` from `dnf` (Quadlet ships with Podman). Minimal EC2/RHEL images often omit Make:
+
+```bash
+sudo dnf install -y podman make
+```
+
+Compose is **not** required for Quadlet. For `compose.yml` on RHEL 10 only: `sudo dnf install -y python3-pip` and `pip install --user podman-compose`.
 
 **One-time setup** (from repo root):
 
@@ -97,6 +103,7 @@ podman logs rhaii-cpu-engine --tail 80
 | `registry.redhat.io` pull errors | `podman login registry.redhat.io` |
 | OOM / cannot allocate | Use a host with **≥16 GiB RAM** (32 GiB recommended for RHAII CPU). Lower `VLLM_CPU_KVCACHE_SPACE` in `rhaii-cpu-engine.container` only on tight hosts |
 | Process exits in ~10s | Re-copy `rhaii-cpu-engine.container` from the repo (needs `LD_PRELOAD` + `--port 8000`), then `systemctl --user daemon-reload && systemctl --user restart rhaii-cpu-engine` |
+| `podman run` **exit 125** (instant) | Usually missing `helpdesk` network, bad `secrets.env`, or port **8000** in use. Run `make quadlet-up` again (creates network if needed) or `podman network inspect helpdesk`; stop stray listeners: `ss -tlnp \| grep 8000`. Fix HF token: `vi ~/.config/helpdesk/secrets.env` (not the README placeholder). |
 
 Gateway `/health` may show `"classify_model":""` while inference is down — fix `rhaii-cpu-engine` first, then `systemctl --user restart email-gateway`.
 

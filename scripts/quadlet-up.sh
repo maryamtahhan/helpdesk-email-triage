@@ -13,7 +13,12 @@ quadlet_install_units
 quadlet_start_deps
 
 if ! quadlet_secrets_ok; then
-  echo "quadlet: continuing engine start (cached weights may still work); fix secrets for fresh pulls." >&2
+  if [[ "${QUADLET_ALLOW_PLACEHOLDER_SECRETS:-}" == "1" ]]; then
+    echo "quadlet: warning: placeholder HUGGING_FACE_HUB_TOKEN (cached weights may still work)." >&2
+  else
+    echo "quadlet: edit ${QUADLET_SECRETS} (real HUGGING_FACE_HUB_TOKEN), or set QUADLET_ALLOW_PLACEHOLDER_SECRETS=1 to override." >&2
+    exit 1
+  fi
 fi
 
 quadlet_start_engine

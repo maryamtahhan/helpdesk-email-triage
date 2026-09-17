@@ -27,7 +27,7 @@ podman volume rm gateway-data 2>/dev/null || podman volume rm gateway-data.volum
 podman network rm helpdesk 2>/dev/null || true
 
 rm -rf "${QUADLET_DATA}/sample_emails" "${QUADLET_DATA}/docs"
-mkdir -p "${QUADLET_DATA}/sample_emails" "${QUADLET_DATA}/docs"
+mkdir -p "${QUADLET_DATA}/sample_emails" "${QUADLET_DATA}/docs" "${QUADLET_CACHE}"
 
 if [[ "${Wipe_CACHE}" == "1" ]]; then
   rm -rf "${QUADLET_CACHE:?}"/*
