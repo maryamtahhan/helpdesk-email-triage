@@ -42,18 +42,18 @@ spec:
               drop: [ALL]
           startupProbe:
             httpGet:
-              path: /_stcore/health
+              path: /inbox/_stcore/health
               port: http
             periodSeconds: 5
             failureThreshold: 36
           readinessProbe:
             httpGet:
-              path: /_stcore/health
+              path: /inbox/_stcore/health
               port: http
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /_stcore/health
+              path: /inbox/_stcore/health
               port: http
             initialDelaySeconds: 20
             periodSeconds: 20

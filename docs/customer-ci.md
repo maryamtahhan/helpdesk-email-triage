@@ -93,7 +93,7 @@ Customer clusters typically use:
 ```bash
 export HF_TOKEN=...                      # for RHAII CPU path
 podman login registry.redhat.io
-make deploy-openshift                      # INFERENCE=auto
+make deploy-openshift                      # default INFERENCE=rhaii; use INFERENCE=mock in CI
 make verify-openshift
 ```
 

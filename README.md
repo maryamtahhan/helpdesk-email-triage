@@ -20,9 +20,13 @@ Classify support email by **category** and **urgency** while keeping raw PII out
   - [Permissions](#permissions)
 - [Choose your track](#choose-your-track)
 - [Track 1: Deploy to OpenShift (RHAII CPU)](#track-1-deploy-to-openshift-rhaii-cpu)
+  - [Submit support tickets](#submit-support-tickets)
+  - [Review classified and redacted emails](#review-classified-and-redacted-emails)
+  - [Review classification speed](#review-classification-speed)
+  - [Testing classification and redaction quality](#testing-classification-and-redaction-quality)
+  - [Load testing](#load-testing)
+  - [What you've accomplished](#what-youve-accomplished)
 - [Track 2: Run on RHEL with systemd (Quadlet)](#track-2-run-on-rhel-with-systemd-quadlet)
-- [Hands-on validation](#hands-on-validation)
-- [Benchmark inference with GuideLLM](#benchmark-inference-with-guidellm)
 - [Track 3: Local mock validation (maintainers)](#track-3-local-mock-validation-maintainers)
 - [Beyond the demo UI](#beyond-the-demo-ui)
 - [OpenShift hardened pilot](#openshift-hardened-pilot)
@@ -119,7 +123,7 @@ First start downloads **Qwen2.5-1.5B-Instruct** weights — allow **several minu
 | **Start** | `INFERENCE=rhaii make deploy-openshift` | `systemctl --user enable --now …` | `make demo` |
 | **UI** | Dashboard Route `/welcome` | `http://127.0.0.1:8501/welcome` | `http://127.0.0.1:8501/welcome` |
 
-**Customers:** complete **Track 1** or **Track 2**, then **[Hands-on validation](#hands-on-validation)**. Use **Track 3** only when you lack cluster/RHEL capacity or need a fast regression check.
+**Customers:** deploy with **Track 1** or **Track 2**, then work through the **hands-on checklist** in Track 1 ([Submit support tickets](#submit-support-tickets) → [What you've accomplished](#what-youve-accomplished)) before tear-down. **Track 3** is mock-only smoke / CI.
 
 ---
 
@@ -170,33 +174,152 @@ Open **`https://<dashboard-route>/welcome`** — the pill should show **RHAII**,
 
 If the gateway Route is OAuth-protected (hardened overlay), verify uses in-cluster port-forward for API smoke tests — follow the script output.
 
-### Step 3: Complete hands-on validation
+Save your **dashboard** URL (`https://<dashboard-route>/welcome`) and **gateway** URL (`https://<gateway-route-host>`) for the steps below. Vault rehydration uses `VAULT_SECRET` from `helpdesk-secrets` (not the laptop demo default).
 
-Follow **[Hands-on validation](#hands-on-validation)** on the dashboard Route. Use the cluster `VAULT_SECRET` from `helpdesk-secrets` for vault rehydration.
+### Submit support tickets
 
-### Step 4: Ingest from outside the cluster
+Try each ingest path at least once on the cluster:
 
-Use the **gateway Route URL** from verify (not `127.0.0.1:8080`):
+| Method | How |
+|---|---|
+| **File watcher** | Sample `.eml` files in `sample_emails/` ingest on deploy (if mounted) |
+| **Sidebar scenarios** | On the dashboard Route → **Quick demo scenario** (billing, MFA, VPN, …) |
+| **Custom message** | Sidebar form → **Triage →** |
+| **HTTP API** | `POST /ingest/raw` or upload `.eml` via `POST /ingest` ([integration.md](docs/integration.md)) |
+| **SMTP** | Sidebar **↪** or mail to `support@helpdesk.local` when SMTP is exposed on the overlay |
 
 ```bash
 GW="https://<gateway-route-host>"
 curl -sk -X POST "${GW}/ingest/raw" \
   -H "Content-Type: application/json" \
-  -d '{"sender":"you@example.com","subject":"OpenShift test","body":"Charged twice on card ACC-998877."}'
+  -d '{"sender":"you@example.com","subject":"VPN issue","body":"Cannot connect from home office."}'
 ```
 
-When `INGEST_API_KEY` is set (hardened overlay), add `-H "X-Ingest-Key: …"` from `oc get secret helpdesk-secrets …`.
+When `INGEST_API_KEY` is set (hardened overlay), add `-H "X-Ingest-Key: …"` from `oc get secret helpdesk-secrets -n helpdesk-email-triage -o jsonpath='{.data.INGEST_API_KEY}' | base64 -d`.
 
-### Step 5: Benchmark inference with GuideLLM
+**What to look for:** New tickets in the inbox queue within a few seconds.
 
-After hands-on validation, run **[Benchmark inference with GuideLLM](#benchmark-inference-with-guidellm)** (OpenShift → `make guidellm-openshift`) to measure RHAII CPU throughput and latency before a pilot.
+### Review classified and redacted emails
 
-### What you get on OpenShift
+#### Step 1: Review the email in the different inboxes based on classification
 
-- **RHAII 3.5 CPU** serving `Qwen/Qwen2.5-1.5B-Instruct` on tokenized ticket text
-- **Routes** for gateway and dashboard; CORS/WebSockets discovered from the dashboard Route at startup
-- **Kustomize overlays** including hardened pilots ([below](#openshift-hardened-pilot))
-- **GuideLLM Job** against internal inference Service DNS
+1. On the dashboard, set **Queue** to each category: `Billing`, `Tech Support`, `Account Access`, `General`, then `All`.
+2. Set **Urgency** to `High` — urgent samples (double charge, MFA lockout) should surface first.
+3. Click tickets in the left **Queue** column; detail opens with **category**, **urgency**, and subject.
+4. Expand **Category breakdown** above the queue.
+
+Expected sample results (file-watcher emails):
+
+| Email | Category | Urgency |
+|---|---|---|
+| Double charge on card | Billing | High |
+| MFA lockout | Account Access | High |
+| VPN dropping | Tech Support | Medium |
+| GDPR erasure request | General | Low |
+
+#### Step 2: Check redaction
+
+1. Open a ticket with obvious PII (e.g. billing double-charge).
+2. In **Sanitized body**, confirm tokens (`[NAME_1]`, `[EMAIL_1]`, `[CARD_LAST4_1]`, `[PHONE_1]`, `[ACCOUNT_ID_1]` for `ACC-…`) — not raw values. **From** on the ticket should be tokenized.
+3. Click **View original PII vault** — compare the token map to the original body.
+4. Expand **What downstream systems see** — exact `GET /tickets/{id}` JSON for webhooks/CRMs; no `original_text` or vault map.
+
+### Review classification speed
+
+1. In the queue list, each ticket shows **classification time** (e.g. `42 ms classification` on mock; higher on RHAII CPU).
+2. At the top of the inbox, check **Avg classification** in the metrics row.
+3. In ticket detail, note the per-ticket latency tag next to the timestamp.
+
+```bash
+# Optional — use gateway Route or in-cluster URL from verify port-forward
+curl -sk "${GW}/tickets" | python3 -c \
+  'import json,sys; t=json.load(sys.stdin); print([(x["id"], x.get("classification_ms")) for x in t[:5]])'
+```
+
+### Testing classification and redaction quality
+
+1. **Custom PII patterns** — submit a message with a card number, phone, email, and `ACC-12345` account id; verify distinct tokens in the sanitized body and vault map.
+2. **Category sanity** — billing language → `Billing`; access/MFA → `Account Access`; VPN/outage → `Tech Support`.
+3. **Residual names** — RHAII may add `[NAME_N]` tokens; the gateway merge step rejects model output that drops structured tokens or reintroduces raw PII.
+4. **Heuristic fallback** — scale inference to zero (`oc scale deployment/rhaii-cpu -n helpdesk-email-triage --replicas=0`); ingest still works and `model` shows `heuristic-fallback`. Scale back up when finished.
+5. **Regression** — run `make test` on a workstation for automated API and pipeline checks.
+
+More UI detail: [docs/testing-locally.md](docs/testing-locally.md).
+
+### Load testing
+
+Load-test the **RHAII inference endpoint** (OpenAI-compatible `:8000`) with [GuideLLM](https://github.com/vllm-project/guidellm) — the same class of call the gateway makes on tokenized text. Skip on mock-only deploys.
+
+For end-to-end **gateway** load, run parallel `POST /ingest/raw` against the gateway Route (include `X-Ingest-Key` when configured).
+
+#### Step 1: Install GuideLLM
+
+**OpenShift (recommended)** — the benchmark Job uses the Red Hat image (same registry login as RHAII CPU):
+
+```bash
+podman login registry.redhat.io
+# Default at Job runtime: registry.redhat.io/rhai/guidellm-rhel9
+```
+
+**RHEL / Quadlet (Track 2)** — pull upstream on the host:
+
+```bash
+podman pull ghcr.io/vllm-project/guidellm:v0.7.1
+```
+
+#### Step 2: Run load test
+
+**OpenShift** — requires `rhaii-cpu` in the namespace:
+
+```bash
+make guidellm-openshift
+# Optional: GUIDELLM_RATE=1,2,4 GUIDELLM_MAX_SECONDS=300 make guidellm-openshift
+```
+
+Benchmarks via in-cluster Service DNS (`rhaii-cpu:8000`), not the public Route. Artifacts copy to `./results/guidellm-openshift/`. Follow logs with the Job name printed by the script:
+
+```bash
+oc logs -n helpdesk-email-triage job/guidellm-benchmark-<timestamp> --follow
+```
+
+**RHEL / Quadlet** — with RHAII on `127.0.0.1:8000`:
+
+```bash
+mkdir -p results/guidellm
+podman run --rm --network host \
+  -v "$(pwd)/results/guidellm:/results:rw" \
+  -e HOME=/results -e HF_HOME=/results/.cache \
+  -e HF_TOKEN="${HF_TOKEN}" \
+  ghcr.io/vllm-project/guidellm:v0.7.1 \
+  benchmark run \
+  --target http://127.0.0.1:8000 \
+  --model Qwen/Qwen2.5-1.5B-Instruct \
+  --processor Qwen/Qwen2.5-1.5B-Instruct \
+  --data '{"prompt_tokens":128,"output_tokens":64}' \
+  --rate-type concurrent --rate 2,4 \
+  --max-seconds 120 \
+  --output-dir /results \
+  --outputs benchmark-results.json,benchmark-results.html
+```
+
+Extended runbook: [docs/deploy-openshift.md](docs/deploy-openshift.md#load-test-inference-guidellm).
+
+#### Step 3: Review results
+
+- **Console** — throughput and latency in Job logs (`oc logs …`) or `podman run` stdout.
+- **HTML** — open `./results/guidellm-openshift/*.html` or `./results/guidellm/benchmark-results.html` in a browser.
+- **JSON** — archive or compare runs under `./results/guidellm-openshift/` or `./results/guidellm/`.
+
+Use the numbers to size RHAII CPU nodes before a pilot.
+
+### What you've accomplished
+
+- Deployed a **helpdesk triage pipeline** on OpenShift (ingest → tokenize → RHAII classify → ticket API).
+- Submitted mail via **multiple ingest paths** and confirmed tickets in the agent inbox.
+- Verified **category and urgency** and filtered the queue by classification.
+- Confirmed **PII redaction** (including sender and `ACC-…` account ids) in downstream JSON while retaining authorized vault rehydration.
+- Observed **classification latency** per ticket and in aggregate.
+- Optionally **benchmarked inference** with GuideLLM on RHAII CPU.
 
 ### Delete
 
@@ -270,19 +393,22 @@ curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
 
 Open **[http://127.0.0.1:8501/welcome](http://127.0.0.1:8501/welcome)** — pill should reflect **RHAII**, not mock.
 
-### Step 5: Complete hands-on validation
+### Step 5: Hands-on validation (same checklist as Track 1)
 
-Follow **[Hands-on validation](#hands-on-validation)** at `http://127.0.0.1:8501`. Vault rehydration uses `VAULT_SECRET` from `secrets.env`.
+Work through **[Submit support tickets](#submit-support-tickets)** through **[What you've accomplished](#what-youve-accomplished)** in Track 1, using this host instead of OpenShift Routes:
 
-Optional:
+| | RHEL / Quadlet |
+|---|---|
+| **Welcome / inbox** | `http://127.0.0.1:8501/welcome` |
+| **Gateway API** | `http://127.0.0.1:8080` |
+| **Vault secret** | `VAULT_SECRET` in `~/.config/helpdesk/secrets.env` |
+| **GuideLLM target** | `http://127.0.0.1:8000` — see [Load testing → Step 2](#step-2-run-load-test) (RHEL / Quadlet) |
+
+Optional extra ingest:
 
 ```bash
 ./scripts/ingest-sample.sh
 ```
-
-### Step 6: Benchmark inference with GuideLLM
-
-With `rhaii-cpu-engine` healthy on `:8000`, follow **[Benchmark inference with GuideLLM](#benchmark-inference-with-guidellm)** (RHEL / Quadlet → `podman run` against `http://127.0.0.1:8000`).
 
 ### Stop
 
@@ -291,158 +417,6 @@ systemctl --user stop agent-dashboard email-gateway rhaii-cpu-engine
 ```
 
 **Compose alternative** on RHEL (no systemd): see [Production RHEL with Compose](#production-rhel-with-compose) below. Full Quadlet notes: [deploy/quadlet/README.md](deploy/quadlet/README.md).
-
----
-
-## Hands-on validation
-
-*Complete after **Track 1** or **Track 2**. Same UI and API checks; only URLs and secrets differ.*
-
-| | Track 1 (OpenShift) | Track 2 (Quadlet) |
-|---|---|---|
-| **Welcome / inbox** | `https://<dashboard-route>/welcome` | `http://127.0.0.1:8501/welcome` |
-| **Gateway API** | `https://<gateway-route>` (+ `X-Ingest-Key` if hardened) | `http://127.0.0.1:8080` |
-| **Vault secret** | `helpdesk-secrets` / `VAULT_SECRET` | `~/.config/helpdesk/secrets.env` |
-| **Welcome pill** | **RHAII** | **RHAII** |
-
-### Step 1: Open the welcome page and inbox
-
-1. Open the welcome URL — pipeline diagram and before/after redaction example.
-2. Open the inbox; confirm sample tickets from `sample_emails/` (file watcher).
-3. Confirm the welcome pill shows **RHAII** (not mock).
-
-### Step 2: Submit support tickets
-
-Try at least two ingest paths (sidebar **Quick demo scenarios**, custom form, `POST /ingest/raw`, or SMTP where exposed):
-
-```bash
-# Track 2 example — use your gateway Route on Track 1
-curl -sS -X POST http://127.0.0.1:8080/ingest/raw \
-  -H "Content-Type: application/json" \
-  -d '{"sender":"you@example.com","subject":"VPN issue","body":"Cannot connect from home office."}'
-```
-
-**What to look for:** New tickets in the queue within a few seconds (RHAII classification may take hundreds of ms to a few seconds per ticket).
-
-### Step 3: Review classification by category
-
-1. Filter **Queue** by category and **Urgency** (e.g. `High` for double-charge / MFA samples).
-2. Open tickets; confirm **category**, **urgency**, and subject.
-
-Expected results for bundled samples (mock and RHAII should agree on these demos):
-
-| Email | Category | Urgency |
-|---|---|---|
-| Double charge on card | Billing | High |
-| MFA lockout | Account Access | High |
-| VPN dropping | Tech Support | Medium |
-| GDPR erasure request | General | Low |
-
-### Step 4: Check redaction and the vault
-
-1. Open the **billing / double charge** ticket.
-2. **Sanitized body:** tokens `[NAME_1]`, `[EMAIL_1]`, `[CARD_LAST4_1]`, `[PHONE_1]`, `[ACCOUNT_ID_1]` — not raw PII. **From** is tokenized.
-3. **View original PII vault** — map matches originals using your deploy secret.
-4. **What downstream systems see** — no `original_text` or vault map.
-
-### Step 5: Review classification speed
-
-Note per-ticket **classification time** and **Avg classification** in the inbox. On RHAII CPU, expect higher latency than mock — continue with **[Benchmark inference with GuideLLM](#benchmark-inference-with-guidellm)** for throughput sizing.
-
-### What you accomplished
-
-- End-to-end **ingest → tokenize → RHAII classify → ticket API**
-- Verified **category/urgency** and **PII tokenization** on real inference
-- Confirmed **vault** and **downstream JSON** contract
-
----
-
-## Benchmark inference with GuideLLM
-
-*Part of the **customer quickstart** after Track 1 or Track 2 hands-on validation. Requires **RHAII** on port **8000** (not mock).*
-
-[GuideLLM](https://github.com/vllm-project/guidellm) load-tests the **OpenAI-compatible inference endpoint** — the same class of `chat/completions` call the email gateway makes after regex tokenization. Use the results to size CPU nodes and set expectations for classification latency at concurrency.
-
-| Path | When | Command |
-|---|---|---|
-| **OpenShift** | After `INFERENCE=rhaii` deploy + `make verify-openshift` | `make guidellm-openshift` |
-| **RHEL / Quadlet / Compose** | RHAII listening on `127.0.0.1:8000` | `podman run` (below) |
-
-Skip this section on mock-only deploys ([Track 3](#track-3-local-mock-validation-maintainers)).
-
-### Step 1: Pull the GuideLLM image
-
-**OpenShift** — the benchmark Job uses the Red Hat image (same registry login as RHAII CPU):
-
-```bash
-podman login registry.redhat.io
-# Default: registry.redhat.io/rhai/guidellm-rhel9 (override with GUIDELLM_IMAGE)
-```
-
-**RHEL / laptop with local RHAII:**
-
-```bash
-podman pull ghcr.io/vllm-project/guidellm:v0.7.1
-```
-
-### Step 2: Run the benchmark
-
-#### OpenShift (recommended for Track 1)
-
-Requires `rhaii-cpu` in the namespace (mock overlays are rejected).
-
-```bash
-make guidellm-openshift
-# Optional tuning:
-# GUIDELLM_RATE=1,2,4 GUIDELLM_MAX_SECONDS=300 make guidellm-openshift
-```
-
-- Targets **in-cluster Service DNS** (`rhaii-cpu:8000`), not the public gateway Route.
-- Creates a results PVC, runs a GuideLLM Job, copies artifacts to `./results/guidellm-openshift/`.
-- Red Hat image uses CLI `guidellm run`; upstream `ghcr.io/vllm-project/guidellm` uses `guidellm benchmark run` — set `GUIDELLM_IMAGE` to switch.
-
-Watch progress (use the Job name printed by the script, e.g. `guidellm-benchmark-1730000000`):
-
-```bash
-oc logs -n helpdesk-email-triage job/guidellm-benchmark-<timestamp> --follow
-```
-
-#### RHEL host, Quadlet, or `compose.yml` (Track 2)
-
-With RHAII healthy on port 8000:
-
-```bash
-mkdir -p results/guidellm
-
-podman run --rm --network host \
-  -v "$(pwd)/results/guidellm:/results:rw" \
-  -e HOME=/results -e HF_HOME=/results/.cache \
-  -e HF_TOKEN="${HF_TOKEN}" \
-  ghcr.io/vllm-project/guidellm:v0.7.1 \
-  benchmark run \
-  --target http://127.0.0.1:8000 \
-  --model Qwen/Qwen2.5-1.5B-Instruct \
-  --processor Qwen/Qwen2.5-1.5B-Instruct \
-  --data '{"prompt_tokens":128,"output_tokens":64}' \
-  --rate-type concurrent --rate 2,4 \
-  --max-seconds 120 \
-  --output-dir /results \
-  --outputs benchmark-results.json,benchmark-results.html
-```
-
-On **macOS** with RHAII in Podman, use `--target http://host.containers.internal:8000` (Docker: `host.docker.internal`).
-
-### Step 3: Review results
-
-| Output | Where |
-|---|---|
-| **Console** | Job log (`oc logs …`) or `podman run` stdout — throughput, TTFT, latency tables |
-| **HTML report** | `./results/guidellm-openshift/*.html` or `./results/guidellm/benchmark-results.html` — charts in a browser |
-| **JSON** | Matching `.json` files for archival or comparison runs |
-
-Use these numbers alongside per-ticket **classification time** in the inbox when planning pilot capacity.
-
-More detail (NetworkPolicy, env vars, production sweeps): [docs/deploy-openshift.md](docs/deploy-openshift.md#load-test-inference-guidellm) · [Red Hat GuideLLM on Kubernetes](https://developers.redhat.com/articles/2025/12/24/how-deploy-and-benchmark-vllm-guidellm-kubernetes).
 
 ---
 
@@ -469,7 +443,7 @@ curl -sS http://127.0.0.1:8080/health   # classify_model: mock-triage
 
 ### Step 2: Smoke-test the inbox
 
-Walk **[Hands-on validation](#hands-on-validation)** at `http://127.0.0.1:8501`. Vault demo secret: `helpdesk-demo-secret`.
+Walk the Track 1 checklist ([Submit support tickets](#submit-support-tickets) through redaction) at `http://127.0.0.1:8501`. Vault demo secret: `helpdesk-demo-secret`. Skip [Load testing](#load-testing) unless you run `compose.yml` with RHAII.
 
 Optional maintainer checks: stop mock inference (`podman stop helpdesk-inference-mock`) and confirm **heuristic-fallback** ingest.
 
@@ -562,7 +536,7 @@ Copy defaults: `cp .env.example .env`
 | `INGEST_API_KEY` | Requires `X-Ingest-Key` on ingest and ticket APIs when set |
 | `MODEL_NAME` | `Qwen/Qwen2.5-1.5B-Instruct` (RHAII) or `mock-triage` (demo) |
 | `HF_TOKEN` | Hugging Face token for RHAII |
-| `INFERENCE` | OpenShift: `auto`, `mock`, or `rhaii` |
+| `INFERENCE` | OpenShift: default `rhaii`; or `mock`, `auto` |
 | `IMAGE_TAG` | Pin container tags on OpenShift deploy |
 | `TICKET_SINK` | `webhook:https://…` or `log` |
 | `TICKET_SINK_MAX_WORKERS` | Async webhook pool size (default `4`) |
@@ -575,7 +549,7 @@ See `.env.example` for the full list.
 
 | Guide | When to read it |
 |---|---|
-| [docs/quickstart-walkthrough.md](docs/quickstart-walkthrough.md) | Extended walkthrough + GuideLLM command reference |
+| [docs/quickstart-walkthrough.md](docs/quickstart-walkthrough.md) | Mirror of Track 1 hands-on sections for deep links |
 | [docs/testing-locally.md](docs/testing-locally.md) | Every demo UI feature |
 | [docs/integration.md](docs/integration.md) | HTTP/SMTP API, auth, webhooks |
 | [docs/deploy-openshift.md](docs/deploy-openshift.md) | Overlays, verify, production checklist |

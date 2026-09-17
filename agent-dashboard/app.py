@@ -56,6 +56,10 @@ st.set_page_config(
 st.markdown(PAGE_CSS, unsafe_allow_html=True)
 
 # ── Static header ─────────────────────────────────────────────────────
+st.markdown(
+    '<p class="welcome-back"><a href="/welcome">← Back to welcome</a></p>',
+    unsafe_allow_html=True,
+)
 st.title("Helpdesk triage inbox")
 st.caption("Local CPU classification · Red Hat AI Inference 3.5 · Tokenized PII")
 st.markdown(

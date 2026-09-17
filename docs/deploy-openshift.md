@@ -8,7 +8,7 @@ For single-host RHEL, use Podman Compose or Quadlet (`deploy/quadlet/`).
 
 | I want… | Command |
 |---|---|
-| Demo (auto: RHAII if creds exist, else mock) | `make deploy-openshift` |
+| Demo RHAII CPU (default; needs HF + registry creds) | `make deploy-openshift` |
 | Demo mock only | `INFERENCE=mock make deploy-openshift` |
 | Demo RHAII CPU | `INFERENCE=rhaii make deploy-openshift` |
 | Hardened mock | `OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift` |
@@ -18,7 +18,7 @@ For single-host RHEL, use Podman Compose or Quadlet (`deploy/quadlet/`).
 
 | Variable | Controls |
 |---|---|
-| `INFERENCE` | Mock vs RHAII for secrets, `oc wait`, and deploy metadata when **no** `OVERLAY` is set (`auto` → RHAII if `HF_TOKEN` + registry creds exist, else mock). |
+| `INFERENCE` | Mock vs RHAII for secrets, `oc wait`, and deploy metadata when **no** `OVERLAY` is set (default **`rhaii`**; `auto` → RHAII if creds exist, else mock). |
 | `OVERLAY` | Which Kustomize tree is applied. **Takes precedence** over the default overlay implied by `INFERENCE`. |
 
 `deploy/openshift/overlays/hardened` includes the **mock** stack. For hardened **RHAII CPU**, use `INFERENCE=rhaii` with that overlay (remapped to `hardened-rhaii`) or set `OVERLAY=deploy/openshift/overlays/hardened-rhaii` explicitly.
@@ -55,6 +55,8 @@ First RHAII start downloads weights to the `rhaii-model-cache` PVC (several minu
 
 **Gateway not Ready (`0/1`)** — if pod logs show `GET /health/ready HTTP/1.1" 404`, the published `helpdesk-email-gateway` image is older than the manifests. Rebuild and push the gateway image (`make build-images` + push to your registry), set `IMAGE_TAG`, and `oc rollout restart deployment/email-gateway`. Quick workaround: patch the readiness probe to `/health` (see `openshift_gateway_readiness_hint` in `scripts/openshift-lib.sh`).
 
+**Dashboard has no welcome page or “Open inbox” buttons** — the Route should open **`/welcome`** (root redirects there). If you land straight in Streamlit with no welcome CTAs, the cluster is likely running an older `helpdesk-triage-ui` image (Streamlit-only, no nginx). Rebuild and push the UI image (`podman build -f agent-dashboard/Containerfile -t …`), redeploy with `IMAGE_TAG=… make deploy-openshift`, or `oc rollout restart deployment/agent-dashboard` after the image is updated.
+
 ## Verify
 
 ```bash
@@ -65,7 +67,7 @@ Checks health, dashboard headers, file-watcher tickets, and falls back to `/inge
 
 ## Quickstart walkthrough
 
-After verify succeeds, continue [README Track 1](../README.md#track-1-deploy-to-openshift-rhaii-cpu) and [Hands-on validation](../README.md#hands-on-validation), or this [quickstart walkthrough](quickstart-walkthrough.md). On hardened overlays, use the Route URLs from verify and include `X-Ingest-Key` on gateway API calls.
+After verify succeeds, continue the README checklist from [Submit support tickets](../README.md#submit-support-tickets) through [What you've accomplished](../README.md#what-youve-accomplished), or this [quickstart walkthrough](quickstart-walkthrough.md). On hardened overlays, use the Route URLs from verify and include `X-Ingest-Key` on gateway API calls.
 
 ## Load test inference (GuideLLM)
 

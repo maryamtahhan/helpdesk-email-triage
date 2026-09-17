@@ -32,7 +32,7 @@ INGEST_API_KEY="$(oc get secret helpdesk-secrets -n "$NAMESPACE" -o jsonpath='{.
 
 echo "Namespace: ${NAMESPACE}"
 echo "Gateway:   ${GATEWAY_ROUTE_URL}/health"
-echo "Dashboard: https://${UI}"
+echo "Dashboard: https://${UI}/welcome   (inbox: https://${UI}/inbox/)"
 if openshift_gateway_route_oauth "$NAMESPACE"; then
   echo "Note:      Gateway Route is OAuth-protected; API smoke tests use in-cluster port-forward."
 fi
@@ -40,7 +40,7 @@ echo
 echo "## Verify"
 echo "curl -sk \"${GATEWAY_ROUTE_URL}/health\"   # may show OAuth page when hardened"
 echo "curl -skI \"https://${UI}\" | head -5"
-echo "Open: https://${UI}"
+echo "Open: https://${UI}/welcome"
 
 if [[ "$RUN_CHECKS" != "1" ]]; then
   exit 0

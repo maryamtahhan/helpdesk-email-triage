@@ -102,6 +102,17 @@ rhaii_prereqs_met() {
   has_hf_secret "$namespace" && has_redhat_pull_secret "$namespace"
 }
 
+explain_rhaii_prereqs() {
+  local namespace="${1:?namespace required}"
+  if ! has_hf_secret "$namespace"; then
+    echo "  • Hugging Face: export HF_TOKEN=hf_... (or oc create secret hf-secret in ${namespace})" >&2
+  fi
+  if ! has_redhat_pull_secret "$namespace"; then
+    echo "  • Red Hat registry: podman login registry.redhat.io" >&2
+    echo "    (or REDHAT_REGISTRY_USERNAME/PASSWORD, or redhat-registry-pull in ${namespace})" >&2
+  fi
+}
+
 setup_rhaii_secrets() {
   local namespace="${1:?namespace required}"
   if ! ensure_hf_secret "$namespace"; then

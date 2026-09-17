@@ -22,7 +22,7 @@ make demo
 
 Mock compose uses service name `inference-mock` (real RHAII in `compose.yml` uses `rhaii-cpu-engine`).
 
-Open [http://127.0.0.1:8501](http://127.0.0.1:8501). Tickets from `sample_emails/` load automatically.
+Open [http://127.0.0.1:8501/welcome](http://127.0.0.1:8501/welcome) (inbox at `/inbox/`). Tickets from `sample_emails/` load automatically.
 
 ## Verify
 
@@ -88,7 +88,7 @@ Results land in `./results/guidellm-openshift/`. See [deploy-openshift.md](deplo
 
 ## OpenShift
 
-Cluster deploy is documented in [README Track 1](../README.md#track-1-deploy-to-openshift-rhaii-cpu) and [deploy-openshift.md](deploy-openshift.md) (overlay catalog). After verify, continue with [Hands-on validation](../README.md#hands-on-validation) or [quickstart-walkthrough.md](quickstart-walkthrough.md).
+Cluster deploy is documented in [README Track 1](../README.md#track-1-deploy-to-openshift-rhaii-cpu) and [deploy-openshift.md](deploy-openshift.md) (overlay catalog). After verify, continue with [Submit support tickets](../README.md#submit-support-tickets) through [What you've accomplished](../README.md#what-youve-accomplished), or [quickstart-walkthrough.md](quickstart-walkthrough.md).
 
 ## Mock vs RHAII
 

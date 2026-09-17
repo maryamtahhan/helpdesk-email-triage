@@ -13,6 +13,17 @@ PAGE_CSS = """
 <style>
   .block-container { padding-top: 1rem; }
 
+  .welcome-back {
+    margin: 0 0 0.35rem;
+    font-size: 0.88rem;
+  }
+  .welcome-back a {
+    color: #c9190b;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .welcome-back a:hover { text-decoration: underline; }
+
   /* Welcome link — sidebar only (visible on dark theme) */
   section[data-testid="stSidebar"] [data-testid="stLinkButton"] a {
     font-weight: 600;

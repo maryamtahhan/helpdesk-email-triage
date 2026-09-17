@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # One-command OpenShift deploy for an existing project namespace.
-# INFERENCE=mock| rhaii|auto (default auto: RHAII CPU when HF + registry creds exist).
+# INFERENCE=mock|rhaii|auto (default rhaii — customer quickstart; auto falls back to mock when creds missing).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NAMESPACE="${1:-helpdesk-email-triage}"
-INFERENCE="${INFERENCE:-auto}"
+INFERENCE="${INFERENCE:-rhaii}"
 WAIT_TIMEOUT="${WAIT_TIMEOUT:-300s}"
 RHAII_WAIT_TIMEOUT="${RHAII_WAIT_TIMEOUT:-900s}"
 
@@ -25,7 +25,15 @@ fi
 
 resolve_inference_mode() {
   case "$INFERENCE" in
-    mock|rhaii) echo "$INFERENCE" ;;
+    mock) echo "mock" ;;
+    rhaii)
+      if ! rhaii_prereqs_met "$NAMESPACE"; then
+        echo "INFERENCE=rhaii requires Hugging Face and registry.redhat.io credentials." >&2
+        explain_rhaii_prereqs "$NAMESPACE"
+        exit 1
+      fi
+      echo "rhaii"
+      ;;
     auto)
       if rhaii_prereqs_met "$NAMESPACE" >/dev/null 2>&1; then
         echo "rhaii"
@@ -87,7 +95,7 @@ GW="$(oc get route email-gateway -n "$NAMESPACE" -o jsonpath='{.spec.host}')"
 UI="$(oc get route agent-dashboard -n "$NAMESPACE" -o jsonpath='{.spec.host}')"
 echo
 echo "Gateway:   https://${GW}/health"
-echo "Dashboard: https://${UI}"
+echo "Dashboard: https://${UI}/welcome   (inbox: https://${UI}/inbox/)"
 if [[ "$INFERENCE_MODE" == "rhaii" ]]; then
   echo "Inference: RHAII CPU (registry.redhat.io/rhaii/vllm-cpu-rhel9) — first start may take several minutes"
 fi

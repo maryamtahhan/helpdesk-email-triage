@@ -73,7 +73,7 @@ build-images:
 
 deploy-openshift:
 	chmod +x scripts/deploy-openshift.sh scripts/openshift-rhaii-secrets.sh scripts/openshift-verify.sh
-	./scripts/deploy-openshift.sh
+	INFERENCE="$${INFERENCE:-rhaii}" ./scripts/deploy-openshift.sh
 
 verify-openshift:
 	chmod +x scripts/openshift-verify.sh

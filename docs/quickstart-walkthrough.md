@@ -1,6 +1,6 @@
 # Quickstart walkthrough
 
-**Catalog reviewers:** customer tracks (OpenShift RHAII, RHEL Quadlet), [Hands-on validation](../README.md#hands-on-validation), and **[Benchmark inference with GuideLLM](../README.md#benchmark-inference-with-guidellm)** live in the [README](../README.md). This document mirrors the walkthrough sections below for deep links.
+**Catalog reviewers:** the hands-on checklist ([Submit support tickets](../README.md#submit-support-tickets) → [What you've accomplished](../README.md#what-youve-accomplished), including [Load testing](../README.md#load-testing)) lives in **README Track 1** between verify and delete. This document mirrors the same sections for deep links.
 
 Use this after the stack is running:
 
@@ -92,7 +92,7 @@ curl -sS http://127.0.0.1:8080/tickets | python3 -c \
 
 ## Load testing
 
-**Canonical steps:** [README — Benchmark inference with GuideLLM](../README.md#benchmark-inference-with-guidellm).
+**Canonical steps:** [README — Load testing](../README.md#load-testing).
 
 Load-test the **RHAII inference endpoint** (OpenAI-compatible `:8000`) with [GuideLLM](https://github.com/vllm-project/guidellm). Mock-only laptop demos skip this section unless you run `compose.yml` with RHAII.
 

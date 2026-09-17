@@ -24,6 +24,7 @@ STREAMLIT_ARGS=(
   --server.port=8502
   --server.address=127.0.0.1
   --server.headless=true
+  --server.baseUrlPath=/inbox
   --server.enableCORS=false
   --server.enableXsrfProtection="${STREAMLIT_ENABLE_XSRF}"
 )
@@ -42,7 +43,7 @@ import urllib.request
 
 for _ in range(80):
     try:
-        urllib.request.urlopen("http://127.0.0.1:8502/_stcore/health", timeout=1)
+        urllib.request.urlopen("http://127.0.0.1:8502/inbox/_stcore/health", timeout=1)
         break
     except OSError:
         time.sleep(0.25)
