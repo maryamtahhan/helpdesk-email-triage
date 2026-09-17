@@ -5,6 +5,7 @@ Automated checks for **RHEL + rootless Podman + user systemd** — not for end-c
 ## Requirements
 
 - Same host prerequisites as [README.md](README.md) (`podman`, `make`, registry login, `secrets.env`, prod images built).
+- **Real** `HUGGING_FACE_HUB_TOKEN` in `~/.config/helpdesk/secrets.env` — the README placeholder `hf_your_token_here` is rejected (GuideLLM and model ingest checks need a valid token unless weights are fully cached and you opt into placeholders).
 - **≥16 GiB RAM** and RHAII already cached or a valid `HUGGING_FACE_HUB_TOKEN`.
 - Run from repo root as the user that owns the Quadlet units (`ec2-user`, etc.).
 

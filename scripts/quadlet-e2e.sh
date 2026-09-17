@@ -42,6 +42,17 @@ echo "==> Quadlet E2E run ${SCENARIOS}"
 echo "    results: ${QUADLET_E2E_RESULTS:-results/quadlet-e2e}"
 echo "    skip guidellm: ${QUADLET_E2E_SKIP_GUIDELLM:-0}"
 
+# shellcheck source=quadlet-e2e-lib.sh
+source "${ROOT}/scripts/quadlet-e2e-lib.sh"
+if ! quadlet_e2e_preflight_secrets; then
+  for raw in $(echo "${SCENARIOS}" | tr ',' ' '); do
+    scenario="$(echo "$raw" | xargs)"
+    [[ -z "$scenario" ]] && continue
+    quadlet_e2e_fail_scenario_early "$scenario" "preflight: fix secrets.env before running E2E"
+  done
+  exit 1
+fi
+
 IFS=',' read -r -a scenario_list <<< "${SCENARIOS}"
 for raw in "${scenario_list[@]}"; do
   scenario="$(echo "$raw" | xargs)"

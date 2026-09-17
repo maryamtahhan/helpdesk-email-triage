@@ -13,11 +13,11 @@ quadlet_e2e_section "start stack (inference + gateway + dashboard)"
 quadlet_install_units
 quadlet_start_deps
 
-if ! quadlet_secrets_ok; then
-  if [[ "${QUADLET_ALLOW_PLACEHOLDER_SECRETS:-}" != "1" ]]; then
-    echo "quadlet-e2e: configure ${QUADLET_SECRETS} or set QUADLET_ALLOW_PLACEHOLDER_SECRETS=1" >&2
-    exit 1
-  fi
+if ! quadlet_e2e_preflight_secrets; then
+  quadlet_e2e_fail_scenario_early full "secrets.env missing or still README placeholder"
+  exit 1
+fi
+if [[ "${QUADLET_ALLOW_PLACEHOLDER_SECRETS:-}" == "1" ]]; then
   export QUADLET_E2E_REQUIRE_MODEL=0
 fi
 

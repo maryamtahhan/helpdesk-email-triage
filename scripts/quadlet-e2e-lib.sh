@@ -17,6 +17,39 @@ quadlet_e2e_init() {
   E2E_FAILED=0
 }
 
+quadlet_e2e_preflight_secrets() {
+  if quadlet_secrets_ok; then
+    return 0
+  fi
+  if [[ "${QUADLET_ALLOW_PLACEHOLDER_SECRETS:-}" == "1" ]]; then
+    echo "quadlet-e2e: warning: placeholder token — model/heuristic checks relaxed." >&2
+    return 0
+  fi
+  cat >&2 <<EOF
+quadlet-e2e: invalid ${QUADLET_SECRETS}
+
+The README template value hf_your_token_here is not a real Hugging Face token.
+Edit secrets (do not paste tokens into chat):
+
+  vi ${QUADLET_SECRETS}
+  # HUGGING_FACE_HUB_TOKEN=hf_<your token from huggingface.co/settings/tokens>
+  # Accept the Qwen model license on huggingface.co if required.
+
+Smoke only with cached weights (not a full validation):
+  QUADLET_ALLOW_PLACEHOLDER_SECRETS=1 make quadlet-e2e
+EOF
+  return 1
+}
+
+quadlet_e2e_fail_scenario_early() {
+  local scenario="$1"
+  local reason="$2"
+  export E2E_SCENARIO="$scenario"
+  quadlet_e2e_init
+  quadlet_e2e_record FAIL "$reason"
+  quadlet_e2e_write_scenario_report "$scenario" fail
+}
+
 quadlet_e2e_section() {
   echo ""
   echo "========== [$E2E_SCENARIO] $* =========="
