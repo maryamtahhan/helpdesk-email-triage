@@ -66,8 +66,20 @@ systemctl --user start email-gateway.service agent-dashboard.service
 | `make quadlet-reset` | Full teardown (`QUADLET_RESET_CONFIRM=1`; optional `WIPE_RHAII_CACHE=1`) |
 | `make quadlet-deploy` | `setup` + `build` + `up` |
 | `make quadlet-relaunch` | `quadlet-reset` + `quadlet-deploy` (`QUADLET_RESET_CONFIRM=1`) |
+| `make guidellm-quadlet` | Load-test RHAII on `:8000` (same Red Hat GuideLLM image as OpenShift) |
 
 Increase inference wait: `RHAII_WAIT_TIMEOUT=1200 make quadlet-up`.
+
+## GuideLLM (inference load test)
+
+After the stack is up (`curl -sf http://127.0.0.1:8000/v1/models`):
+
+```bash
+podman login registry.redhat.io
+make guidellm-quadlet
+```
+
+Uses `registry.redhat.io/rhai/guidellm-rhel9:3.5.0-1787154406` and `guidellm run` (not the upstream `ghcr.io` image — its `benchmark run` subcommand is incompatible). Reports: `results/guidellm-quadlet/benchmark-results.html`. Tune with `GUIDELLM_RATE`, `GUIDELLM_MAX_SECONDS`, `GUIDELLM_MODEL` (same env names as `make guidellm-openshift`). Benchmarks inference only, not the email gateway; absolute throughput is not core-guaranteed on a shared host.
 
 ## Verify
 

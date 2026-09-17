@@ -2,7 +2,7 @@
         validate-manifests compose-e2e build-images deploy-openshift verify-openshift guidellm-openshift \
         undeploy-openshift run-on-kind destroy-kind kind-e2e test-openshift-overlay \
         quadlet-setup quadlet-build quadlet-up quadlet-down quadlet-reset quadlet-verify quadlet-ingest \
-        quadlet-deploy quadlet-relaunch
+        quadlet-deploy quadlet-relaunch guidellm-quadlet
 
 # demo          — mock inference + gateway + Streamlit UI
 # gateway-only  — mock inference + gateway (integrator path, no UI)
@@ -141,3 +141,7 @@ quadlet-relaunch:
 	}
 	$(MAKE) quadlet-reset
 	$(MAKE) quadlet-deploy
+
+guidellm-quadlet:
+	chmod +x scripts/guidellm-quadlet.sh scripts/quadlet-lib.sh
+	./scripts/guidellm-quadlet.sh

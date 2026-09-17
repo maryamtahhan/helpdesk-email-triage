@@ -86,6 +86,14 @@ make guidellm-openshift
 
 Results land in `./results/guidellm-openshift/`. See [deploy-openshift.md](deploy-openshift.md#load-test-inference-guidellm).
 
+**RHEL Quadlet** — after inference responds on `:8000`:
+
+```bash
+make guidellm-quadlet
+```
+
+Results: `./results/guidellm-quadlet/`. Same `registry.redhat.io/rhai/guidellm-rhel9` image as OpenShift.
+
 ## OpenShift
 
 Cluster deploy is documented in [README Track 1](../README.md#track-1-deploy-to-openshift-rhaii-cpu) and [deploy-openshift.md](deploy-openshift.md) (overlay catalog). After verify, continue with [Submit support tickets](../README.md#submit-support-tickets) through [What you've accomplished](../README.md#what-youve-accomplished), or [quickstart-walkthrough.md](quickstart-walkthrough.md).

@@ -261,10 +261,11 @@ podman login registry.redhat.io
 # Default at Job runtime: registry.redhat.io/rhai/guidellm-rhel9
 ```
 
-**RHEL / Quadlet (Track 2)** — pull upstream on the host:
+**RHEL / Quadlet (Track 2)** — same Red Hat image as OpenShift (`guidellm run`, not upstream `benchmark run`):
 
 ```bash
-podman pull ghcr.io/vllm-project/guidellm:v0.7.1
+podman login registry.redhat.io
+podman pull registry.redhat.io/rhai/guidellm-rhel9:3.5.0-1787154406
 ```
 
 #### Step 2: Run load test
@@ -282,33 +283,22 @@ Benchmarks via in-cluster Service DNS (`rhaii-cpu:8000`), not the public Route. 
 oc logs -n helpdesk-email-triage job/guidellm-benchmark-<timestamp> --follow
 ```
 
-**RHEL / Quadlet** — with RHAII on `127.0.0.1:8000`:
+**RHEL / Quadlet** — with RHAII on `127.0.0.1:8000` (after `make quadlet-up`):
 
 ```bash
-mkdir -p results/guidellm
-podman run --rm --network host \
-  -v "$(pwd)/results/guidellm:/results:rw" \
-  -e HOME=/results -e HF_HOME=/results/.cache \
-  -e HF_TOKEN="${HF_TOKEN}" \
-  ghcr.io/vllm-project/guidellm:v0.7.1 \
-  benchmark run \
-  --target http://127.0.0.1:8000 \
-  --model Qwen/Qwen2.5-1.5B-Instruct \
-  --processor Qwen/Qwen2.5-1.5B-Instruct \
-  --data '{"prompt_tokens":128,"output_tokens":64}' \
-  --rate-type concurrent --rate 2,4 \
-  --max-seconds 120 \
-  --output-dir /results \
-  --outputs benchmark-results.json,benchmark-results.html
+make guidellm-quadlet
+# Optional: GUIDELLM_RATE=1,2,4 GUIDELLM_MAX_SECONDS=300 make guidellm-quadlet
 ```
+
+Same image and `guidellm run` CLI as OpenShift (`registry.redhat.io/rhai/guidellm-rhel9:3.5.0-1787154406`). Results under `./results/guidellm-quadlet/`; token from `~/.config/helpdesk/secrets.env`. Alternative target on the Podman network: `GUIDELLM_PODMAN_NETWORK=helpdesk GUIDELLM_TARGET=http://rhaii-cpu-engine:8000 make guidellm-quadlet`.
 
 Extended runbook: [docs/deploy-openshift.md](docs/deploy-openshift.md#load-test-inference-guidellm).
 
 #### Step 3: Review results
 
 - **Console** — throughput and latency in Job logs (`oc logs …`) or `podman run` stdout.
-- **HTML** — open `./results/guidellm-openshift/*.html` or `./results/guidellm/benchmark-results.html` in a browser.
-- **JSON** — archive or compare runs under `./results/guidellm-openshift/` or `./results/guidellm/`.
+- **HTML** — open `./results/guidellm-openshift/*.html` or `./results/guidellm-quadlet/benchmark-results.html` in a browser.
+- **JSON** — archive or compare runs under `./results/guidellm-openshift/` or `./results/guidellm-quadlet/`.
 
 Use the numbers to size RHAII CPU nodes before a pilot.
 

@@ -100,38 +100,29 @@ For end-to-end **gateway** load, run parallel `POST /ingest/raw` against the gat
 
 ### Step 1: Install / pull GuideLLM
 
-**Laptop / RHEL (RHAII on port 8000):**
+**RHEL / Quadlet (RHAII on port 8000)** — same Red Hat image as OpenShift:
 
 ```bash
-podman pull ghcr.io/vllm-project/guidellm:v0.7.1
+podman login registry.redhat.io
+podman pull registry.redhat.io/rhai/guidellm-rhel9:3.5.0-1787154406
 ```
 
 **OpenShift (RHAII overlay):** the cluster pulls `registry.redhat.io/rhai/guidellm-rhel9` when you run `make guidellm-openshift` (same registry login as RHAII CPU). See [deploy-openshift.md — Load test inference](deploy-openshift.md#load-test-inference-guidellm).
 
 ### Step 2: Run load test
 
-**Laptop / RHEL** — with `compose.yml` running:
+**RHEL / Quadlet** — after `make quadlet-up`:
 
 ```bash
-mkdir -p results/guidellm
-
-podman run --rm --network host \
-  -v "$(pwd)/results/guidellm:/results:rw" \
-  -e HOME=/results -e HF_HOME=/results/.cache \
-  -e HF_TOKEN="${HF_TOKEN}" \
-  ghcr.io/vllm-project/guidellm:v0.7.1 \
-  benchmark run \
-  --target http://127.0.0.1:8000 \
-  --model Qwen/Qwen2.5-1.5B-Instruct \
-  --processor Qwen/Qwen2.5-1.5B-Instruct \
-  --data '{"prompt_tokens":128,"output_tokens":64}' \
-  --rate-type concurrent --rate 2,4 \
-  --max-seconds 120 \
-  --output-dir /results \
-  --outputs benchmark-results.json,benchmark-results.html
+make guidellm-quadlet
 ```
 
-On **macOS**, use `http://host.containers.internal:8000` (Podman) or `http://host.docker.internal:8000` (Docker) for `--target`.
+**Compose on laptop** (`compose.yml` with RHAII) — same Red Hat image and CLI:
+
+```bash
+make guidellm-quadlet
+# or GUIDELLM_TARGET=http://host.containers.internal:8000 make guidellm-quadlet   # macOS Podman
+```
 
 **OpenShift:**
 
