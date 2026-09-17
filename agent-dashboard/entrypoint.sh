@@ -58,4 +58,5 @@ for _ in $(seq 1 40); do
   sleep 0.5
 done
 
-exec nginx -c /app/nginx.conf -g 'daemon off;'
+# Package nginx defaults to /var/log/nginx/error.log (not writable as UID 1001 on OpenShift).
+exec nginx -e /dev/stderr -c /app/nginx.conf -g 'daemon off;'

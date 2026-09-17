@@ -41,15 +41,17 @@ spec:
             capabilities:
               drop: [ALL]
           startupProbe:
-            httpGet:
-              path: /_stcore/health
-              port: http
+            exec:
+              command:
+                - python3
+                - /app/probe-welcome.py
             periodSeconds: 5
             failureThreshold: 36
           readinessProbe:
-            httpGet:
-              path: /_stcore/health
-              port: http
+            exec:
+              command:
+                - python3
+                - /app/probe-welcome.py
             periodSeconds: 10
           livenessProbe:
             httpGet:

@@ -55,9 +55,14 @@ First RHAII start downloads weights to the `rhaii-model-cache` PVC (several minu
 
 **Gateway not Ready (`0/1`)** — if pod logs show `GET /health/ready HTTP/1.1" 404`, the published `helpdesk-email-gateway` image is older than the manifests. Rebuild and push the gateway image (`make build-images` + push to your registry), set `IMAGE_TAG`, and `oc rollout restart deployment/email-gateway`. Quick workaround: patch the readiness probe to `/health` (see `openshift_gateway_readiness_hint` in `scripts/openshift-lib.sh`).
 
-**Dashboard has no welcome page or “Open inbox” buttons** — the Route should open **`/welcome`** (root redirects there). If you land straight in Streamlit with no welcome CTAs, the cluster is likely running an older `helpdesk-triage-ui` image (Streamlit-only, no nginx). Rebuild and push the UI image (`podman build -f agent-dashboard/Containerfile -t …`), redeploy with `IMAGE_TAG=… make deploy-openshift`, or `oc rollout restart deployment/agent-dashboard` after the image is updated.
+**Dashboard shows the Streamlit inbox instead of `/welcome`** — the pod is almost certainly running a **legacy `helpdesk-triage-ui` image** (Streamlit on port 8501, no nginx). Current images serve onboarding at **`/welcome`** and redirect **`/`** there; the inbox is **`/inbox/`**. Readiness probes run `probe-welcome.py` so Streamlit-only images do not stay Ready. After Quay publishes `helpdesk-triage-ui:latest`, run `oc rollout restart deployment/agent-dashboard -n helpdesk-email-triage` and confirm:
 
-**`make deploy-openshift` hangs after `email-gateway`** — usually `agent-dashboard` probes failing. Check `oc describe pod -l app.kubernetes.io/name=agent-dashboard` (look for probe 404 on `/inbox/_stcore/health`). Probes use `/_stcore/health`, which works on both legacy Streamlit-only images and the nginx + `/inbox` layout once the current UI image is on Quay.
+```bash
+oc exec deployment/agent-dashboard -n helpdesk-email-triage -- python3 /app/probe-welcome.py
+curl -skI "https://<dashboard-route>/" | grep -i location   # expect /welcome
+```
+
+**`make deploy-openshift` hangs after `email-gateway`** — usually `agent-dashboard` not Ready. Check `oc logs deployment/agent-dashboard` (nginx `Permission denied` on `/var/log/nginx/error.log` means the UI image is older than the `nginx -e /dev/stderr` fix) and `oc describe pod -l app.kubernetes.io/name=agent-dashboard` (startup/readiness run `probe-welcome.py`).
 
 ## Verify
 
