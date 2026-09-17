@@ -120,8 +120,9 @@ First start downloads **Qwen2.5-1.5B-Instruct** weights — allow **several minu
 | **Goal** | Try the real stack on OpenShift | Try the real stack on RHEL + systemd | Validate UI and ingest without RHAII |
 | **Time** | ~30–45 min (+ model download) | ~45 min (+ model download) | ~15 min |
 | **Inference** | **RHAII 3.5 CPU** | **RHAII 3.5 CPU** | Mock only |
-| **Start** | `INFERENCE=rhaii make deploy-openshift` | `systemctl --user enable --now …` | `make demo` |
+| **Start** | `INFERENCE=rhaii make deploy-openshift` | `make quadlet-deploy` (see [Track 2](#track-2-run-on-rhel-with-systemd-quadlet)) | `make demo` |
 | **UI** | Dashboard Route `/welcome` | `http://127.0.0.1:8501/welcome` | `http://127.0.0.1:8501/welcome` |
+| **GuideLLM** | `make guidellm-openshift` | `make guidellm-quadlet` | — (mock; skip) |
 
 **Customers:** deploy with **Track 1** or **Track 2**, then work through the **hands-on checklist** in Track 1 ([Submit support tickets](#submit-support-tickets) → [What you've accomplished](#what-youve-accomplished)) before tear-down. **Track 3** is mock-only smoke / CI.
 
@@ -248,7 +249,7 @@ More UI detail: [docs/testing-locally.md](docs/testing-locally.md).
 
 ### Load testing
 
-Load-test the **RHAII inference endpoint** (OpenAI-compatible `:8000`) with [GuideLLM](https://github.com/vllm-project/guidellm) — the same class of call the gateway makes on tokenized text. Skip on mock-only deploys.
+**Canonical GuideLLM guide** for Track 1 (OpenShift) and Track 2 (RHEL Quadlet). Load-test the **RHAII inference endpoint** (OpenAI-compatible `:8000`) with [GuideLLM](https://github.com/vllm-project/guidellm) — the same class of call the gateway makes on tokenized text. Skip on mock-only deploys. Maintainer functional/E2E automation is separate: [docs/testing/README.md](docs/testing/README.md).
 
 For end-to-end **gateway** load, run parallel `POST /ingest/raw` against the gateway Route (include `X-Ingest-Key` when configured).
 
@@ -325,7 +326,7 @@ Full overlay catalog: [docs/deploy-openshift.md](docs/deploy-openshift.md).
 
 ## Track 2: Run on RHEL with systemd (Quadlet)
 
-*~45 minutes. **Recommended for single-host evaluation** — RHAII 3.5 CPU via user systemd.*
+*~45 minutes. **Recommended for single-host evaluation** — RHAII 3.5 CPU via user systemd, optional [GuideLLM](#load-testing).*
 
 ### Prerequisites
 
@@ -565,6 +566,7 @@ See `.env.example` for the full list.
 | [docs/customer-ci.md](docs/customer-ci.md) | Fork, Quay publish, pipeline adoption |
 | [deploy/openshift/README.md](deploy/openshift/README.md) | Kustomize layout |
 | [deploy/quadlet/README.md](deploy/quadlet/README.md) | Quadlet units |
+| [docs/testing/README.md](docs/testing/README.md) | Functional / E2E regression (maintainers; GuideLLM stays in this README) |
 
 ---
 
@@ -578,6 +580,10 @@ make validate-manifests
 make test-openshift-overlay
 make build-images
 ```
+
+**GuideLLM** (inference benchmarking): [Load testing](#load-testing) above.
+
+**Functional / E2E regression** (maintainers): [docs/testing/README.md](docs/testing/README.md).
 
 **CI** (on every PR): ruff, tests, compose e2e, kind e2e, container builds (mock inference only).
 
