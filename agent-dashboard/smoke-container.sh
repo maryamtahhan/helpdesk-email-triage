@@ -18,7 +18,7 @@ for _ in $(seq 1 60); do
 done
 
 curl -sf "http://127.0.0.1:${PORT}/_stcore/health" >/dev/null
-curl -sf "http://127.0.0.1:${PORT}/welcome" | grep -q "You.re connected"
+WELCOME_PROBE_URL="http://127.0.0.1:${PORT}/welcome" python3 agent-dashboard/probe-welcome.py
 loc="$(curl -sI "http://127.0.0.1:${PORT}/" | awk 'toupper($1)=="LOCATION:"{print $2}' | tr -d '\r')"
 [[ "$loc" == *"/welcome"* ]] || { echo "expected / -> /welcome redirect, got: ${loc:-none}" >&2; exit 1; }
 echo "UI smoke OK (${IMAGE})"

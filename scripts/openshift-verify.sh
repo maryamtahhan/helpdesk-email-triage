@@ -78,7 +78,7 @@ if [[ "$welcome_code" != "200" ]]; then
   openshift_dashboard_readiness_hint "$NAMESPACE"
   exit 1
 fi
-if ! curl -sk "https://${UI}/welcome" | grep -q "You.re connected"; then
+if ! WELCOME_PROBE_URL="https://${UI}/welcome" python3 "${ROOT}/agent-dashboard/probe-welcome.py"; then
   echo "/welcome did not return the onboarding page (UI image may be stale Streamlit-only)." >&2
   openshift_dashboard_readiness_hint "$NAMESPACE"
   exit 1

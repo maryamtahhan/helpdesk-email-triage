@@ -161,7 +161,7 @@ openshift_dashboard_readiness_hint() {
   replicas="$(oc get deployment agent-dashboard -n "$namespace" -o jsonpath='{.status.replicas}' 2>/dev/null || echo 0)"
   echo "WARNING: agent-dashboard not serving /welcome (readyReplicas=${ready:-0}/${replicas:-0})." >&2
   echo "         Check probes: oc describe pod -l app.kubernetes.io/name=agent-dashboard -n ${namespace} | tail -25" >&2
-  echo "         Probes must use GET /_stcore/health on port 8501; pull a fresh UI image:" >&2
+  echo "         Probes run python3 /app/probe-welcome.py; pull a fresh UI image:" >&2
   echo "           quay.io/mtahhan/helpdesk-triage-ui:latest (imagePullPolicy: Always)" >&2
   echo "           oc rollout restart deployment/agent-dashboard -n ${namespace}" >&2
   echo "         If the pod is Ready but /welcome is 404, the node may still have a cached Streamlit-only image." >&2
