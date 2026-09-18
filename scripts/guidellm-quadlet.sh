@@ -75,6 +75,7 @@ podman run --rm --network "${PODMAN_NETWORK}" \
   -v "$(cd "${RESULTS_DIR}" && pwd):/results:rw" \
   -e HOME=/results -e HF_HOME=/results/.cache \
   -e HF_TOKEN="${HF_TOKEN}" \
+  --entrypoint guidellm \
   "${IMAGE}" \
   run \
   --backend "kind=openai_http,target=${TARGET},model=${MODEL}" \

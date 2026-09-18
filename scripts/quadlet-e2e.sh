@@ -19,6 +19,8 @@ source "${ROOT}/scripts/quadlet-lib.sh"
 
 SCENARIOS="${QUADLET_E2E_SCENARIOS:-full,gateway-only}"
 FAILED=0
+export QUADLET_E2E_RUN_ID="${QUADLET_E2E_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
+E2E_REPORT="${ROOT}/results/quadlet-e2e/report-${QUADLET_E2E_RUN_ID}.json"
 
 quadlet_require
 
@@ -73,9 +75,9 @@ for raw in "${scenario_list[@]}"; do
   fi
 done
 
-report="$(ls -t "${ROOT}/results/quadlet-e2e"/report-*.json 2>/dev/null | head -1 || true)"
+report="${E2E_REPORT}"
 summary_rc=0
-if [[ -n "$report" ]]; then
+if [[ -f "$report" ]]; then
   echo ""
   echo "==> Summary (${report})"
   python3 - "$report" <<'PY' || summary_rc=$?

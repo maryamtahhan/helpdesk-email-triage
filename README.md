@@ -104,7 +104,7 @@ First start downloads **Qwen2.5-1.5B-Instruct** weights — allow **several minu
 
 - **Track 1:** `oc` CLI, OpenShift 5.x, `make`, `podman login registry.redhat.io`, `HF_TOKEN`
 - **Track 2:** RHEL 9.4+ (including RHEL 10), `podman` and `make` from `dnf`, user systemd, registry login, Hugging Face token — **Quadlet does not need Compose**
-- **Track 3 (optional):** `podman` or `docker` with Compose — on RHEL 10 install the Compose CLI with `python3 -m pip install --user podman-compose` if `podman compose` is unavailable; **no** registry or HF token for mock
+- **Track 3 (optional):** `podman` or `docker` with Compose — on RHEL 10 install the Compose CLI with `sudo dnf install -y git python-pip` then `pip install podman-compose`; **no** registry or HF token for mock
 
 ### Permissions
 

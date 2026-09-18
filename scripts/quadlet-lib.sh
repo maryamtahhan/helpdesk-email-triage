@@ -201,11 +201,12 @@ quadlet_clear_ticket_store() {
   if ! podman volume inspect gateway-data &>/dev/null; then
     return 0
   fi
-  local mount
-  mount="$(podman volume inspect gateway-data --format '{{.Mountpoint}}' 2>/dev/null || true)"
-  if [[ -n "$mount" && -d "$mount" ]]; then
-    rm -f "${mount}/tickets.json"
-  fi
+  # tickets.json is often owned by the gateway container user (uid 1001).
+  podman run --rm --user 0 \
+    -v gateway-data:/data:Z \
+    --entrypoint /bin/rm \
+    registry.access.redhat.com/ubi9/ubi-minimal:latest \
+    -f /data/tickets.json 2>/dev/null || true
 }
 
 quadlet_stop_all() {

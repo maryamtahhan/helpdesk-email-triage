@@ -28,6 +28,8 @@ chmod 600 ~/.config/helpdesk/secrets.env
 
 Accept the Qwen model license on huggingface.co if this is a fresh host.
 
+Do **not** leave `HUGGING_FACE_HUB_TOKEN=hf_your_token_here` from the README template — E2E rejects it unless `QUADLET_ALLOW_PLACEHOLDER_SECRETS=1` (smoke only; model checks relaxed).
+
 ## Run all scenarios
 
 ```bash

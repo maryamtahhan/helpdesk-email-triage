@@ -9,7 +9,7 @@ QUADLET_E2E_EXPECTED_MODEL="${QUADLET_E2E_EXPECTED_MODEL:-Qwen/Qwen2.5-1.5B-Inst
 export E2E_SCENARIO=""
 E2E_STEP_LOG=()
 export E2E_FAILED=0
-E2E_RUN_ID="$(date +%Y%m%d-%H%M%S)"
+E2E_RUN_ID="${QUADLET_E2E_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 
 quadlet_e2e_init() {
   mkdir -p "${QUADLET_E2E_RESULTS}"
@@ -144,18 +144,20 @@ PY
 }
 
 quadlet_e2e_assert_file_watcher_ingest() {
-  local root
-  root="$(quadlet_root)"
   quadlet_sync_repo_assets
   local before after
   before="$(curl -sf "${GATEWAY_URL%/}/tickets" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
   touch "${QUADLET_DATA}/sample_emails/"*.eml
-  if ! count="$("${root}/scripts/wait-for-tickets.sh" 45 2)"; then
-    echo "file watcher: no new tickets within timeout (had ${before})" >&2
-    return 1
-  fi
-  after="$count"
-  [[ "${after}" -gt "${before}" ]]
+  for _ in $(seq 1 45); do
+    after="$(curl -sf "${GATEWAY_URL%/}/tickets" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
+    if [[ "${after}" -gt "${before}" ]]; then
+      echo "file watcher: ticket count ${before} -> ${after}"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "file watcher: no new tickets within timeout (stayed at ${before})" >&2
+  return 1
 }
 
 quadlet_e2e_run_guidellm_short() {
