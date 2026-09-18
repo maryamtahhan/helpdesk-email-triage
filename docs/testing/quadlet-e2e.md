@@ -48,7 +48,7 @@ Effects when set to `1`:
 
 Still required for full validation:
 
-- Real token for first-time model download and for **`make guidellm-quadlet`** inside the `full` scenario (GuideLLM reuses `~/rhaii-cache` for tokenizer files; placeholder token may still fail HF downloads).
+- Real token for first-time model download and for **`make guidellm-quadlet`** inside the `full` scenario (GuideLLM downloads tokenizer files into `results/.../.cache`, same as OpenShift).
 
 With placeholder secrets, skip GuideLLM in E2E:
 

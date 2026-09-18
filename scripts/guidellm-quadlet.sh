@@ -59,8 +59,8 @@ print(json.dumps({"kind": "concurrent", "streams": streams}))
 PY
 )"
 
-mkdir -p "${RESULTS_DIR}" "${RESULTS_DIR}/.cache" "${QUADLET_CACHE}"
-# GuideLLM runs non-root; ensure mount points are writable (see HF_HOME below).
+mkdir -p "${RESULTS_DIR}" "${RESULTS_DIR}/.cache"
+# Same as OpenShift Job: HF cache under /results (not ~/rhaii-cache — RHAII owns that as uid 1001).
 chmod -R a+rwX "${RESULTS_DIR}" 2>/dev/null || true
 
 RUN_ID="guidellm-$(date +%s)"
@@ -76,9 +76,8 @@ echo "    profile: ${PROFILE_JSON} (max ${MAX_SECONDS}s)"
 
 podman run --rm --network "${PODMAN_NETWORK}" \
   -v "$(cd "${RESULTS_DIR}" && pwd):/results:Z" \
-  -v "${QUADLET_CACHE}:/hf-cache:Z" \
   -e HOME=/results \
-  -e HF_HOME=/hf-cache \
+  -e HF_HOME=/results/.cache \
   -e HF_TOKEN="${HF_TOKEN}" \
   -e HUGGING_FACE_HUB_TOKEN="${HF_TOKEN}" \
   --entrypoint guidellm \
