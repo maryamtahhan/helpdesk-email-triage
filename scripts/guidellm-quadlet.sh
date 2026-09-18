@@ -59,7 +59,10 @@ print(json.dumps({"kind": "concurrent", "streams": streams}))
 PY
 )"
 
-mkdir -p "${RESULTS_DIR}"
+mkdir -p "${RESULTS_DIR}" "${RESULTS_DIR}/.cache" "${QUADLET_CACHE}"
+# GuideLLM runs non-root; ensure mount points are writable (see HF_HOME below).
+chmod -R a+rwX "${RESULTS_DIR}" 2>/dev/null || true
+
 RUN_ID="guidellm-$(date +%s)"
 OUT_JSON="${RESULTS_DIR}/${RUN_ID}.json"
 OUT_HTML="${RESULTS_DIR}/${RUN_ID}.html"
@@ -72,9 +75,12 @@ echo "    network: ${PODMAN_NETWORK}"
 echo "    profile: ${PROFILE_JSON} (max ${MAX_SECONDS}s)"
 
 podman run --rm --network "${PODMAN_NETWORK}" \
-  -v "$(cd "${RESULTS_DIR}" && pwd):/results:rw" \
-  -e HOME=/results -e HF_HOME=/results/.cache \
+  -v "$(cd "${RESULTS_DIR}" && pwd):/results:Z" \
+  -v "${QUADLET_CACHE}:/hf-cache:Z" \
+  -e HOME=/results \
+  -e HF_HOME=/hf-cache \
   -e HF_TOKEN="${HF_TOKEN}" \
+  -e HUGGING_FACE_HUB_TOKEN="${HF_TOKEN}" \
   --entrypoint guidellm \
   "${IMAGE}" \
   run \

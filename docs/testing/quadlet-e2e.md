@@ -48,7 +48,13 @@ Effects when set to `1`:
 
 Still required for full validation:
 
-- Real token for first-time model download and for **`make guidellm-quadlet`** inside the `full` scenario.
+- Real token for first-time model download and for **`make guidellm-quadlet`** inside the `full` scenario (GuideLLM reuses `~/rhaii-cache` for tokenizer files; placeholder token may still fail HF downloads).
+
+With placeholder secrets, skip GuideLLM in E2E:
+
+```bash
+QUADLET_ALLOW_PLACEHOLDER_SECRETS=1 QUADLET_E2E_SKIP_GUIDELLM=1 make quadlet-e2e
+```
 - Customer evaluation should **not** rely on this flag.
 
 Full reference: [deploy/quadlet/README.md — secrets.env](../../deploy/quadlet/README.md#secretsenv-and-quadlet_allow_placeholder_secrets).

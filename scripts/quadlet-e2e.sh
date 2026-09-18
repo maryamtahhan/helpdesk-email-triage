@@ -42,6 +42,7 @@ fi
 
 if [[ "${QUADLET_E2E_INITIAL_RESET:-}" == "1" ]]; then
   echo "==> Initial reset"
+  export RHAII_WAIT_TIMEOUT="${RHAII_WAIT_TIMEOUT:-1200}"
   QUADLET_RESET_CONFIRM=1 "${ROOT}/scripts/quadlet-reset.sh"
   "${ROOT}/scripts/quadlet-setup.sh"
 fi

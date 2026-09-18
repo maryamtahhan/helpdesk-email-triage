@@ -48,6 +48,7 @@ quadlet_e2e_fail_scenario_early() {
   quadlet_e2e_record FAIL "$reason"
   quadlet_e2e_write_scenario_report "$scenario" fail
   quadlet_e2e_scenario_teardown
+  exit 1
 }
 
 quadlet_e2e_preflight_images() {
