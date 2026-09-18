@@ -11,7 +11,7 @@ Automated scenario tests for **rootless Podman + user systemd** on RHEL 9.4+. Th
 ## Prerequisites
 
 ```bash
-sudo dnf install -y podman make
+sudo dnf install -y podman git make
 podman login registry.redhat.io
 ```
 
@@ -28,12 +28,36 @@ chmod 600 ~/.config/helpdesk/secrets.env
 
 Accept the Qwen model license on huggingface.co if this is a fresh host.
 
-Do **not** leave `HUGGING_FACE_HUB_TOKEN=hf_your_token_here` from the README template — E2E rejects it unless `QUADLET_ALLOW_PLACEHOLDER_SECRETS=1` (smoke only; model checks relaxed).
+## `QUADLET_ALLOW_PLACEHOLDER_SECRETS`
+
+E2E and `make quadlet-up` treat `hf_your_token_here` in `secrets.env` as invalid.
+
+| Value | Meaning |
+|-------|---------|
+| unset (default) | **Fail** preflight if the placeholder is still present — use a real Hugging Face token |
+| `1` | Allow the placeholder for **smoke** runs when weights are already in `~/rhaii-cache` |
+
+```bash
+QUADLET_ALLOW_PLACEHOLDER_SECRETS=1 make quadlet-e2e
+```
+
+Effects when set to `1`:
+
+- Preflight passes with the README template token.
+- E2E sets `QUADLET_E2E_REQUIRE_MODEL=0` (ingest will not fail solely because `model` is `heuristic-fallback`).
+
+Still required for full validation:
+
+- Real token for first-time model download and for **`make guidellm-quadlet`** inside the `full` scenario.
+- Customer evaluation should **not** rely on this flag.
+
+Full reference: [deploy/quadlet/README.md — secrets.env](../../deploy/quadlet/README.md#secretsenv-and-quadlet_allow_placeholder_secrets).
 
 ## Run all scenarios
 
 ```bash
 cd helpdesk-email-triage
+make quadlet-build    # required once per host (or QUADLET_E2E_BUILD=1 make quadlet-e2e)
 make quadlet-e2e
 ```
 
@@ -57,7 +81,7 @@ Default order: **`full`** → **`gateway-only`**. Each scenario stops services a
 | `QUADLET_E2E_BUILD` | `0` | `1` = run `quadlet-build` first |
 | `QUADLET_E2E_INITIAL_RESET` | `0` | `1` = `quadlet-reset` + `quadlet-setup` before tests |
 | `QUADLET_E2E_REQUIRE_MODEL` | `1` | Fail if ingest returns `heuristic-fallback` |
-| `QUADLET_ALLOW_PLACEHOLDER_SECRETS` | unset | `1` = allow README placeholder (smoke only, not full validation) |
+| `QUADLET_ALLOW_PLACEHOLDER_SECRETS` | unset | `1` = allow `hf_your_token_here`; relaxes E2E model assertion (see section above) |
 | `RHAII_WAIT_TIMEOUT` | `900` | Max wait for inference boot |
 
 Examples:
@@ -66,6 +90,7 @@ Examples:
 QUADLET_E2E_SKIP_GUIDELLM=1 make quadlet-e2e
 QUADLET_E2E_SCENARIOS=gateway-only make quadlet-e2e
 QUADLET_E2E_INITIAL_RESET=1 QUADLET_E2E_BUILD=1 make quadlet-e2e
+QUADLET_ALLOW_PLACEHOLDER_SECRETS=1 QUADLET_E2E_SKIP_GUIDELLM=1 make quadlet-e2e   # smoke only
 ```
 
 ## Reports and exit codes

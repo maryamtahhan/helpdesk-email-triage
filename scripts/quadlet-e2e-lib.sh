@@ -45,9 +45,26 @@ quadlet_e2e_fail_scenario_early() {
   local scenario="$1"
   local reason="$2"
   export E2E_SCENARIO="$scenario"
-  quadlet_e2e_init
   quadlet_e2e_record FAIL "$reason"
   quadlet_e2e_write_scenario_report "$scenario" fail
+  quadlet_e2e_scenario_teardown
+}
+
+quadlet_e2e_preflight_images() {
+  local missing=0
+  if ! podman image exists localhost/helpdesk-email-gateway:prod 2>/dev/null; then
+    echo "quadlet-e2e: missing localhost/helpdesk-email-gateway:prod" >&2
+    missing=1
+  fi
+  if ! podman image exists localhost/helpdesk-triage-ui:prod 2>/dev/null; then
+    echo "quadlet-e2e: missing localhost/helpdesk-triage-ui:prod" >&2
+    missing=1
+  fi
+  if [[ "$missing" -ne 0 ]]; then
+    echo "quadlet-e2e: run make quadlet-build or QUADLET_E2E_BUILD=1 make quadlet-e2e" >&2
+    return 1
+  fi
+  return 0
 }
 
 quadlet_e2e_section() {

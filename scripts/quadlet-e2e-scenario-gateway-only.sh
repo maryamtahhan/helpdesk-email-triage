@@ -22,10 +22,11 @@ if [[ "${QUADLET_ALLOW_PLACEHOLDER_SECRETS:-}" == "1" ]]; then
   export QUADLET_E2E_REQUIRE_MODEL=0
 fi
 
-quadlet_start_engine
-quadlet_wait_inference
-quadlet_start_gateway
-quadlet_wait_gateway_ready
+quadlet_sync_repo_assets
+quadlet_start_engine || quadlet_e2e_fail_scenario_early gateway-only "rhaii-cpu-engine.service failed to start"
+quadlet_wait_inference || quadlet_e2e_fail_scenario_early gateway-only "inference did not become ready"
+quadlet_start_gateway || quadlet_e2e_fail_scenario_early gateway-only "email-gateway.service failed to start"
+quadlet_wait_gateway_ready || quadlet_e2e_fail_scenario_early gateway-only "gateway /health/ready timeout"
 
 quadlet_e2e_assert_cmd "dashboard not listening" quadlet_e2e_assert_dashboard_down || true
 quadlet_e2e_assert_cmd "inference /v1/models" quadlet_e2e_assert_inference_up || true

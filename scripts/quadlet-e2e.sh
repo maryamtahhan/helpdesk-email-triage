@@ -34,6 +34,12 @@ if [[ "${QUADLET_E2E_BUILD:-}" == "1" ]]; then
   "${ROOT}/scripts/quadlet-build.sh"
 fi
 
+# shellcheck source=quadlet-e2e-lib.sh
+source "${ROOT}/scripts/quadlet-e2e-lib.sh"
+if ! quadlet_e2e_preflight_images; then
+  exit 1
+fi
+
 if [[ "${QUADLET_E2E_INITIAL_RESET:-}" == "1" ]]; then
   echo "==> Initial reset"
   QUADLET_RESET_CONFIRM=1 "${ROOT}/scripts/quadlet-reset.sh"
@@ -44,8 +50,6 @@ echo "==> Quadlet E2E run ${SCENARIOS}"
 echo "    results: ${QUADLET_E2E_RESULTS:-results/quadlet-e2e}"
 echo "    skip guidellm: ${QUADLET_E2E_SKIP_GUIDELLM:-0}"
 
-# shellcheck source=quadlet-e2e-lib.sh
-source "${ROOT}/scripts/quadlet-e2e-lib.sh"
 if ! quadlet_e2e_preflight_secrets; then
   for raw in $(echo "${SCENARIOS}" | tr ',' ' '); do
     scenario="$(echo "$raw" | xargs)"

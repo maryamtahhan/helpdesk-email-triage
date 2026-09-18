@@ -6,13 +6,21 @@ This is an **enterprise single-host** deploy path. Change default secrets, restr
 
 ## Prerequisites
 
-**Packages:** `podman` and `make` from `dnf` (Quadlet ships with Podman). Minimal EC2/RHEL images often omit Make:
+**Packages** — minimal RHEL/EC2 images often omit `git` and `make`:
 
 ```bash
-sudo dnf install -y podman make
+sudo dnf install -y podman git make
 ```
 
-Compose is **not** required for Quadlet. For `compose.yml` on RHEL 10 only: `sudo dnf install -y python3-pip` and `pip install --user podman-compose`.
+Quadlet does **not** need Compose. For Track 3 / `compose.yml` on hosts where `podman compose` is missing:
+
+```bash
+sudo dnf install -y python-pip
+pip3 install --user podman-compose
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+If `python-pip` is not found, try `sudo dnf install -y python3-pip` (same `pip3 install` step).
 
 **One-time setup** (from repo root):
 
@@ -72,6 +80,36 @@ systemctl --user start email-gateway.service agent-dashboard.service
 | `make quadlet-e2e` | Run maintainer validation scenarios (see [docs/testing/quadlet-e2e.md](../../docs/testing/quadlet-e2e.md)) |
 
 Increase inference wait: `RHAII_WAIT_TIMEOUT=1200 make quadlet-up`.
+
+## `secrets.env` and `QUADLET_ALLOW_PLACEHOLDER_SECRETS`
+
+`~/.config/helpdesk/secrets.env` must hold a real **`HUGGING_FACE_HUB_TOKEN`** for first-time model download and for GuideLLM. The README template value `hf_your_token_here` is a placeholder only.
+
+| Command | Behavior without a real token |
+|---------|-------------------------------|
+| `make quadlet-up` | **Exits** unless you override (see below) |
+| `make quadlet-e2e` | **Exits** at preflight unless you override |
+
+**Override (smoke / cached weights only):**
+
+```bash
+export QUADLET_ALLOW_PLACEHOLDER_SECRETS=1
+make quadlet-up
+# or
+QUADLET_ALLOW_PLACEHOLDER_SECRETS=1 make quadlet-e2e
+```
+
+What this does:
+
+- Skips the hard failure when `secrets.env` still contains `hf_your_token_here`.
+- **`make quadlet-e2e`:** also sets `QUADLET_E2E_REQUIRE_MODEL=0` so ingest is allowed to pass even if the model field were `heuristic-fallback` (with cached weights you may still get real Qwen classification).
+
+What it does **not** do:
+
+- Replace a valid token for **first** RHAII pull from Hugging Face (401 / gated model errors).
+- Satisfy **GuideLLM** (`make guidellm-quadlet`), which still needs `HF_TOKEN` / `HUGGING_FACE_HUB_TOKEN` in `secrets.env`.
+
+For production or customer evaluation, always set a real token and **do not** set this variable.
 
 ## GuideLLM (inference load test)
 

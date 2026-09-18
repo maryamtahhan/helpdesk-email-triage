@@ -17,14 +17,15 @@ if ! quadlet_e2e_preflight_secrets; then
   quadlet_e2e_fail_scenario_early full "secrets.env missing or still README placeholder"
   exit 1
 fi
+quadlet_sync_repo_assets
 if [[ "${QUADLET_ALLOW_PLACEHOLDER_SECRETS:-}" == "1" ]]; then
   export QUADLET_E2E_REQUIRE_MODEL=0
 fi
 
-quadlet_start_engine
-quadlet_wait_inference
-quadlet_start_gateway_stack
-quadlet_wait_gateway_ready
+quadlet_start_engine || quadlet_e2e_fail_scenario_early full "rhaii-cpu-engine.service failed to start"
+quadlet_wait_inference || quadlet_e2e_fail_scenario_early full "inference did not become ready"
+quadlet_start_gateway_stack || quadlet_e2e_fail_scenario_early full "email-gateway or agent-dashboard failed to start"
+quadlet_wait_gateway_ready || quadlet_e2e_fail_scenario_early full "gateway /health/ready timeout"
 
 quadlet_e2e_assert_cmd "inference /v1/models" quadlet_e2e_assert_inference_up || true
 quadlet_e2e_assert_cmd "gateway /health" quadlet_e2e_assert_gateway_health || true

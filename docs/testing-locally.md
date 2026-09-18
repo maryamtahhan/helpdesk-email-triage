@@ -8,8 +8,8 @@ This guide walks through every feature in the demo UI and alternative run method
 
 ## Prerequisites
 
-- Podman 4.9+ with Compose (`podman compose`), **or** Docker with `docker compose`. On **RHEL 10**, if `podman compose` is missing: `python3 -m pip install --user podman-compose` and use `podman-compose` / ensure `~/.local/bin` is on `PATH`.
-- Git
+- Podman 4.9+ with Compose (`podman compose`), **or** Docker with `docker compose`. On **RHEL**, if `podman compose` is missing: `sudo dnf install -y git make python-pip`, then `pip3 install --user podman-compose` and ensure `~/.local/bin` is on `PATH`.
+- Git (clone the repo; often installed with the `dnf` line above)
 
 ## Start the stack
 
