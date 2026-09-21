@@ -3,7 +3,7 @@
 Automated **regression**, **smoke**, and **scenario** checks for maintainers and CI. This is **not** the primary home for customer evaluation flows.
 
 - **Deploy + hands-on + GuideLLM (performance benchmarking)** — [README](../README.md) Tracks 1–2 and [Load testing](../README.md#load-testing) (`make guidellm-openshift`, `make guidellm-quadlet`).
-- **Mock UI walkthrough** — [testing-locally.md](../testing-locally.md).
+- **Mock UI walkthrough** — [CONTRIBUTING.md local mock](../CONTRIBUTING.md#local-mock-validation) and [testing-locally.md](../testing-locally.md).
 
 Use this folder when you need repeatable pass/fail gates (unit tests, compose/kind e2e, OpenShift verify, Quadlet maintainer scenarios).
 

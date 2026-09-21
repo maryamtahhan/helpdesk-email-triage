@@ -12,7 +12,7 @@ This is an **enterprise single-host** deploy path. Change default secrets, restr
 sudo dnf install -y podman git make
 ```
 
-Quadlet does **not** need Compose. For Track 3 / `compose.yml` on hosts where `podman compose` is missing:
+Quadlet does **not** need Compose. For the maintainer [local mock stack](../../CONTRIBUTING.md#local-mock-validation) / `compose.yml` on hosts where `podman compose` is missing:
 
 ```bash
 sudo dnf install -y python-pip
@@ -35,20 +35,16 @@ make quadlet-up
 
 `make quadlet-up` starts **network → inference → waits for `/v1/models` → gateway + UI**, then copies sample `.eml` files only after `/health/ready` (avoids `heuristic-fallback` on cold start). Skip auto-ingest: `SKIP_INGEST=1 make quadlet-up`. Enable linger on boot: `ENABLE_LINGER=1 make quadlet-up`.
 
-Manual equivalent (no Make):
+Manual equivalent (no Make) — Quadlet reads **`~/.config/helpdesk/secrets.env` only**; shell `export HF_TOKEN=…` does not configure containers:
 
 ```bash
-mkdir -p ~/.config/containers/systemd ~/.config/helpdesk \
-  ~/helpdesk/sample_emails ~/helpdesk/docs ~/rhaii-cache
+make quadlet-setup   # or mkdir/cp units yourself — see scripts/quadlet-lib.sh
 
-cat > ~/.config/helpdesk/secrets.env <<'EOF'
-HUGGING_FACE_HUB_TOKEN=hf_your_token_here
-VAULT_SECRET=change-me-before-deploy
+cat > ~/.config/helpdesk/secrets.env <<EOF
+HUGGING_FACE_HUB_TOKEN=$(cat ~/hf_token)
+VAULT_SECRET=$(openssl rand -hex 32)
 EOF
 chmod 600 ~/.config/helpdesk/secrets.env
-
-cp -r sample_emails/. ~/helpdesk/sample_emails/
-cp -r docs/. ~/helpdesk/docs/
 
 podman build -f email-gateway/Containerfile -t localhost/helpdesk-email-gateway:prod .
 podman build -f agent-dashboard/Containerfile -t localhost/helpdesk-triage-ui:prod .
@@ -60,6 +56,8 @@ systemctl --user start rhaii-cpu-engine.service
 until curl -sf http://127.0.0.1:8000/v1/models >/dev/null; do sleep 15; done
 systemctl --user start email-gateway.service agent-dashboard.service
 ```
+
+Do **not** start engine + gateway + UI in one `systemctl start` line on a cold host — the file-watcher ingests samples before vLLM is ready and tickets stay `heuristic-fallback`.
 
 **Maintainers:** automated scenario tests — [docs/testing/quadlet-e2e.md](../../docs/testing/quadlet-e2e.md) (`make quadlet-e2e`).
 

@@ -1,6 +1,6 @@
 # Running the demo locally
 
-**Customer paths:** [README Track 1 (OpenShift RHAII)](../README.md#track-1-deploy-to-openshift-rhaii-cpu) or [Track 2 (Quadlet)](../README.md#track-2-run-on-rhel-with-systemd-quadlet). **Maintainers:** [Track 3 mock](../README.md#track-3-local-mock-validation-maintainers) — `make demo`, open `/welcome`. **Automated test matrix:** [testing/README.md](testing/README.md).
+**Customer paths:** [README Track 1 (OpenShift RHAII)](../README.md#track-1-deploy-to-openshift-rhaii-cpu) or [Track 2 (Quadlet)](../README.md#track-2-run-on-rhel-with-systemd-quadlet). **Maintainers:** [local mock stack](../CONTRIBUTING.md#local-mock-validation) — `make demo`, open `/welcome`. **Automated test matrix:** [testing/README.md](testing/README.md).
 
 **Hands-on walkthrough:** [quickstart-walkthrough.md](quickstart-walkthrough.md) — submit tickets, review classification/redaction, classification speed, quality checks, and optional GuideLLM load testing.
 

@@ -26,16 +26,21 @@ fi
 
 quadlet_require
 
-if [[ -f "${QUADLET_SECRETS}" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "${QUADLET_SECRETS}"
-  set +a
+if [[ ! -f "${QUADLET_SECRETS}" ]]; then
+  echo "guidellm-quadlet: missing ${QUADLET_SECRETS}" >&2
+  echo "  Create it with a real Hugging Face token (see README Track 2 Step 1)." >&2
+  exit 1
 fi
+set -a
+# shellcheck disable=SC1090
+source "${QUADLET_SECRETS}"
+set +a
 export HF_TOKEN="${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-}}"
 
-if [[ -z "${HF_TOKEN}" ]]; then
-  echo "guidellm-quadlet: set HF_TOKEN or HUGGING_FACE_HUB_TOKEN in ${QUADLET_SECRETS}" >&2
+if [[ -z "${HF_TOKEN}" ]] || [[ "${HF_TOKEN}" == "hf_your_token_here" ]]; then
+  echo "guidellm-quadlet: set a real HF_TOKEN or HUGGING_FACE_HUB_TOKEN in ${QUADLET_SECRETS}" >&2
+  echo "  Shell exports are not read — edit the file, e.g.:" >&2
+  echo "    HUGGING_FACE_HUB_TOKEN=\$(cat ~/hf_token)" >&2
   exit 1
 fi
 

@@ -21,6 +21,7 @@ PublishPort=8080:8080
 PublishPort=3025:3025
 Environment=VLLM_BASE_URL=http://rhaii-cpu-engine:8000/v1
 Environment=VLLM_ENDPOINT=http://rhaii-cpu-engine:8000/v1/chat/completions
+Environment=MODEL_NAME=Qwen/Qwen2.5-1.5B-Instruct
 Environment=GATEWAY_MODE=FILE_WATCHER
 Environment=EMAIL_INPUT_DIR=/app/input_emails
 Environment=TICKET_DATA_DIR=/app/data

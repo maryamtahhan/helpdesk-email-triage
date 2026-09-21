@@ -8,7 +8,7 @@ Use this after the stack is running:
 |---|---|---|
 | **OpenShift (RHAII)** | `INFERENCE=rhaii make deploy-openshift` then `make verify-openshift` | Dashboard Route `/welcome` |
 | **RHEL Quadlet** | Quadlet units — [deploy/quadlet/README.md](../deploy/quadlet/README.md) | `http://127.0.0.1:8501/welcome` |
-| **Local mock (maintainers)** | `make demo` | `http://127.0.0.1:8501/welcome` |
+| **Local mock (maintainers)** | [CONTRIBUTING.md](../CONTRIBUTING.md#local-mock-validation) — `make demo` | `http://127.0.0.1:8501/welcome` |
 | **RHEL Compose** | `podman compose -f compose.yml up` | `http://127.0.0.1:8501` |
 
 **OpenShift:** use the **gateway Route URL** from `make verify-openshift` instead of `127.0.0.1:8080`. Add header `X-Ingest-Key` when the hardened overlay is deployed.

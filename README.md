@@ -11,7 +11,7 @@ Securely classify helpdesk email by category and urgency with reversible PII tok
   - [Key patterns you'll learn](#key-patterns-youll-learn)
   - [Architecture](#architecture)
 - [Requirements](#requirements)
-  - [Minimum hardware](#minimum-hardware)
+  - [RHAII CPU hardware (Tracks 1 and 2)](#rhaii-cpu-hardware-tracks-1-and-2)
   - [Minimum software](#minimum-software)
   - [Permissions](#permissions)
 - [Deploy](#deploy)
@@ -24,7 +24,6 @@ Securely classify helpdesk email by category and urgency with reversible PII tok
     - [Load testing](#load-testing)
     - [What you've accomplished](#what-youve-accomplished)
   - [Track 2: Run on RHEL with systemd (Quadlet)](#track-2-run-on-rhel-with-systemd-quadlet)
-  - [Track 3: Local mock validation (maintainers)](#track-3-local-mock-validation-maintainers)
   - [Delete](#delete)
 - [Reference](#reference)
 - [Technical details](#technical-details)
@@ -33,7 +32,6 @@ Securely classify helpdesk email by category and urgency with reversible PII tok
   - [Gateway API summary](#gateway-api-summary)
   - [Configuration](#configuration)
   - [Documentation](#documentation)
-  - [Development](#development)
   - [Repository structure](#repository-structure)
 - [Tags](#tags)
 
@@ -47,7 +45,7 @@ This quickstart demonstrates how to use CPU-based AI inference on existing RHEL 
 
 **Platform engineers, AI engineers, and architects** who want to learn **CPU inference with [Red Hat AI Inference (RHAII) 3.5](https://docs.redhat.com/en/documentation/red_hat_ai_inference/3.5/html/getting_started/about-cpu-inference_getting-started)** on OpenShift or RHEL: pull and run an instruction-tuned model on **x86_64 + AVX512** (no GPU), wire an app to an OpenAI-compatible endpoint, observe readiness and latency, and optionally benchmark with GuideLLM.
 
-The sample app is **helpdesk email triage** (ingest → tokenize PII → classify on sanitized text). That domain shows a realistic gateway in front of RHAII; integrators can use the API without the Streamlit inbox. **Track 3 (local mock)** is for UI/CI smoke tests only — it is not a substitute for trying RHAII.
+The sample app is **helpdesk email triage** (ingest → tokenize PII → classify on sanitized text). That domain shows a realistic gateway in front of RHAII; integrators can use the API without the Streamlit inbox.
 
 ### What this quickstart provides
 
@@ -82,7 +80,7 @@ By the end of the tracks below, you will have:
 
 1. **Ingest** — HTTP `:8080`, SMTP `:3025` (demo), or file watcher on `.eml` drops.
 2. **Gateway** — Tokenizes structured PII into a vault; exposes `TriageResult` JSON and `/health/ready`.
-3. **Inference** — **RHAII 3.5 CPU** (customer tracks) or built-in mock (Track 3 / CI only). **Tokenized text only.**
+3. **Inference** — **RHAII 3.5 CPU** on the customer tracks below. **Tokenized text only.**
 4. **Agent inbox** *(optional)* — Streamlit on `:8501` (`/welcome` onboarding + inbox). Integrators can skip this.
 
 **Privacy guarantee:** Raw card numbers, phones, and names do not reach the model. Downstream systems get tokens; authorized agents rehydrate locally.
@@ -107,29 +105,27 @@ First start downloads **Qwen2.5-1.5B-Instruct** weights — allow **several minu
 
 - **Track 1:** `oc` CLI, OpenShift 5.x, `make`, `podman login registry.redhat.io`, `HF_TOKEN`
 - **Track 2:** RHEL 9.4+ (including RHEL 10), `podman`, `git`, and `make` from `dnf`, user systemd, registry login, Hugging Face token — **Quadlet does not need Compose**
-- **Track 3 (optional):** `podman` or `docker` with Compose — on RHEL when `podman compose` is missing: `sudo dnf install -y git make python-pip` then `pip3 install --user podman-compose` (add `~/.local/bin` to `PATH`); **no** registry or HF token for mock
 
 ### Permissions
 
 - **Track 1:** Namespace admin (or equivalent) for Routes, Deployments, Secrets, PVCs
 - **Track 2:** User systemd (`systemctl --user`); linger enabled if the host should survive logout
-- **Track 3:** Local user only
 
 ## Deploy
 
 ### Choose your track
 
-| | **Track 1: OpenShift** | **Track 2: RHEL Quadlet** | Track 3: Local mock |
-|---|---|---|---|
-| **Priority** | **Primary** — cluster deploy | **Primary** — single-host production style | Optional — maintainers / CI |
-| **Goal** | Try the real stack on OpenShift | Try the real stack on RHEL + systemd | Validate UI and ingest without RHAII |
-| **Time** | ~30–45 min (+ model download) | ~45 min (+ model download) | ~15 min |
-| **Inference** | **RHAII 3.5 CPU** | **RHAII 3.5 CPU** | Mock only |
-| **Start** | `INFERENCE=rhaii make deploy-openshift` | `make quadlet-deploy` (see [Track 2](#track-2-run-on-rhel-with-systemd-quadlet)) | `make demo` |
-| **UI** | Dashboard Route `/welcome` | `http://127.0.0.1:8501/welcome` | `http://127.0.0.1:8501/welcome` |
-| **GuideLLM** | `make guidellm-openshift` | `make guidellm-quadlet` | — (mock; skip) |
+| | **Track 1: OpenShift** | **Track 2: RHEL Quadlet** |
+|---|---|---|
+| **Priority** | **Primary** — cluster deploy | **Primary** — single-host production style |
+| **Goal** | Try the real stack on OpenShift | Try the real stack on RHEL + systemd |
+| **Time** | ~30–45 min (+ model download) | ~45 min (+ model download) |
+| **Inference** | **RHAII 3.5 CPU** | **RHAII 3.5 CPU** |
+| **Start** | `INFERENCE=rhaii make deploy-openshift` | `make quadlet-deploy` (see [Track 2](#track-2-run-on-rhel-with-systemd-quadlet)) |
+| **UI** | Dashboard Route `/welcome` | `http://127.0.0.1:8501/welcome` |
+| **GuideLLM** | `make guidellm-openshift` | `make guidellm-quadlet` |
 
-**Customers:** deploy with **Track 1** or **Track 2**, then work through the **hands-on checklist** in Track 1 ([Submit support tickets](#submit-support-tickets) → [What you've accomplished](#what-youve-accomplished)) before tear-down. **Track 3** is mock-only smoke / CI.
+Deploy with **Track 1** or **Track 2**, then work through the **hands-on checklist** in Track 1 ([Submit support tickets](#submit-support-tickets) → [What you've accomplished](#what-youve-accomplished)) before tear-down. Maintainers: local mock stack and CI workflows are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -165,7 +161,7 @@ Use when the cluster cannot run RHAII yet, or for overlay/CI checks:
 INFERENCE=mock make deploy-openshift
 ```
 
-The inbox welcome pill shows **local mock**. For full UI regression without a cluster, prefer [Track 3](#track-3-local-mock-validation-maintainers).
+The inbox welcome pill shows **local mock**. For full UI regression without a cluster, use the [local mock stack](CONTRIBUTING.md#local-mock-validation).
 </details>
 
 #### Step 2: Verify deployment
@@ -258,7 +254,7 @@ More UI detail: [docs/testing-locally.md](docs/testing-locally.md).
 
 For end-to-end **gateway** load, run parallel `POST /ingest/raw` against the gateway Route (include `X-Ingest-Key` when configured).
 
-##### Step 1: Install GuideLLM
+##### Step 1: Pull the GuideLLM container image
 
 **OpenShift (recommended)** — the benchmark Job uses the Red Hat image (same registry login as RHAII CPU):
 
@@ -289,7 +285,7 @@ Benchmarks via in-cluster Service DNS (`rhaii-cpu:8000`), not the public Route. 
 oc logs -n helpdesk-email-triage job/guidellm-benchmark-<timestamp> --follow
 ```
 
-**RHEL / Quadlet** — with RHAII on `127.0.0.1:8000` (after `make quadlet-up`):
+**RHEL / Quadlet** — with RHAII on `127.0.0.1:8000` (after `make quadlet-up`). Token must be in `~/.config/helpdesk/secrets.env` as `HUGGING_FACE_HUB_TOKEN` (or `HF_TOKEN`); a shell `export` alone is not enough.
 
 ```bash
 make guidellm-quadlet
@@ -326,49 +322,62 @@ Use the numbers to size RHAII CPU nodes before a pilot.
 #### Prerequisites
 
 - RHEL 9.4+ (including **RHEL 10**) with rootless Podman meeting [RHAII CPU hardware](#rhaii-cpu-hardware-tracks-1-and-2) requirements
-- **Packages** from `dnf` on minimal hosts: `sudo dnf install -y podman git make`. Quadlet does not need Compose for this track
-- **Compose (optional)** — only for [Track 3](#track-3-local-mock-validation-maintainers) or [Compose on RHEL](#production-rhel-with-compose) on the same host. When `podman compose` is unavailable: `sudo dnf install -y python-pip` (or `python3-pip`), then `pip3 install --user podman-compose` (add `~/.local/bin` to `PATH`)
-- **Secrets** — real `HUGGING_FACE_HUB_TOKEN` in `~/.config/helpdesk/secrets.env` (not `hf_your_token_here`). Optional smoke override: `QUADLET_ALLOW_PLACEHOLDER_SECRETS=1` — see [deploy/quadlet/README.md](deploy/quadlet/README.md#secretsenv-and-quadlet_allow_placeholder_secrets)
-- `podman login registry.redhat.io`
-- Hugging Face token and a strong `VAULT_SECRET`
+- **Packages** on minimal hosts: `sudo dnf install -y podman git make` — **no Compose** required for this track
+- **Secrets file** — Quadlet containers read **`~/.config/helpdesk/secrets.env` only** (exporting `HF_TOKEN` in your shell does not configure the engine). Set a real `HUGGING_FACE_HUB_TOKEN` and a strong `VAULT_SECRET` before start. Optional `INGEST_API_KEY` gates HTTP ingest when set. Placeholder override: `QUADLET_ALLOW_PLACEHOLDER_SECRETS=1` — [deploy/quadlet/README.md](deploy/quadlet/README.md#secretsenv-and-quadlet_allow_placeholder_secrets)
+
+```bash
+podman login registry.redhat.io
+sudo dnf install -y podman git make python-pip
+pip install podman-compose
+```
 
 #### Step 1: One-time setup (repo root)
 
 ```bash
-mkdir -p ~/.config/containers/systemd ~/.config/helpdesk \
-  ~/helpdesk/sample_emails ~/helpdesk/docs ~/rhaii-cache
+git clone <repo-url> && cd helpdesk-email-triage
+make quadlet-setup
+```
 
-cat > ~/.config/helpdesk/secrets.env <<'EOF'
-HUGGING_FACE_HUB_TOKEN=hf_your_token_here
-VAULT_SECRET=change-me-before-deploy
+`make quadlet-setup` creates directories, copies sample mail and docs into `~/helpdesk/`, installs Quadlet units under `~/.config/containers/systemd/`, and creates `~/.config/helpdesk/secrets.env` **only if it does not exist**.
+
+**Edit secrets before RHAII start** (replace with your token path or paste a token):
+
+```bash
+cat > ~/.config/helpdesk/secrets.env <<EOF
+HUGGING_FACE_HUB_TOKEN=$(cat ~/hf_token)
+VAULT_SECRET=$(openssl rand -hex 32)
 EOF
 chmod 600 ~/.config/helpdesk/secrets.env
-
 podman login registry.redhat.io
-cp -r sample_emails/. ~/helpdesk/sample_emails/
-cp -r docs/. ~/helpdesk/docs/
 ```
 
-#### Step 2: Build images
+Do not leave `hf_your_token_here` or `change-me-before-deploy` in that file.
 
-Gateway and UI `Containerfile`s expect **repo root** as build context:
+#### Step 2: Build and start (ordered — avoids heuristic fallback)
+
+`make quadlet-deploy` builds gateway/UI images, starts inference, **waits until `/v1/models` and gateway `/health/ready`**, then starts the gateway and dashboard and ingests sample mail.
 
 ```bash
-podman build -f email-gateway/Containerfile -t localhost/helpdesk-email-gateway:prod .
-podman build -f agent-dashboard/Containerfile -t localhost/helpdesk-triage-ui:prod .
+make quadlet-deploy
 ```
 
-#### Step 3: Install Quadlet units and start
+Do **not** start all three services in one command (`systemctl --user start rhaii-cpu-engine email-gateway …`) on a cold host: the gateway file-watcher ingests sample `.eml` while vLLM is still loading, and those tickets are stored with model **`heuristic-fallback`** even after inference is healthy.
+
+<details>
+<summary>Manual equivalent (advanced)</summary>
 
 ```bash
+make quadlet-build
 cp deploy/quadlet/*.container deploy/quadlet/*.network deploy/quadlet/*.volume \
    ~/.config/containers/systemd/
-
 systemctl --user daemon-reload
-systemctl --user start rhaii-cpu-engine.service email-gateway.service agent-dashboard.service
+make quadlet-up
 ```
 
-Quadlet units show as **`generated`** in `systemctl --user list-unit-files`. Do **not** use `systemctl --user enable` if systemd reports *transient or generated* — use **`start`** above, then for boot / after SSH logout:
+`make quadlet-up` performs the same inference and readiness waits as `quadlet-deploy`. Skip sample ingest: `SKIP_INGEST=1 make quadlet-up`.
+</details>
+
+Quadlet units show as **`generated`** in `systemctl --user list-unit-files`. For boot / after SSH logout:
 
 ```bash
 sudo loginctl enable-linger "$USER"
@@ -384,22 +393,25 @@ podman logs -f rhaii-cpu-engine
 journalctl --user -u rhaii-cpu-engine.service -f
 ```
 
-#### Step 4: Verify
+#### Step 3: Verify
 
 ```bash
+make quadlet-verify
+# or:
 systemctl --user status rhaii-cpu-engine email-gateway agent-dashboard
-podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-curl -sS http://127.0.0.1:8080/health
-curl -sS http://127.0.0.1:8080/health/ready
+curl -sS http://127.0.0.1:8080/health          # classify_model: Qwen/Qwen2.5-1.5B-Instruct
+curl -sS http://127.0.0.1:8080/health/ready    # must succeed before trusting classifications
 curl -sS http://127.0.0.1:8080/tickets | python3 -m json.tool | head -20
 curl -sI http://127.0.0.1:8501/welcome | head -5
 ```
 
-Open **[http://127.0.0.1:8501/welcome](http://127.0.0.1:8501/welcome)** — pill should reflect **RHAII**, not mock. From a laptop, SSH port-forward: `ssh -L 8501:127.0.0.1:8501 -L 8080:127.0.0.1:8080 ec2-user@<host>`.
+Open **[http://127.0.0.1:8501/welcome](http://127.0.0.1:8501/welcome)** — the pill should show **RHAII**. On the inbox, **Model** in the sidebar reflects the **first ticket** in the queue; triage a new **Quick demo scenario** if older tickets still say `heuristic-fallback` from a cold start.
 
-**Troubleshooting:** If `rhaii-cpu-engine` is `activating (auto-restart)` and `curl …/health` shows `"classify_model":""`, run `podman logs rhaii-cpu-engine --tail 80` (not only `journalctl --user`, which may print *No journal files were found* until linger is enabled). Check `HUGGING_FACE_HUB_TOKEN` in `secrets.env`, registry login, and **≥16 GiB RAM**. After updating `deploy/quadlet/rhaii-cpu-engine.container`, `cp` it again and `systemctl --user daemon-reload && systemctl --user restart rhaii-cpu-engine`. Details: [deploy/quadlet/README.md](deploy/quadlet/README.md).
+From a laptop, SSH port-forward: `ssh -L 8501:127.0.0.1:8501 -L 8080:127.0.0.1:8080 ec2-user@<host>`.
 
-#### Step 5: Hands-on validation (same checklist as Track 1)
+**Troubleshooting:** `make guidellm-quadlet` asks for `HF_TOKEN` / `HUGGING_FACE_HUB_TOKEN` → put a real token in `~/.config/helpdesk/secrets.env` (not `hf_your_token_here`). `curl …/health/ready` failing → fix `rhaii-cpu-engine` (`podman logs rhaii-cpu-engine --tail 80`): `HUGGING_FACE_HUB_TOKEN` in `secrets.env`, registry login, **≥16 GiB RAM**. **`/health` shows `"classify_model":""` or `/welcome` does not show RHAII** on a host deployed before a repo update → re-copy `deploy/quadlet/email-gateway.container` to `~/.config/containers/systemd/`, then `systemctl --user daemon-reload && systemctl --user restart email-gateway` (the unit sets `MODEL_NAME` for the welcome pill). Sidebar **Model `heuristic-fallback`** with healthy inference → stale tickets from early ingest; triage a new scenario or stop the gateway, `podman volume rm gateway-data`, and `make quadlet-up` again. After other Quadlet unit changes, same `cp` / `daemon-reload` / restart pattern. Details: [deploy/quadlet/README.md](deploy/quadlet/README.md).
+
+#### Step 4: Hands-on validation (same checklist as Track 1)
 
 Work through **[Submit support tickets](#submit-support-tickets)** through **[What you've accomplished](#what-youve-accomplished)** in Track 1, using this host instead of OpenShift Routes:
 
@@ -408,7 +420,7 @@ Work through **[Submit support tickets](#submit-support-tickets)** through **[Wh
 | **Welcome / inbox** | `http://127.0.0.1:8501/welcome` |
 | **Gateway API** | `http://127.0.0.1:8080` |
 | **Vault secret** | `VAULT_SECRET` in `~/.config/helpdesk/secrets.env` |
-| **GuideLLM target** | `http://127.0.0.1:8000` — see [Load testing → Step 2](#step-2-run-load-test) (RHEL / Quadlet) |
+| **GuideLLM** | `make guidellm-quadlet` (inference on `http://127.0.0.1:8000`) — [Step 5](#step-5-optional-benchmark-inference-with-guidellm) |
 
 Optional extra ingest:
 
@@ -416,46 +428,26 @@ Optional extra ingest:
 ./scripts/ingest-sample.sh
 ```
 
+#### Step 5 (optional): Benchmark inference with GuideLLM
+
+With the Quadlet stack up and `curl -sf http://127.0.0.1:8080/health/ready` succeeding (from repo root). GuideLLM loads the Hugging Face tokenizer — use a real **`HUGGING_FACE_HUB_TOKEN`** in `~/.config/helpdesk/secrets.env` (not a shell `export` only).
+
+```bash
+podman login registry.redhat.io
+make guidellm-quadlet
+# Optional: GUIDELLM_RATE=1,2,4 GUIDELLM_MAX_SECONDS=300 make guidellm-quadlet
+```
+
+HTML/JSON under `./results/guidellm-quadlet/`. Image pull, tuning, and Podman-network targets: [Load testing](#load-testing) (RHEL / Quadlet).
+
 #### Stop
 
 ```bash
-systemctl --user stop agent-dashboard email-gateway rhaii-cpu-engine
+make quadlet-down
+# or: systemctl --user stop agent-dashboard email-gateway rhaii-cpu-engine
 ```
 
 **Compose alternative** on RHEL (no systemd): see [Production RHEL with Compose](#production-rhel-with-compose) below. Full Quadlet notes: [deploy/quadlet/README.md](deploy/quadlet/README.md).
-
----
-
-### Track 3: Local mock validation (maintainers)
-
-*~15 minutes. **Not a customer evaluation path** — mock classifier, no registry or HF token. Use for UI smoke tests, docs screenshots, and `make compose-e2e` / CI.*
-
-#### Prerequisites
-
-- `podman` or `docker` with Compose, `make`, `curl`, `python3`
-
-#### Step 1: Start the mock stack
-
-```bash
-git clone <repo-url> && cd helpdesk-email-triage
-make demo
-```
-
-Gateway `:8080`, dashboard `:8501`, SMTP `:3025`. Sample mail ingests automatically. Welcome pill shows **local mock**.
-
-```bash
-curl -sS http://127.0.0.1:8080/health   # classify_model: mock-triage
-```
-
-#### Step 2: Smoke-test the inbox
-
-Walk the Track 1 checklist ([Submit support tickets](#submit-support-tickets) through redaction) at `http://127.0.0.1:8501`. Vault demo secret: `helpdesk-demo-secret`. Skip [Load testing](#load-testing) unless you run `compose.yml` with RHAII.
-
-Optional maintainer checks: stop mock inference (`podman stop helpdesk-inference-mock`) and confirm **heuristic-fallback** ingest.
-
-```bash
-make down
-```
 
 ### Delete
 
@@ -584,27 +576,7 @@ See `.env.example` for the full list.
 | [deploy/openshift/README.md](deploy/openshift/README.md) | Kustomize layout |
 | [deploy/quadlet/README.md](deploy/quadlet/README.md) | Quadlet units |
 | [docs/testing/README.md](docs/testing/README.md) | Functional / E2E regression (maintainers; GuideLLM stays in this README) |
-
----
-
-### Development
-
-```bash
-make test              # unit tests (no running stack)
-make lint
-make compose-e2e       # mock gateway stack smoke test
-make validate-manifests
-make test-openshift-overlay
-make build-images
-```
-
-**GuideLLM** (inference benchmarking): [Load testing](#load-testing) above.
-
-**Functional / E2E regression** (maintainers): [docs/testing/README.md](docs/testing/README.md).
-
-**CI** (on every PR): ruff, tests, compose e2e, kind e2e, container builds (mock inference only).
-
-**Published images:** `quay.io/mtahhan/helpdesk-email-gateway`, `helpdesk-triage-ui`, `helpdesk-inference-mock`.
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Local mock stack, `make test` / CI, contributor workflows |
 
 ---
 
