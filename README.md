@@ -184,7 +184,7 @@ Try each ingest path at least once on the cluster:
 
 | Method | How |
 |---|---|
-| **File watcher** | Sample `.eml` files in `sample_emails/` ingest on deploy (if mounted) |
+| **File watcher** | Sample `.eml` files in `sample_emails/`if mounted. Ingest all .eml files on deploy and add new/changed files at runtime |
 | **Sidebar scenarios** | On the dashboard Route → **Quick demo scenario** (billing, MFA, VPN, …) |
 | **Custom message** | Sidebar form → **Triage →** |
 | **HTTP API** | `POST /ingest/raw` or upload `.eml` via `POST /ingest` ([integration.md](docs/integration.md)) |
@@ -198,6 +198,8 @@ curl -sk -X POST "${GW}/ingest/raw" \
 ```
 
 When `INGEST_API_KEY` is set (hardened overlay), add `-H "X-Ingest-Key: …"` from `oc get secret helpdesk-secrets -n helpdesk-email-triage -o jsonpath='{.data.INGEST_API_KEY}' | base64 -d`.
+
+If sample\_emails are mounted the app will rescan for new/changed files and ingest them. Note that there is NO LOCKING during the rescan. Any new files must be put with an extension different from `.eml` first and renamed to a `.eml` file to be picked up by the app.
 
 **What to look for:** New tickets in the inbox queue within a few seconds.
 
