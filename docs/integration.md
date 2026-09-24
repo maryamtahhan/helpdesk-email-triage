@@ -56,11 +56,44 @@ make verify-openshift
 
 See [deploy-openshift.md](deploy-openshift.md). After verify, follow the [quickstart walkthrough](quickstart-walkthrough.md) (submit tickets, review redaction, classification speed, optional GuideLLM load test).
 
+## Role in the mail stack
+
+The email gateway is an **application ingest point**: it parses RFC-822 mail, tokenizes PII, classifies on sanitized text, and exposes `TriageResult` over HTTP or webhooks. It is **not** a mail transfer agent (MTA).
+
+| Responsibility | Owner |
+|---|---|
+| Delivery, bounces, retries, queues, timeouts, TLS to the internet | Your MTA (Postfix, sendmail, Exim, commercial proxy, …) |
+| “What should happen to this message?” from headers and policy | Your MTA / routing rules |
+| Triage, vault, ticket API, optional webhook push | **This gateway** |
+
+Do **not** extend the gateway with MTA-style queuing, retransmission, or outbound relay. That problem space has years of corner cases; use a configured MTA (`sendmail -t`, `.forward`, transport maps, etc.) when mail must **continue in flight**.
+
+### Recommended production patterns
+
+1. **HTTP ingest (default)** — A trusted upstream system (helpdesk, ESB, custom worker) `POST`s `.eml` or JSON to `/ingest` with `X-Ingest-Key` when configured. The upstream owns retry if the gateway is down.
+2. **Shared spool or drop directory** — The real MTA (or proxy) writes queue files or `.eml` drops to a volume the gateway watches (`EMAIL_INPUT_DIR`). Same pod (sidecar) or shared PVC. The MTA still delivers mail; the gateway only **reads a copy** for triage.
+3. **MTA mail filter** — Run [`email_classification_gateway.py`](../email-gateway/gateways/email_classification_gateway.py) as a stdin/stdout filter inside the existing pipeline when you need MIME → JSON classification **without** running an SMTP listener ([Standalone mail filter](#standalone-mail-filter)).
+4. **Duplicate SMTP to a dead-end sink (avoid)** — Forwarding a second copy to the gateway SMTP port works for demos but doubles traffic and is harder to operate than HTTP or spool.
+
+For machine-to-machine ingest on OpenShift, prefer the **in-cluster Service** URL plus `INGEST_API_KEY`. Public Routes with OAuth are for human/browser access; automation should not depend on the OAuth-facing gateway URL unless your platform provides a standard token flow.
+
+### SMTP listener: dead-end ingest only
+
+The optional SMTP listener (default port **3025**) is a **dead-end sink**: accept → triage → store → done. It does **not** relay mail onward. That model is appropriate for local demos (`swaks`, sidebar “send via SMTP”).
+
+Security and operations teams often flag **any** custom SMTP listener on the network — it can resemble an open relay in port scans and policy reviews even when it is not relaying. For production:
+
+- Use **`REQUIRE_SECRETS=1`** (hardened overlays) so SMTP is **not started**; use HTTP ingest instead.
+- If you must use SMTP in a lab, bind to **`127.0.0.1`** (`SMTP_BIND`) or keep the port off the public internet.
+- Do not point production MX records or internet-facing MTA transports at the gateway.
+
+The listener also has **no** SMTP-level durability: it returns `250 Message accepted` before triage finishes. A crash after accept can lose the message. See [SMTP durability](#smtp-durability).
+
 ## Adoption paths
 
-### 1. SMTP relay
+### 1. SMTP ingest (demo / lab)
 
-Point your mail transfer agent or helpdesk forwarder at the gateway SMTP listener (default port **3025**).
+Point a **local** client or forwarder at the gateway SMTP listener (default port **3025**) only for quickstarts — not as a production mail hop.
 
 ```bash
 # Example: swaks (if installed)
@@ -71,9 +104,9 @@ swaks --to support@localhost --server 127.0.0.1:3025 \
 
 The gateway accepts the message asynchronously and returns `250 Message accepted`. Poll `GET /tickets` (or `GET /tickets/{id}`) for the sanitized result.
 
-Set `SMTP_BIND=127.0.0.1` in production unless the listener sits behind a firewall or authenticated relay. When `REQUIRE_SECRETS=1` (hardened OpenShift overlay), the SMTP listener is **not started** — use authenticated HTTP ingest instead.
+When `REQUIRE_SECRETS=1` (hardened OpenShift overlay), the SMTP listener is **not started** — use authenticated HTTP ingest instead. See [Role in the mail stack](#role-in-the-mail-stack).
 
-### 2. HTTP ingest
+### 2. HTTP ingest (production default)
 
 **Multipart upload** — post a `.eml` file:
 
@@ -346,9 +379,9 @@ Do not expose this endpoint to untrusted consumers. The demo Streamlit UI gates 
 | `INGEST_API_KEY` | *(unset)* | Require `X-Ingest-Key` on ingest and `GET /tickets` endpoints |
 | `REQUIRE_SECRETS` | *(unset)* | Set to `1` to refuse demo-default secrets at startup and **disable SMTP** |
 
-## SMTP durability note
+## SMTP durability
 
-The SMTP listener accepts mail with `250 Message accepted` and classifies in a background thread. If the gateway process crashes after accept but before persistence, that message is lost. For production MTA integration, prefer `POST /ingest` (with `INGEST_API_KEY` when configured) or an upstream queue that retries on failure.
+The SMTP listener accepts mail with `250 Message accepted` and classifies in a background thread. If the gateway process crashes after accept but before persistence, that message is lost. Production integrations should use `POST /ingest` (with `INGEST_API_KEY` when configured) or a spool/drop path where the **upstream MTA** retains the message until ingest succeeds. The gateway does not implement SMTP retries or a mail queue.
 
 ## Compose files
 

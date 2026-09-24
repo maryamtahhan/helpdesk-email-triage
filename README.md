@@ -482,7 +482,7 @@ For local or RHEL deployments, stop the running stack using the commands in the 
 make gateway-only
 ```
 
-No Streamlit — mock inference + gateway only. Wire your queue via [docs/integration.md](docs/integration.md) (`POST /ingest`, webhooks, `TICKET_SINK`).
+No Streamlit — mock inference + gateway only. Wire your stack via [docs/integration.md](docs/integration.md) (`POST /ingest`, webhooks, `TICKET_SINK`). The gateway is **not an MTA** (no relay or mail queue); production mail stays on your Postfix/sendmail/proxy — see [Role in the mail stack](docs/integration.md#role-in-the-mail-stack).
 
 ### Production RHEL with Compose
 

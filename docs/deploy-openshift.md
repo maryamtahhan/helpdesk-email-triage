@@ -120,10 +120,12 @@ OVERLAY=deploy/openshift/overlays/mock-demo ./scripts/deploy-openshift.sh my-nam
 1. **Overlay** — `hardened` (mock) or `hardened-rhaii` / `INFERENCE=rhaii OVERLAY=.../hardened` (RHAII).
 2. **Secrets** — non-demo `VAULT_SECRET` and `INGEST_API_KEY` in `helpdesk-secrets` before deploy.
 3. **Images** — `IMAGE_TAG=v1.2.3 make deploy-openshift` or Kustomize `images:` in your fork.
-4. **Vault storage** — `tickets.json` on the gateway PVC is **not encrypted at rest**.
-5. **SMTP** — disabled automatically when `REQUIRE_SECRETS=1`; prefer authenticated HTTP ingest.
-6. **OAuth** — hardened overlays protect **both** gateway and dashboard Routes with OpenShift OAuth; the dashboard pod receives only `INGEST_API_KEY` (not `VAULT_SECRET`) and uses it for ticket list and vault rehydration.
-7. **NetworkPolicy** — demo overlays apply ingress-only policies. GuideLLM adds `allow-guidellm-to-inference` egress when you run `make guidellm-openshift`. If your cluster enforces default-deny **egress**, allow DNS to `openshift-dns` / `kube-dns` (UDP/TCP port 53) and egress from `email-gateway` to inference on port 8000.
+4. **Vault storage** — `tickets.json` on the gateway PVC is **not encrypted at rest**; use encrypted PVC / volume or replace the store for regulated workloads.
+5. **Mail integration** — the gateway is **not an MTA** (no relay, queue, or retransmission). Use authenticated **HTTP ingest** or a **shared spool / `.eml` drop** the real MTA writes; keep delivery on Postfix/sendmail/your proxy. Details: [integration.md — Role in the mail stack](integration.md#role-in-the-mail-stack).
+6. **SMTP** — disabled automatically when `REQUIRE_SECRETS=1`; do not expose the demo SMTP listener on production networks (dead-end ingest only; see integration guide).
+7. **OAuth** — hardened overlays protect **both** gateway and dashboard Routes with OpenShift OAuth. Workers and CRM adapters should call the **in-cluster** `email-gateway` Service with `X-Ingest-Key`, not the OAuth-facing Route URL, unless you use a platform token flow. The dashboard pod receives only `INGEST_API_KEY` (not `VAULT_SECRET`) for ticket list and vault rehydration.
+8. **Downstream** — set `TICKET_SINK` for push delivery; treat `GET /tickets` as backup if a webhook fails (no built-in outbox replay).
+9. **NetworkPolicy** — demo overlays apply ingress-only policies. GuideLLM adds `allow-guidellm-to-inference` egress when you run `make guidellm-openshift`. If your cluster enforces default-deny **egress**, allow DNS to `openshift-dns` / `kube-dns` (UDP/TCP port 53) and egress from `email-gateway` to inference on port 8000.
 
 ### Hardened deploy
 
