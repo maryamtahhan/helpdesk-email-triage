@@ -2,7 +2,10 @@
         validate-manifests compose-e2e build-images deploy-openshift verify-openshift guidellm-openshift \
         undeploy-openshift run-on-kind destroy-kind kind-e2e test-openshift-overlay \
         quadlet-setup quadlet-build quadlet-up quadlet-down quadlet-reset quadlet-verify quadlet-ingest \
-        quadlet-deploy quadlet-relaunch guidellm-quadlet quadlet-e2e
+        quadlet-deploy quadlet-relaunch guidellm-quadlet quadlet-e2e \
+        ci-install ci-test ci-uninstall
+
+NAMESPACE ?= helpdesk-email-triage
 
 # demo          — mock inference + gateway + Streamlit UI
 # gateway-only  — mock inference + gateway (integrator path, no UI)
@@ -150,3 +153,16 @@ guidellm-quadlet:
 quadlet-e2e:
 	chmod +x scripts/quadlet-*.sh scripts/wait-for-tickets.sh scripts/guidellm-quadlet.sh
 	./scripts/quadlet-e2e.sh
+
+# CI targets — deploy with mock inference, verify, and clean up without deleting the namespace
+ci-install:
+	chmod +x scripts/deploy-openshift.sh scripts/openshift-rhaii-secrets.sh scripts/openshift-verify.sh
+	INFERENCE=auto ./scripts/deploy-openshift.sh "$(NAMESPACE)"
+
+ci-test:
+	chmod +x scripts/openshift-verify.sh
+	./scripts/openshift-verify.sh "$(NAMESPACE)"
+
+ci-uninstall:
+	chmod +x scripts/undeploy-openshift.sh
+	./scripts/undeploy-openshift.sh "$(NAMESPACE)"

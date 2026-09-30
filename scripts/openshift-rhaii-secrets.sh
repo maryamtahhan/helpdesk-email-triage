@@ -41,6 +41,10 @@ ensure_redhat_pull_secret() {
     return 0
   fi
 
+  if cluster_pull_secret_covers_redhat_registry; then
+    return 0
+  fi
+
   if [[ -n "${REDHAT_REGISTRY_USERNAME:-}" && -n "${REDHAT_REGISTRY_PASSWORD:-}" ]]; then
     oc create secret docker-registry redhat-registry-pull \
       --docker-server=registry.redhat.io \
@@ -85,11 +89,20 @@ ensure_redhat_pull_secret() {
   return 1
 }
 
+cluster_pull_secret_covers_redhat_registry() {
+  # On RHOCP the cluster-level pull secret typically covers registry.redhat.io globally,
+  # so a namespace-level secret is not required.
+  oc get secret pull-secret -n openshift-config -o jsonpath='{.data.\.dockerconfigjson}' 2>/dev/null \
+    | base64 -d 2>/dev/null \
+    | grep -q "registry.redhat.io" 2>/dev/null
+}
+
 has_redhat_pull_secret() {
   local namespace="$1"
   oc get secret redhat-registry-pull -n "$namespace" >/dev/null 2>&1 \
     || [[ -n "${REDHAT_REGISTRY_USERNAME:-}" && -n "${REDHAT_REGISTRY_PASSWORD:-}" ]] \
-    || registry_auth_file >/dev/null 2>&1
+    || registry_auth_file >/dev/null 2>&1 \
+    || cluster_pull_secret_covers_redhat_registry
 }
 
 link_pull_secret() {
@@ -105,7 +118,11 @@ rhaii_prereqs_met() {
 explain_rhaii_prereqs() {
   local namespace="${1:?namespace required}"
   if has_redhat_pull_secret "$namespace"; then
-    echo "  ✓ registry.redhat.io credentials detected" >&2
+    if cluster_pull_secret_covers_redhat_registry; then
+      echo "  ✓ registry.redhat.io covered by cluster pull secret" >&2
+    else
+      echo "  ✓ registry.redhat.io credentials detected" >&2
+    fi
   fi
   if has_hf_secret "$namespace"; then
     echo "  ✓ Hugging Face token detected" >&2
