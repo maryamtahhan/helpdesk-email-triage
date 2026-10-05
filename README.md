@@ -134,7 +134,7 @@ Both tracks run RHAII 3.5 CPU inference; no GPU is required.
 
 ### Track 1: Deploy to OpenShift (RHAII CPU)
 
-*~30–45 minutes.
+*~30–45 minutes.*
 
 #### Prerequisites
 
@@ -213,10 +213,11 @@ In the sample above, `<cluster>` stands in for your cluster apps domain (for exa
 Open `https://<dashboard-route>/welcome`.
 
 ![Welcome page showing PII redaction demo](docs/images/welcome-page.png)
+
 #### Step 2: Verify deployment
 
 ```bash
-$ make verify-openshift
+make verify-openshift
 ```
 
 Example output (`$` = command you ran; following lines = script output):
@@ -370,8 +371,10 @@ curl -sk "${GW}/tickets" | python3 -c \
 
 For example in one of our tests we saw:
 
-```bash
-curl -sk -X POST "${GW}/ingest/raw"   -H "Content-Type: application/json"   -d '{"sender":"you@example.com","subject":"VPN issue","body":"Cannot connect from home office."}'
+```console
+$ curl -sk -X POST "${GW}/ingest/raw" \
+  -H "Content-Type: application/json" \
+  -d '{"sender":"you@example.com","subject":"VPN issue","body":"Cannot connect from home office."}'
 {"id":"TICKET-8930","sender":"[EMAIL_1]","subject":"VPN issue","sanitized_text":"Cannot connect from [WORK_LOCATION]","summary":"User cannot connect from their work location.","category":"Tech Support","urgency":"High","classification_ms":4664.3,"source":"api","model":"Qwen/Qwen2.5-1.5B-Instruct","created_at":"2026-09-30T18:09:37.280911+00:00","token_count":1}
 ```
 
@@ -437,14 +440,13 @@ podman login registry.redhat.io
 ##### Step 2: Run the benchmark
 
 First deploy the quickstart to your OpenShift project with RHAII CPU inference enabled if you have not done so already.
-Next run the guidellm-openshift target
+Then run `make guidellm-openshift`:
 
 ```bash
 make guidellm-openshift
 ```
 
-The Job sends requests to the in-cluster Service (`rhaii-cpu:8000`) to test the deployment. You can
-what the progress as the load test progresses with:
+The Job sends requests to the in-cluster Service (`rhaii-cpu:8000`) to test the deployment. You can watch progress as the load test runs with:
 
 ```bash
 oc logs -n helpdesk-email-triage job/guidellm-benchmark-<timestamp> --follow
@@ -682,7 +684,7 @@ make quadlet-down
 # or: systemctl --user stop agent-dashboard email-gateway rhaii-cpu-engine
 ```
 
-**Compose alternative** on RHEL (no systemd): see [Production RHEL with Compose](#production-rhel-with-compose) below. Full Quadlet notes: [deploy/quadlet/README.md](deploy/quadlet/README.md).
+**Compose alternative** on RHEL (no systemd): see [Production RHEL with Compose](#production-rhel-with-compose) under [Technical Details](#technical-details). Full Quadlet notes: [deploy/quadlet/README.md](deploy/quadlet/README.md).
 
 ### What you've accomplished
 
@@ -701,8 +703,9 @@ For OpenShift:
 make undeploy-openshift
 ```
 
-If you want to delete the namespace at the same time you can add DELETE_NAMESPACE=1:
-```
+If you want to delete the namespace at the same time you can add `DELETE_NAMESPACE=1`:
+
+```bash
 # Remove the whole project:
 DELETE_NAMESPACE=1 make undeploy-openshift
 ```
@@ -720,6 +723,44 @@ For local Compose or RHEL Compose deployments, run `make down` to stop the conta
 
 
 ## Technical Details
+
+### Production RHEL with Compose
+
+Alternative to Quadlet on a single RHEL host (no systemd integration):
+
+```bash
+cp .env.example .env
+podman login registry.redhat.io
+export HF_TOKEN="your_huggingface_token"
+export RHEL_CACHE_DIR="$HOME/rhaii-cache" && mkdir -p "$RHEL_CACHE_DIR"
+podman compose -f compose.yml up --build -d
+```
+
+Open [http://127.0.0.1:8501/welcome](http://127.0.0.1:8501/welcome). Prefer [Track 2 Quadlet](#track-2-run-on-rhel-with-systemd-quadlet) when you need boot integration and per-service logs.
+
+### OpenShift hardened pilot
+
+NetworkPolicies, OAuth on Routes, and non-demo secrets. Full checklist: [docs/deploy-openshift.md](docs/deploy-openshift.md).
+
+```bash
+export VAULT_SECRET="$(openssl rand -hex 32)"
+export INGEST_API_KEY="$(openssl rand -hex 16)"
+oc create secret generic helpdesk-secrets \
+  --from-literal=VAULT_SECRET="$VAULT_SECRET" \
+  --from-literal=INGEST_API_KEY="$INGEST_API_KEY" \
+  -n helpdesk-email-triage --dry-run=client -o yaml | oc apply -f -
+
+# RHAII CPU + hardening (recommended pilot):
+INFERENCE=rhaii OVERLAY=deploy/openshift/overlays/hardened make deploy-openshift
+
+# Mock + hardening (overlay smoke only):
+OVERLAY=deploy/openshift/overlays/hardened INFERENCE=mock make deploy-openshift
+```
+
+> `OVERLAY=.../hardened` without `INFERENCE=rhaii` deploys **mock** inference.
+
+HTTP ingest then requires `X-Ingest-Key`. Pin images: `IMAGE_TAG=v1.2.3 make deploy-openshift`.
+
 ### Documentation
 
 | Guide | When to read it |
