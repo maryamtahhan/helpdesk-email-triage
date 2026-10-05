@@ -147,7 +147,7 @@ Both tracks run RHAII 3.5 CPU inference; no GPU is required.
 
 ```bash
 git clone <repo-url> && cd helpdesk-email-triage
-oc new-project helpdesk-email-triage 
+oc new-project helpdesk-email-triage
 export HF_TOKEN="your_huggingface_token"
 podman login registry.redhat.io
 INFERENCE=rhaii make deploy-openshift
@@ -358,7 +358,7 @@ Expected sample results (file-watcher emails):
 1. In the queue list, each ticket shows its **classification time**.
 2. At the top of the inbox, check **Avg classification** in the metrics row.
 
-   ![Metrics row at the top of the inbox showing Avg classification time](docs/images/classification-speed-metrics.png)
+   ![Metrics row at the top of the inbox showing Avg classification time](docs/images/avg-classification-time.png)
 
 3. In ticket detail, note the per-ticket latency tag next to the timestamp.
 
@@ -436,7 +436,7 @@ podman login registry.redhat.io
 
 ##### Step 2: Run the benchmark
 
-First deploy the quickstart to your OpenShift project with RHAII CPU inference enabled if you have not done so already. 
+First deploy the quickstart to your OpenShift project with RHAII CPU inference enabled if you have not done so already.
 Next run the guidellm-openshift target
 
 ```bash
@@ -481,7 +481,7 @@ xdg-open ./results/guidellm-openshift/guidellm-benchmark-*.html      # Linux
 
 The HTML report shows latency distributions, time-to-first-token (TTFT), inter-token latency (ITL), and per-request breakdowns across concurrency levels. Look for the concurrency level where p95 latency starts to increase sharply — that is the saturation point for your node configuration.
 
-![GuideLLM HTML benchmark report showing latency and throughput across concurrency levels](docs/images/guidellm-html-report.png)
+A sample report from a 4-vCPU test run is included at [docs/examples/guidellm-benchmark-example.html](docs/examples/guidellm-benchmark-example.html).
 
 **Step 3c: Archive or compare runs (JSON)**
 
