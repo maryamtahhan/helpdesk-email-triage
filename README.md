@@ -216,7 +216,7 @@ Open `https://<dashboard-route>/welcome`.
 #### Step 2: Verify deployment
 
 ```bash
-make verify-openshift
+$ make verify-openshift
 ```
 
 Example output (`$` = command you ran; following lines = script output):
