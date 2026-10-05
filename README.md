@@ -155,15 +155,116 @@ INFERENCE=rhaii make deploy-openshift
 
 Weights download to the `rhaii-model-cache` PVC on first start. Increase wait if needed: `RHAII_WAIT_TIMEOUT=1200s INFERENCE=rhaii make deploy-openshift`.
 
+Example output from running `INFERENCE=rhaii make deploy-openshift` (lines starting with `$` are commands; the rest is script output):
+
+```console
+$ INFERENCE=rhaii make deploy-openshift
+chmod +x scripts/deploy-openshift.sh scripts/openshift-rhaii-secrets.sh scripts/openshift-verify.sh
+INFERENCE="${INFERENCE:-rhaii}" ./scripts/deploy-openshift.sh
+==> Checking cluster capacity for RHAII CPU (requests: 4 CPU, 8Gi memory)
+    Found node(s) with >=16Gi allocatable memory
+==> Preparing RHAII CPU secrets (registry.redhat.io + Hugging Face)
+secret/hf-secret created
+==> Applying deploy/openshift/overlays/helpdesk-email-triage-rhaii (inference=rhaii, image-tag=latest)
+serviceaccount/helpdesk-route-reader created
+role.rbac.authorization.k8s.io/helpdesk-route-reader created
+rolebinding.rbac.authorization.k8s.io/helpdesk-route-reader created
+configmap/helpdesk-config created
+configmap/helpdesk-routes created
+configmap/sample-emails-k5hg95fhmb created
+secret/helpdesk-secrets created
+service/agent-dashboard created
+service/email-gateway created
+service/rhaii-cpu created
+persistentvolumeclaim/gateway-data created
+persistentvolumeclaim/rhaii-model-cache created
+deployment.apps/agent-dashboard created
+deployment.apps/email-gateway created
+deployment.apps/rhaii-cpu created
+networkpolicy.networking.k8s.io/allow-dashboard-to-gateway created
+networkpolicy.networking.k8s.io/allow-gateway-to-inference created
+networkpolicy.networking.k8s.io/allow-openshift-ingress created
+networkpolicy.networking.k8s.io/default-deny-ingress created
+route.route.openshift.io/agent-dashboard created
+route.route.openshift.io/email-gateway created
+configmap/helpdesk-deploy-info created
+==> Waiting for deployments
+deployment.apps/rhaii-cpu condition met
+deployment.apps/email-gateway condition met
+deployment.apps/agent-dashboard condition met
+
+Deployed to namespace: helpdesk-email-triage (inference: rhaii)
+NAME                                   READY   STATUS    RESTARTS   AGE
+pod/agent-dashboard-7b8497dbfd-swpxh   1/1     Running   0          4m13s
+pod/email-gateway-5549f756c4-k6jwq     1/1     Running   0          4m13s
+pod/rhaii-cpu-964f6d545-wsfh5          1/1     Running   0          4m12s
+
+NAME                                       HOST/PORT                                                                                   PATH   SERVICES          PORT   TERMINATION     WILDCARD
+route.route.openshift.io/agent-dashboard   agent-dashboard-helpdesk-email-triage.<cluster>          agent-dashboard   http   edge/Redirect   None
+route.route.openshift.io/email-gateway     email-gateway-helpdesk-email-triage.<cluster>            email-gateway     http   edge/Redirect   None
+
+Gateway:   https://email-gateway-helpdesk-email-triage.apps.<cluster>/health
+Dashboard: https://agent-dashboard-helpdesk-email-triage.apps.<cluster>/welcome   (inbox: https://agent-dashboard-helpdesk-email-triage.apps.<cluster>/inbox/)
+Inference: RHAII CPU (registry.redhat.io/rhaii/vllm-cpu-rhel9) — first start may take several minutes
+```
+
+In the sample above, `<cluster>` stands in for your cluster apps domain (for example `apps.cluster.example.com`). Hostnames from `oc get route` include that full suffix.
+
+Open `https://<dashboard-route>/welcome`.
+
+![Welcome page showing PII redaction demo](docs/images/welcome-page.png)
 #### Step 2: Verify deployment
 
 ```bash
 make verify-openshift
 ```
 
+Example output (`$` = command you ran; following lines = script output):
+
+```console
+$ make verify-openshift
+chmod +x scripts/openshift-verify.sh
+./scripts/openshift-verify.sh
+Namespace: helpdesk-email-triage
+Gateway:   https://email-gateway-helpdesk-email-triage.<cluster>/health
+Dashboard: https://agent-dashboard-helpdesk-email-triage.<cluster>/welcome   (inbox: https://agent-dashboard-helpdesk-email-triage.<cluster>/inbox/)
+
+## Verify
+curl -sk "https://email-gateway-helpdesk-email-triage.<cluster>/health"   # may show OAuth page when hardened
+curl -skI "https://agent-dashboard-helpdesk-email-triage.<cluster>" | head -5
+Open: https://agent-dashboard-helpdesk-email-triage.<cluster>/welcome
+
+==> Gateway health (API base: https://email-gateway-helpdesk-email-triage.<cluster>)
+{"status":"ok","classify_model":"Qwen/Qwen2.5-1.5B-Instruct"}
+
+==> Dashboard /welcome
+OK — onboarding page reachable
+
+==> Dashboard headers (/)
+HTTP/1.1 302 Moved Temporarily
+server: nginx/1.20.1
+date: Mon, 05 Oct 2026 10:58:53 GMT
+content-type: text/html
+content-length: 145
+
+==> Waiting for ticket (file watcher on sample_emails/)
+==> Found 7 ticket(s) from file watcher
+```
+
 You should see **Gateway** and **Dashboard** Route URLs, gateway `/health` JSON (with a real model name when RHAII is up), dashboard headers, and at least one ticket.
 
 Open **`https://<dashboard-route>/welcome`** — the pill should show **RHAII**.
+
+![RHAII pill](docs/images/rhaii-pill.png)
+
+Click on `Open the inbox` in the welcome page (`https://<dashboard-route>/welcome`)
+to open the main dashboard.
+
+![Open the inbox](docs/images/open-the-inbox.png)
+
+The main dashboard will look as follows:
+
+![Main dashboard](docs/images/main-dashboard.png)
 
 Save your **dashboard** URL (`https://<dashboard-route>/welcome`) and **gateway** URL (`https://<gateway-route-host>`) for the steps below.
 
@@ -175,11 +276,15 @@ Try each ingest path at least once on the cluster:
 
 | Method | How |
 |---|---|
-| **File watcher** | Sample `.eml` files in `sample_emails/`if mounted. Ingest all .eml files on deploy and add new/changed files at runtime |
+| **File watcher** | Sample `.eml` files in `sample_emails/` if mounted. Ingest all .eml files on deploy and add new/changed files at runtime |
 | **Sidebar scenarios** | On the dashboard Route → **Quick demo scenario** (billing, MFA, VPN, …) |
 | **Custom message** | Sidebar form → **Triage →** |
 | **HTTP API** | `POST /ingest/raw` or upload `.eml` via `POST /ingest` ([integration.md](docs/integration.md)) |
 | **SMTP** | Sidebar **↪** or mail to `support@helpdesk.local` when SMTP is exposed on the overlay |
+
+The **Quick demo scenario** buttons are in the left-hand sidebar:
+
+![Quick demo scenario buttons in the sidebar](docs/images/quick-demo-scenarios.png)
 
 ```bash
 export GW="https://$(oc get route email-gateway -n helpdesk-email-triage -o jsonpath='{.spec.host}')"
@@ -197,7 +302,13 @@ If sample\_emails are mounted the app will rescan for new/changed files and inge
 ##### Step 1: Review the email in the different inboxes based on classification
 
 1. On the dashboard, set **Queue** to each category: `Billing`, `Tech Support`, `Account Access`, `General`, then `All`.
+
+   ![Queue filter dropdown showing all categories](docs/images/queue-filters.png)
+
 2. Set **Urgency** to `High` — urgent samples (double charge, MFA lockout) should surface first.
+
+   ![Urgency filter chips applied in the sidebar](docs/images/filters.png)
+
 3. Click tickets in the left **Queue** column; detail opens with **category**, **urgency**, and subject.
 4. Expand **Category breakdown** above the queue.
 
@@ -214,8 +325,16 @@ Expected sample results (file-watcher emails):
 
 1. Open a ticket with obvious PII (e.g. billing double-charge).
 2. In **Sanitized body**, confirm tokens (`[NAME_1]`, `[EMAIL_1]`, `[CARD_LAST4_1]`, `[PHONE_1]`, `[ACCOUNT_ID_1]` for `ACC-…`) — not raw values. **From** on the ticket should be tokenized.
+
+   ![Ticket detail showing sanitized body with PII tokens](docs/images/view-ticket.png)
+
 3. Click **View original PII vault** — compare the token map to the original body.
+
+   ![Vault rehydration — original body alongside token map](docs/images/rehydration.png)
+
 4. Expand **What downstream systems see** — exact `GET /tickets/{id}` JSON for webhooks/CRMs; no `original_text` or vault map.
+
+   ![What downstream systems see — sanitized JSON output](docs/images/what-downstream-sees.png)
 
 #### Review classification speed
 
