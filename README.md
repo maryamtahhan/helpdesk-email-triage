@@ -491,6 +491,8 @@ The script prints the re-fetch command at the end of its output. GuideLLM produc
 
 Each row is one concurrency level (2 and 4 concurrent streams). Key columns: **Request Latency Mdn** (end-to-end per request), **TTFT Mdn** (time to first token), **ITL Mdn** (inter-token latency), and **Output Tokens Per Sec**.
 
+> **Note:** The **Total Tokens Per Sec** column will not equal **Input + Output Tokens Per Sec**. GuideLLM computes each column as an independent time-windowed mean over the run, so they are individually accurate but do not sum arithmetically.
+
 **Step 3b: Open the HTML report**
 
 ```bash
