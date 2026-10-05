@@ -459,18 +459,37 @@ When the Job completes, results are written to `./results/guidellm-openshift/`. 
 
 **Step 3a: Read the console output**
 
-Tail the Job logs to see live progress and a final summary:
+`make guidellm-openshift` streams the Job logs automatically. To re-fetch them after the fact:
 
 ```bash
 oc logs -n helpdesk-email-triage job/guidellm-benchmark-<timestamp> --follow
 ```
 
-The summary shows throughput and latency per concurrency level. For example, a 4-vCPU node running `Qwen/Qwen2.5-1.5B-Instruct` with 128-token prompts and 64-token outputs:
+The script prints the re-fetch command at the end of its output. GuideLLM produces several summary tables; the most useful for sizing are **Request Latency Statistics** and **Server Throughput Statistics**. For example, on a 4-vCPU node with `Qwen/Qwen2.5-1.5B-Instruct` (128-token prompts, 64-token outputs):
 
-| Concurrent streams | Successful | Throughput (req/s) | Avg E2E latency (s) | Output tokens/s |
-|---|---|---|---|---|
-| 2 | 9 / 10 | ~0.07 | ~24 | ~5 |
-| 4 | 12 / 16 | ~0.10 | ~37 | ~7 |
+```
+ℹ Request Latency Statistics (Completed Requests)
+|============|=========|========|=======|========|=======|========|=======|=======|=======|=======|
+| Benchmark  | Request Latency || TTFT          || TTFOT         || ITL          || TPOT         ||
+| Strategy   | Sec             || ms            || ms            || ms           || ms           ||
+|            | Mdn     | p95    | Mdn   | p95    | Mdn   | p95    | Mdn   | p95   | Mdn   | p95   |
+|------------|---------|--------|-------|--------|-------|--------|-------|-------|-------|-------|
+| concurrent | 11.0    | 13.5   | 481.4 | 2571.2 | 481.4 | 2571.2 | 166.6 | 173.5 | 171.5 | 211.0 |
+| concurrent | 11.5    | 12.1   | 670.4 | 1196.1 | 670.4 | 1196.1 | 173.0 | 182.5 | 180.1 | 189.4 |
+|============|=========|========|=======|========|=======|========|=======|=======|=======|=======|
+
+ℹ Server Throughput Statistics (All Requests)
+|============|=======|======|=========|==============|===============|==============|
+| Benchmark  | Requests             ||| Input Tokens | Output Tokens | Total Tokens |
+| Strategy   | Concurrency || Per Sec | Per Sec      | Per Sec       | Per Sec      |
+|            | Mdn   | Mean | Mean                                               ||||
+|------------|-------|------|---------|--------------|---------------|--------------|
+| concurrent | 2.0   | 2.0  | 0.2     | 30.9         | 11.5          | 39.8         |
+| concurrent | 4.0   | 4.0  | 0.3     | 59.3         | 22.2          | 76.7         |
+|============|=======|======|=========|==============|===============|==============|
+```
+
+Each row is one concurrency level (2 and 4 concurrent streams). Key columns: **Request Latency Mdn** (end-to-end per request), **TTFT Mdn** (time to first token), **ITL Mdn** (inter-token latency), and **Output Tokens Per Sec**.
 
 **Step 3b: Open the HTML report**
 
