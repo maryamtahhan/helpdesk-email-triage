@@ -82,7 +82,7 @@ After either track, you’ll have built and deployed:
 1. **Ingest** — HTTP, SMTP, or file watcher on `.eml` drops.
 2. **Gateway** — Tokenizes structured PII into a vault; exposes `TriageResult` JSON and `/health/ready`.
 3. **Inference** — Classification on **RHAII 3.5 CPU** on tokenized text only.
-4. **Agent inbox** *(optional)* — Streamlit UI to review redaction and classificaiton
+4. **Agent inbox** *(optional)* — Streamlit UI to review redaction and classification
 
 ## Requirements
 
@@ -270,9 +270,24 @@ Save your **dashboard** URL (`https://<dashboard-route>/welcome`) and **gateway*
 
 #### Submit support tickets
 
-**TODO**: add more specific step by step instructions with screenshots and explanation of what you see.
+Try each ingest path below to populate the inbox. After each submission, a new ticket should appear in the queue within a few seconds (longer on the first RHAII classification while the model warms up).
 
-Try each ingest path at least once on the cluster:
+**Step-by-step: Quick demo scenario (recommended starting point)**
+
+1. Open the inbox and locate the **Quick demo scenario** section in the left sidebar.
+2. Click any scenario button — for example **Billing → Double charge** or **Account Access → MFA lockout**.
+3. The dashboard submits a pre-written email to the gateway and navigates to the inbox.
+4. The new ticket appears at the top of the queue with its **Category**, **Urgency**, and **classification time** already populated.
+
+**Step-by-step: Custom message via the sidebar form**
+
+1. In the sidebar, fill in **Sender**, **Subject**, and **Body** with your own text. Include PII (a phone number, email address, or `ACC-` account ID) to see tokenization in action.
+2. Click **Triage →** — the gateway tokenizes any detected PII before sending the sanitized text to inference.
+3. Open the new ticket and confirm that **Sanitized body** shows tokens (`[PHONE_1]`, `[EMAIL_1]`, …) rather than the original values.
+
+   ![Custom message form in the sidebar with Sender, Subject, Body fields and Triage button](docs/images/custom-message-form.png)
+
+Try each ingest method at least once:
 
 | Method | How |
 |---|---|
@@ -312,6 +327,8 @@ If sample\_emails are mounted the app will rescan for new/changed files and inge
 3. Click tickets in the left **Queue** column; detail opens with **category**, **urgency**, and subject.
 4. Expand **Category breakdown** above the queue.
 
+   ![Category breakdown panel above the queue showing ticket distribution](docs/images/category-breakdown.png)
+
 Expected sample results (file-watcher emails):
 
 | Email | Category | Urgency |
@@ -340,6 +357,9 @@ Expected sample results (file-watcher emails):
 
 1. In the queue list, each ticket shows its **classification time**.
 2. At the top of the inbox, check **Avg classification** in the metrics row.
+
+   ![Metrics row at the top of the inbox showing Avg classification time](docs/images/classification-speed-metrics.png)
+
 3. In ticket detail, note the per-ticket latency tag next to the timestamp.
 
 ```bash
@@ -355,19 +375,52 @@ curl -sk -X POST "${GW}/ingest/raw"   -H "Content-Type: application/json"   -d '
 {"id":"TICKET-8930","sender":"[EMAIL_1]","subject":"VPN issue","sanitized_text":"Cannot connect from [WORK_LOCATION]","summary":"User cannot connect from their work location.","category":"Tech Support","urgency":"High","classification_ms":4664.3,"source":"api","model":"Qwen/Qwen2.5-1.5B-Instruct","created_at":"2026-09-30T18:09:37.280911+00:00","token_count":1}
 ```
 
-Which shows a classification time of 4664.3 milliseconds. This seems resonable for a non-realtime communication channel like email.
 
 #### Testing classification and redaction quality
 
-**TODO**: Expand these into more step by step instructions with screenshots. Include explanations of interesting things to note/see.
+Use these tests to validate that PII redaction and classification are working correctly end-to-end.
 
-1. **Custom PII patterns** — submit a message with a card number, phone, email, and `ACC-12345` account id; verify distinct tokens in the sanitized body and vault map.
-2. **Category sanity** — billing language → `Billing`; access/MFA → `Account Access`; VPN/outage → `Tech Support`.
-3. **Residual names** — RHAII may add `[NAME_N]` tokens; the gateway merge step rejects model output that drops structured tokens or reintroduces raw PII.
-4. **Heuristic fallback** — scale inference to zero (`oc scale deployment/rhaii-cpu -n helpdesk-email-triage --replicas=0`); ingest still works and `model` shows `heuristic-fallback`. Scale back up when finished.
-5. **Regression** — run `make test` on a workstation for automated API and pipeline checks.
+1. **Custom PII patterns** — submit a message with several PII types and verify the tokenizer picks them all up:
 
-At this point you can explore the sumbmission channels and the results in the UI before continuing on to load testing.
+   ```bash
+   export GW="https://$(oc get route email-gateway -n helpdesk-email-triage -o jsonpath='{.spec.host}')"
+   curl -sk -X POST "${GW}/ingest/raw" \
+     -H "Content-Type: application/json" \
+     -d '{"sender":"alice@example.com","subject":"Billing issue","body":"My name is Alice Smith. Card ending 4242 was charged twice. Call 555-123-4567 or email alice@example.com. Account: ACC-98765."}'
+   ```
+
+   Open the ticket in the inbox and confirm the **Sanitized body** shows distinct tokens — `[NAME_1]`, `[CARD_LAST4_1]`, `[PHONE_1]`, `[EMAIL_1]`, and `[ACCOUNT_ID_1]` — not the raw values. Click **View original PII vault** to verify that each token maps back to its original value.
+
+2. **Category sanity** — submit short emails with category-specific language and confirm the **Category** label:
+   - Billing language ("charged twice", "invoice", "refund") → `Billing`
+   - Access/MFA language ("locked out", "can't log in", "two-factor") → `Account Access`
+   - Network/VPN language ("VPN dropping", "can't connect", "outage") → `Tech Support`
+
+   Use the **Queue** dropdown to filter by category and confirm each ticket lands in the expected bucket.
+
+3. **Residual names** — open a ticket whose body contains a full name. RHAII may add `[NAME_N]` tokens in its output. Confirm the **Sanitized body** does not contain the raw name — the gateway merge step rejects model output that drops structured tokens or reintroduces raw PII.
+
+4. **Heuristic fallback** — scale inference to zero to simulate an outage, then submit a ticket:
+
+   ```bash
+   oc scale deployment/rhaii-cpu -n helpdesk-email-triage --replicas=0
+   ```
+
+   Ingest still succeeds; the ticket's **model** field shows `heuristic-fallback`. Scale back up when finished and confirm `/health` returns the real model name:
+
+   ```bash
+   oc scale deployment/rhaii-cpu -n helpdesk-email-triage --replicas=1
+   ```
+
+5. **Regression** — run the automated test suite from your workstation:
+
+   ```bash
+   make test
+   ```
+
+   This runs API and pipeline checks and prints a pass/fail summary. All tests should pass before considering the deployment production-ready.
+
+At this point you can explore the submission channels and the results in the UI before continuing on to load testing.
 
 #### Load testing
 
@@ -402,12 +455,55 @@ For more details on how to load test inference with GuideLLM see [the OpenShift 
 ##### Step 3: Review results
 
 
-**TODO**: make this more step by step with instructions, and screenshots or example of the results, highlighting how to find
-what is interesting
+When the Job completes, results are written to `./results/guidellm-openshift/`. Each run produces an HTML report and a JSON archive named with the Job timestamp.
 
-- **Console** — throughput and latency in the Job logs (`oc logs …`).
-- **HTML** — open `./results/guidellm-openshift/*.html` in a browser.
-- **JSON** — archive or compare runs under `./results/guidellm-openshift/`.
+**Step 3a: Read the console output**
+
+Tail the Job logs to see live progress and a final summary:
+
+```bash
+oc logs -n helpdesk-email-triage job/guidellm-benchmark-<timestamp> --follow
+```
+
+The summary shows throughput and latency per concurrency level. For example, a 4-vCPU node running `Qwen/Qwen2.5-1.5B-Instruct` with 128-token prompts and 64-token outputs:
+
+| Concurrent streams | Successful | Throughput (req/s) | Avg E2E latency (s) | Output tokens/s |
+|---|---|---|---|---|
+| 2 | 9 / 10 | ~0.07 | ~24 | ~5 |
+| 4 | 12 / 16 | ~0.10 | ~37 | ~7 |
+
+**Step 3b: Open the HTML report**
+
+```bash
+open ./results/guidellm-openshift/guidellm-benchmark-*.html          # macOS
+xdg-open ./results/guidellm-openshift/guidellm-benchmark-*.html      # Linux
+```
+
+The HTML report shows latency distributions, time-to-first-token (TTFT), inter-token latency (ITL), and per-request breakdowns across concurrency levels. Look for the concurrency level where p95 latency starts to increase sharply — that is the saturation point for your node configuration.
+
+![GuideLLM HTML benchmark report showing latency and throughput across concurrency levels](docs/images/guidellm-html-report.png)
+
+**Step 3c: Archive or compare runs (JSON)**
+
+Each run writes a JSON file under `./results/guidellm-openshift/`. Extract key metrics across runs:
+
+```bash
+python3 -c "
+import json, glob
+for f in sorted(glob.glob('./results/guidellm-openshift/*.json')):
+    data = json.load(open(f))
+    streams = data['config']['spec']['profile']['streams']
+    print(f)
+    for i, b in enumerate(data['benchmarks']):
+        s = streams[i] if i < len(streams) else '?'
+        m = b.get('metrics', {})
+        totals = m.get('request_totals', {})
+        e2e = m.get('request_latency', {}).get('successful', {})
+        tps = m.get('output_tokens_per_second', {}).get('successful', {})
+        print(f'  streams={s}: {totals.get(\"successful\")}/{totals.get(\"total\")} ok, '
+              f'e2e_mean={e2e.get(\"mean\", 0):.1f}s, tok/s={tps.get(\"mean\", 0):.1f}')
+"
+```
 
 Use the results to size RHAII CPU nodes before a pilot.
 
@@ -624,6 +720,6 @@ For local Compose or RHEL Compose deployments, run `make down` to stop the conta
 - **Title:** Triage support emails while protecting sensitive data
 - **Description:** Classify support emails and redact PII locally, helping teams protect sensitive data while streamlining helpdesk triage.
 - **Industry:** Information technology
-- **Product:** Red Hat AI Inteference 
+- **Product:** Red Hat AI Inference
 - **Use case:** Helpdesk email triage and PII redaction
 - **Contributor org:** Red Hat
