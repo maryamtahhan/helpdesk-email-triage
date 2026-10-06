@@ -93,8 +93,8 @@ Both tracks run RHAII 3.5 CPU inference; no GPU is required.
 #### Hardware
 
 - x86_64 inference worker with AVX512
-- At least 4 vCPUs available to inference (8 recommended)
-- At least 16 GiB allocatable RAM on the inference node (32 GiB recommended)
+- At least **8 vCPUs** and **16 GiB RAM** allocatable on one inference worker for the default `rhaii-cpu` manifest (requests 8 CPU / 16 Gi, limit 16 CPU / 16 Gi; 32 GiB RAM recommended)
+- **Smaller workers (4–8 cores, 8 GiB RAM):** add the [`rhaii-cpu-small`](deploy/openshift/README.md#inference-resource-sizing-components-rhaii-cpu-small) Kustomize component to your overlay after `rhaii-cpu`
 - 20 GiB `rhaii-model-cache` PVC for model weights
 
 #### Software
@@ -142,6 +142,7 @@ Both tracks run RHAII 3.5 CPU inference; no GPU is required.
 - `git`, `make`, `curl`, `python3`, and Kustomize 5.8.1
 - `export HF_TOKEN="your_huggingface_token"`
 - `podman login registry.redhat.io`
+- If your workers are smaller than the [default inference sizing](#track-1-openshift-requirements), customize the overlay with `rhaii-cpu-small` before deploy — see [docs/deploy-openshift.md](docs/deploy-openshift.md#rhaii-cpu-prerequisites)
 
 > **Important:** Keep `email-gateway` and `sample-emails` at **1 replica each**. Both components use a single shared PVC (`gateway-data`) for ticket storage and file-watcher state. Running more than one replica causes concurrent writes to the same files, leading to duplicate tickets and corrupted state.
 
@@ -163,8 +164,8 @@ Example output from running `INFERENCE=rhaii make deploy-openshift` (lines start
 $ INFERENCE=rhaii make deploy-openshift
 chmod +x scripts/deploy-openshift.sh scripts/openshift-rhaii-secrets.sh scripts/openshift-verify.sh
 INFERENCE="${INFERENCE:-rhaii}" ./scripts/deploy-openshift.sh
-==> Checking cluster capacity for RHAII CPU (requests: 4 CPU, 8Gi memory)
-    Found node(s) with >=16Gi allocatable memory
+==> Checking cluster capacity for RHAII CPU (requests: 8 CPU, 16Gi memory)
+    Found node(s) with >=8 allocatable CPU and >=16Gi allocatable memory
 ==> Preparing RHAII CPU secrets (registry.redhat.io + Hugging Face)
 secret/hf-secret created
 ==> Applying deploy/openshift/overlays/helpdesk-email-triage-rhaii (inference=rhaii, image-tag=latest)
@@ -469,7 +470,7 @@ When the Job completes, results are written to `./results/guidellm-openshift/`. 
 oc logs -n helpdesk-email-triage job/guidellm-benchmark-<timestamp> --follow
 ```
 
-The script prints the re-fetch command at the end of its output. GuideLLM produces several summary tables; the most useful for sizing are **Request Latency Statistics** and **Server Throughput Statistics**. For example, on a 4-vCPU node with `Qwen/Qwen2.5-1.5B-Instruct` (128-token prompts, 64-token outputs):
+The script prints the re-fetch command at the end of its output. GuideLLM produces several summary tables; the most useful for sizing are **Request Latency Statistics** and **Server Throughput Statistics**. For example, with default `rhaii-cpu` sizing (8 CPU request / 16 CPU limit, 16 Gi memory) and `Qwen/Qwen2.5-1.5B-Instruct` (128-token prompts, 64-token outputs):
 
 ```
 
@@ -508,7 +509,7 @@ xdg-open ./results/guidellm-openshift/guidellm-benchmark-*.html      # Linux
 
 The HTML report shows latency distributions, time-to-first-token (TTFT), inter-token latency (ITL), and per-request breakdowns across concurrency levels. Look for the concurrency level where p95 latency starts to increase sharply — that is the saturation point for your node configuration.
 
-A sample report from a 4-vCPU test run is included at [docs/examples/guidellm-benchmark-example.html](docs/examples/guidellm-benchmark-example.html).
+A sample report from a default-sizing test run is included at [docs/examples/guidellm-benchmark-example.html](docs/examples/guidellm-benchmark-example.html).
 
 **Step 3c: Archive or compare runs (JSON)**
 
@@ -546,27 +547,12 @@ for f in sorted(glob.glob('./results/guidellm-openshift/*.json')):
 
 > **Note:** `load_json` trims any trailing text (e.g. kubectl pod-deletion messages) that the Job log collector may have appended after the closing `}`. `get_rates` handles both the legacy `args.rate` schema (guidellm ≤ 0.4) and the current `config.spec.profile.streams` schema (guidellm ≥ 0.5).
 
-Example output from a 4-vCPU node across six runs:
+Example output across several runs (earlier files used smaller `rhaii-cpu-small`-equivalent nodes; the last file reflects default 8/16-core sizing):
 
 ```
-./results/guidellm-openshift/guidellm-benchmark-1788954907.json
-  rate=2.0: 15/16 ok, e2e_mean=16.8s, tok/s=7.0
-  rate=4.0: 17/20 ok, e2e_mean=28.9s, tok/s=7.0
-./results/guidellm-openshift/guidellm-benchmark-1788960651.json
-  rate=2: 9/10 ok, e2e_mean=25.1s, tok/s=5.0
-  rate=4: 9/12 ok, e2e_mean=45.2s, tok/s=4.5
-./results/guidellm-openshift/guidellm-benchmark-1788961383.json
-  rate=2: 14/16 ok, e2e_mean=16.4s, tok/s=7.9
-  rate=4: 16/20 ok, e2e_mean=29.5s, tok/s=9.6
-./results/guidellm-openshift/guidellm-benchmark-1789986936.json
-  rate=2: 9/10 ok, e2e_mean=25.1s, tok/s=5.0
-  rate=4: 9/12 ok, e2e_mean=45.0s, tok/s=4.5
-./results/guidellm-openshift/guidellm-benchmark-1791200320.json
-  rate=2: 9/10 ok, e2e_mean=24.1s, tok/s=5.1
-  rate=4: 12/16 ok, e2e_mean=37.2s, tok/s=7.2
-./results/guidellm-openshift/guidellm-benchmark-1791209047.json
-  rate=2: 21/22 ok, e2e_mean=11.2s, tok/s=11.0
-  rate=4: 41/44 ok, e2e_mean=11.6s, tok/s=20.7
+./results/guidellm-openshift/guidellm-benchmark-1791282912.json
+  rate=2: 47/48 ok, e2e_mean=5.1s, tok/s=25.2
+  rate=4: 93/96 ok, e2e_mean=5.2s, tok/s=48.2
 ```
 
 Use the results to size RHAII CPU nodes before a pilot.

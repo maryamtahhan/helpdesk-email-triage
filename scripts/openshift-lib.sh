@@ -169,28 +169,49 @@ openshift_dashboard_readiness_hint() {
 
 rhaii_preflight() {
   local namespace="$1"
-  echo "==> Checking cluster capacity for RHAII CPU (requests: 4 CPU, 8Gi memory)"
+  echo "==> Checking cluster capacity for RHAII CPU (requests: 8 CPU, 16Gi memory)"
   if python3 - <<'PY'
 import json, subprocess, sys
 
 min_gi = 16
+min_cpu = 8.0
+
+
+def parse_cpu(value: str) -> float:
+    if not value:
+        return 0.0
+    if value.endswith("m"):
+        return int(value[:-1]) / 1000.0
+    return float(value)
+
+
+def parse_mem_gi(value: str) -> float:
+    if value.endswith("Ki"):
+        return int(value[:-2]) / (1024 ** 2)
+    if value.endswith("Mi"):
+        return int(value[:-2]) / 1024
+    if value.endswith("Gi"):
+        return float(value[:-2])
+    return 0.0
+
+
 raw = subprocess.check_output(["oc", "get", "nodes", "-o", "json"], text=True)
 data = json.loads(raw)
 for node in data.get("items", []):
-    mem = node.get("status", {}).get("allocatable", {}).get("memory", "0")
-    if mem.endswith("Ki"):
-        gi = int(mem[:-2]) / (1024 ** 2)
-        if gi >= min_gi:
-            sys.exit(0)
+    alloc = node.get("status", {}).get("allocatable", {})
+    gi = parse_mem_gi(alloc.get("memory", "0"))
+    cpu = parse_cpu(alloc.get("cpu", "0"))
+    if gi >= min_gi and cpu >= min_cpu:
+        sys.exit(0)
 sys.exit(1)
 PY
   then
-    echo "    Found node(s) with >=16Gi allocatable memory"
+    echo "    Found node(s) with >=8 allocatable CPU and >=16Gi allocatable memory"
     return 0
   fi
 
-  echo "WARNING: No node with >=16Gi allocatable memory. rhaii-cpu may stay Pending." >&2
-  echo "         See docs/deploy-openshift.md for sizing guidance." >&2
+  echo "WARNING: No node with >=8 allocatable CPU and >=16Gi allocatable memory. rhaii-cpu may stay Pending." >&2
+  echo "         For smaller workers, add components/rhaii-cpu-small to your overlay (see deploy/openshift/README.md)." >&2
   if [[ "${FAIL_ON_RHAII_PREFLIGHT:-0}" == "1" ]]; then
     return 1
   fi
