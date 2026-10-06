@@ -470,15 +470,17 @@ oc logs -n helpdesk-email-triage job/guidellm-benchmark-<timestamp> --follow
 The script prints the re-fetch command at the end of its output. GuideLLM produces several summary tables; the most useful for sizing are **Request Latency Statistics** and **Server Throughput Statistics**. For example, on a 4-vCPU node with `Qwen/Qwen2.5-1.5B-Instruct` (128-token prompts, 64-token outputs):
 
 ```
+
 ℹ Request Latency Statistics (Completed Requests)
-|============|=========|========|=======|========|=======|========|=======|=======|=======|=======|
-| Benchmark  | Request Latency || TTFT          || TTFOT         || ITL          || TPOT         ||
-| Strategy   | Sec             || ms            || ms            || ms           || ms           ||
-|            | Mdn     | p95    | Mdn   | p95    | Mdn   | p95    | Mdn   | p95   | Mdn   | p95   |
-|------------|---------|--------|-------|--------|-------|--------|-------|-------|-------|-------|
-| concurrent | 11.0    | 13.5   | 481.4 | 2571.2 | 481.4 | 2571.2 | 166.6 | 173.5 | 171.5 | 211.0 |
-| concurrent | 11.5    | 12.1   | 670.4 | 1196.1 | 670.4 | 1196.1 | 173.0 | 182.5 | 180.1 | 189.4 |
-|============|=========|========|=======|========|=======|========|=======|=======|=======|=======|
+|============|=========|========|=======|=======|=======|=======|======|======|======|======|
+| Benchmark  | Request Latency || TTFT         || TTFOT        || ITL        || TPOT       ||
+| Strategy   | Sec             || ms           || ms           || ms         || ms         ||
+|            | Mdn     | p95    | Mdn   | p95   | Mdn   | p95   | Mdn  | p95  | Mdn  | p95  |
+|------------|---------|--------|-------|-------|-------|-------|------|------|------|------|
+| concurrent | 5.0     | 5.4    | 206.4 | 384.0 | 206.4 | 384.0 | 76.4 | 79.5 | 78.5 | 84.2 |
+| concurrent | 5.2     | 5.5    | 299.3 | 472.6 | 299.3 | 472.6 | 78.2 | 83.5 | 81.8 | 86.0 |
+|============|=========|========|=======|=======|=======|=======|======|======|======|======|
+
 
 ℹ Server Throughput Statistics (All Requests)
 |============|=======|======|=========|==============|===============|==============|
@@ -486,8 +488,8 @@ The script prints the re-fetch command at the end of its output. GuideLLM produc
 | Strategy   | Concurrency || Per Sec | Per Sec      | Per Sec       | Per Sec      |
 |            | Mdn   | Mean | Mean                                               ||||
 |------------|-------|------|---------|--------------|---------------|--------------|
-| concurrent | 2.0   | 2.0  | 0.2     | 30.9         | 11.5          | 39.8         |
-| concurrent | 4.0   | 4.0  | 0.3     | 59.3         | 22.2          | 76.7         |
+| concurrent | 2.0   | 2.0  | 0.4     | 65.8         | 25.7          | 88.9         |
+| concurrent | 4.0   | 4.0  | 0.8     | 126.7        | 49.7          | 171.8        |
 |============|=======|======|=========|==============|===============|==============|
 ```
 

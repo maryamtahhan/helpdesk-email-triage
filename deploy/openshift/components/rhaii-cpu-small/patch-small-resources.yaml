@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rhaii-cpu
+spec:
+  template:
+    spec:
+      containers:
+        - name: rhaii-cpu
+          env:
+            - name: VLLM_CPU_KVCACHE_SPACE
+              value: "4"
+          resources:
+            requests:
+              cpu: "4"
+              memory: 8Gi
+            limits:
+              cpu: "8"
+              memory: 8Gi

@@ -10,7 +10,8 @@ Kustomize layouts for the helpdesk email triage stack.
 deploy/openshift/
 ├── base/                    # Deployments, Services, PVC, ConfigMap, Secret
 ├── components/
-│   ├── rhaii-cpu/           # RHAII 3.5 CPU (vllm-cpu-rhel9)
+│   ├── rhaii-cpu/           # RHAII 3.5 CPU (vllm-cpu-rhel9) — 16 cores / 16 Gi
+│   ├── rhaii-cpu-small/     # Resource patch: 4 req / 8 limit cores, 8 Gi, KVCACHE=4
 │   ├── routes/              # OpenShift Routes (edge TLS)
 │   ├── route-reader/        # ServiceAccount for Route auto-discovery
 │   ├── network-policy/      # Namespace NetworkPolicies + GuideLLM egress
@@ -53,6 +54,28 @@ Used by `hardened` and `hardened-rhaii` overlays:
 | `patch-route-gateway-oauth.yaml` | OpenShift OAuth on the gateway Route |
 | `patch-route-dashboard-oauth.yaml` | OpenShift OAuth on the dashboard Route |
 | `patch-dashboard-scope-secrets.yaml` | Dashboard pod gets `INGEST_API_KEY` only (vault via `X-Ingest-Key`) |
+
+## Inference resource sizing (`components/rhaii-cpu-small/`)
+
+The default `rhaii-cpu` component requests **8 cores / 16 Gi** and limits to **16 cores / 16 Gi** with `VLLM_CPU_KVCACHE_SPACE=8`. For nodes with fewer resources, add `rhaii-cpu-small` after `rhaii-cpu` in the overlay's `resources:` list to patch it down:
+
+| Setting | Default (`rhaii-cpu`) | Small (`+ rhaii-cpu-small`) |
+|---|---|---|
+| CPU request / limit | 8 / 16 | 4 / 8 |
+| Memory request / limit | 16 Gi / 16 Gi | 8 Gi / 8 Gi |
+| `VLLM_CPU_KVCACHE_SPACE` | 8 | 4 |
+
+```yaml
+# In your overlay's kustomization.yaml
+resources:
+  - ../../base
+  - ../../components/rhaii-cpu
+  - ../../components/rhaii-cpu-small   # add this line
+  - ../../components/routes
+  - ../../components/route-reader
+```
+
+`rhaii-cpu-small` is a patch-only component — it has no standalone resources and must always follow `rhaii-cpu`.
 
 ## GuideLLM benchmark
 
