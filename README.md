@@ -513,19 +513,56 @@ Each run writes a JSON file under `./results/guidellm-openshift/`. Extract key m
 ```bash
 python3 -c "
 import json, glob
+
+def load_json(path):
+    with open(path) as f:
+        content = f.read()
+    end = content.rfind('}')
+    return json.loads(content[:end+1])
+
+def get_rates(data):
+    if 'args' in data:
+        return data['args'].get('rate', [])
+    return data['config']['spec']['profile'].get('streams', [])
+
 for f in sorted(glob.glob('./results/guidellm-openshift/*.json')):
-    data = json.load(open(f))
-    streams = data['config']['spec']['profile']['streams']
+    data = load_json(f)
+    rates = get_rates(data)
     print(f)
     for i, b in enumerate(data['benchmarks']):
-        s = streams[i] if i < len(streams) else '?'
+        r = rates[i] if i < len(rates) else '?'
         m = b.get('metrics', {})
         totals = m.get('request_totals', {})
         e2e = m.get('request_latency', {}).get('successful', {})
         tps = m.get('output_tokens_per_second', {}).get('successful', {})
-        print(f'  streams={s}: {totals.get(\"successful\")}/{totals.get(\"total\")} ok, '
+        print(f'  rate={r}: {totals.get(\"successful\")}/{totals.get(\"total\")} ok, '
               f'e2e_mean={e2e.get(\"mean\", 0):.1f}s, tok/s={tps.get(\"mean\", 0):.1f}')
 "
+```
+
+> **Note:** `load_json` trims any trailing text (e.g. kubectl pod-deletion messages) that the Job log collector may have appended after the closing `}`. `get_rates` handles both the legacy `args.rate` schema (guidellm ≤ 0.4) and the current `config.spec.profile.streams` schema (guidellm ≥ 0.5).
+
+Example output from a 4-vCPU node across six runs:
+
+```
+./results/guidellm-openshift/guidellm-benchmark-1788954907.json
+  rate=2.0: 15/16 ok, e2e_mean=16.8s, tok/s=7.0
+  rate=4.0: 17/20 ok, e2e_mean=28.9s, tok/s=7.0
+./results/guidellm-openshift/guidellm-benchmark-1788960651.json
+  rate=2: 9/10 ok, e2e_mean=25.1s, tok/s=5.0
+  rate=4: 9/12 ok, e2e_mean=45.2s, tok/s=4.5
+./results/guidellm-openshift/guidellm-benchmark-1788961383.json
+  rate=2: 14/16 ok, e2e_mean=16.4s, tok/s=7.9
+  rate=4: 16/20 ok, e2e_mean=29.5s, tok/s=9.6
+./results/guidellm-openshift/guidellm-benchmark-1789986936.json
+  rate=2: 9/10 ok, e2e_mean=25.1s, tok/s=5.0
+  rate=4: 9/12 ok, e2e_mean=45.0s, tok/s=4.5
+./results/guidellm-openshift/guidellm-benchmark-1791200320.json
+  rate=2: 9/10 ok, e2e_mean=24.1s, tok/s=5.1
+  rate=4: 12/16 ok, e2e_mean=37.2s, tok/s=7.2
+./results/guidellm-openshift/guidellm-benchmark-1791209047.json
+  rate=2: 21/22 ok, e2e_mean=11.2s, tok/s=11.0
+  rate=4: 41/44 ok, e2e_mean=11.6s, tok/s=20.7
 ```
 
 Use the results to size RHAII CPU nodes before a pilot.
