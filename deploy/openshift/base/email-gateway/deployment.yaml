@@ -7,6 +7,9 @@ metadata:
     app.kubernetes.io/component: gateway
     app.kubernetes.io/part-of: helpdesk-email-triage
 spec:
+  # DO NOT increase replicas. gateway-data is a ReadWriteOnce PVC and the
+  # file-watcher persists state (ticket DB, processed email log) to that
+  # volume. Multiple pods would fight over the same files and corrupt state.
   replicas: 1
   strategy:
     type: Recreate

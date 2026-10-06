@@ -143,6 +143,8 @@ Both tracks run RHAII 3.5 CPU inference; no GPU is required.
 - `export HF_TOKEN="your_huggingface_token"`
 - `podman login registry.redhat.io`
 
+> **Important:** Keep `email-gateway` and `sample-emails` at **1 replica each**. Both components use a single shared PVC (`gateway-data`) for ticket storage and file-watcher state. Running more than one replica causes concurrent writes to the same files, leading to duplicate tickets and corrupted state.
+
 #### Step 1: Deploy with RHAII CPU
 
 ```bash
