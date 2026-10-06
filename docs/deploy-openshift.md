@@ -51,7 +51,7 @@ Force mock (no registry):
 INFERENCE=mock make deploy-openshift
 ```
 
-First RHAII start downloads weights to the `rhaii-model-cache` PVC (several minutes). Increase wait: `RHAII_WAIT_TIMEOUT=1200s make deploy-openshift`. Workers need **x86_64 + AVX2** and **16 GiB+ allocatable RAM** (32 GiB recommended).
+First RHAII start downloads weights to the `rhaii-model-cache` PVC (several minutes). Increase wait: `RHAII_WAIT_TIMEOUT=1200s make deploy-openshift`. Workers need **x86_64 + AVX2**, **8+ allocatable CPU**, and **16 GiB+ allocatable RAM** on one node for the default `rhaii-cpu` deployment (32 GiB RAM recommended).
 
 **Smaller nodes (8 GiB RAM, 4–8 cores):** add `components/rhaii-cpu-small` to your overlay's `resources:` list after `rhaii-cpu`. This patches the inference deployment to 4 req / 8 limit cores, 8 Gi memory, and `VLLM_CPU_KVCACHE_SPACE=4`. See [Inference resource sizing](../deploy/openshift/README.md#inference-resource-sizing-components-rhaii-cpu-small) in the manifest layout for the full table and example.
 
