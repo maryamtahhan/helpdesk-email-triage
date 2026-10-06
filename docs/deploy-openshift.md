@@ -53,6 +53,8 @@ INFERENCE=mock make deploy-openshift
 
 First RHAII start downloads weights to the `rhaii-model-cache` PVC (several minutes). Increase wait: `RHAII_WAIT_TIMEOUT=1200s make deploy-openshift`. Workers need **x86_64 + AVX2** and **16 GiB+ allocatable RAM** (32 GiB recommended).
 
+**Smaller nodes (8 GiB RAM, 4–8 cores):** add `components/rhaii-cpu-small` to your overlay's `resources:` list after `rhaii-cpu`. This patches the inference deployment to 4 req / 8 limit cores, 8 Gi memory, and `VLLM_CPU_KVCACHE_SPACE=4`. See [Inference resource sizing](../deploy/openshift/README.md#inference-resource-sizing-components-rhaii-cpu-small) in the manifest layout for the full table and example.
+
 **Gateway not Ready (`0/1`)** — if pod logs show `GET /health/ready HTTP/1.1" 404`, the published `helpdesk-email-gateway` image is older than the manifests. Rebuild and push the gateway image (`make build-images` + push to your registry), set `IMAGE_TAG`, and `oc rollout restart deployment/email-gateway`. Quick workaround: patch the readiness probe to `/health` (see `openshift_gateway_readiness_hint` in `scripts/openshift-lib.sh`).
 
 **Dashboard shows the Streamlit inbox instead of `/welcome`** — the pod is almost certainly running a **legacy `helpdesk-triage-ui` image** (Streamlit on port 8501, no nginx). Current images serve onboarding at **`/welcome`** and redirect **`/`** there; the inbox is **`/inbox/`**. Readiness probes run `probe-welcome.py` so Streamlit-only images do not stay Ready. After Quay publishes `helpdesk-triage-ui:latest`, run `oc rollout restart deployment/agent-dashboard -n helpdesk-email-triage` and confirm:
