@@ -276,12 +276,26 @@ Save your **dashboard** URL (`https://<dashboard-route>/welcome`) and **gateway*
 
 Try each ingest path below to populate the inbox. After each submission, a new ticket should appear in the queue within a few seconds (longer on the first RHAII classification while the model warms up).
 
+| Method | How |
+|---|---|
+| **Sidebar scenarios** | On the dashboard Route → **Quick demo scenario** (billing, MFA, VPN, …) |
+| **Custom message** | Sidebar form → **Triage →** |
+| **HTTP API** | `POST /ingest/raw` or upload `.eml` via `POST /ingest` ([integration.md](docs/integration.md)) |
+| **File watcher** | Sample `.eml` files in `sample_emails/` if mounted. Ingest all .eml files on deploy and add new/changed files at runtime |
+| **SMTP** | Sidebar **↪** or mail to `support@helpdesk.local` when SMTP is exposed on the overlay |
+
+
 **Step-by-step: Quick demo scenario (recommended starting point)**
 
 1. Open the inbox and locate the **Quick demo scenario** section in the left sidebar.
 2. Click any scenario button — for example **Billing → Double charge** or **Account Access → MFA lockout**.
 3. The dashboard submits a pre-written email to the gateway and navigates to the inbox.
 4. The new ticket appears at the top of the queue with its **Category**, **Urgency**, and **classification time** already populated.
+
+The **Quick demo scenario** buttons are in the left-hand sidebar. Selecting one of those will submit a message
+for the specific scenario:
+
+![Quick demo scenario buttons in the sidebar](docs/images/quick-demo-scenarios.png)
 
 **Step-by-step: Custom message via the sidebar form**
 
@@ -291,19 +305,9 @@ Try each ingest path below to populate the inbox. After each submission, a new t
 
    ![Custom message form in the sidebar with Sender, Subject, Body fields and Triage button](docs/images/custom-message-form.png)
 
-Try each ingest method at least once:
+**Step-by-step: HTTP API**
 
-| Method | How |
-|---|---|
-| **File watcher** | Sample `.eml` files in `sample_emails/` if mounted. Ingest all .eml files on deploy and add new/changed files at runtime |
-| **Sidebar scenarios** | On the dashboard Route → **Quick demo scenario** (billing, MFA, VPN, …) |
-| **Custom message** | Sidebar form → **Triage →** |
-| **HTTP API** | `POST /ingest/raw` or upload `.eml` via `POST /ingest` ([integration.md](docs/integration.md)) |
-| **SMTP** | Sidebar **↪** or mail to `support@helpdesk.local` when SMTP is exposed on the overlay |
-
-The **Quick demo scenario** buttons are in the left-hand sidebar:
-
-![Quick demo scenario buttons in the sidebar](docs/images/quick-demo-scenarios.png)
+To send an email using the HTTP API you can run the following:
 
 ```bash
 export GW="https://$(oc get route email-gateway -n helpdesk-email-triage -o jsonpath='{.spec.host}')"
@@ -312,7 +316,9 @@ curl -sk -X POST "${GW}/ingest/raw" \
   -d '{"sender":"you@example.com","subject":"VPN issue","body":"Cannot connect from home office."}'
 ```
 
-If sample\_emails are mounted the app will rescan for new/changed files and ingest them. Note that there is NO LOCKING during the rescan. Any new files must be put with an extension different from `.eml` first and renamed to a `.eml` file to be picked up by the app.
+**Step-by-Step: File watcher**
+
+If sample\_emails are mounted the app will rescan for new/changed files and ingest them. Note that there is NO LOCKING during the rescan. Any new files must be put with an extension different from `.eml` first and renamed to a `.eml` file to be picked up by the app. Add a new email to the directory and watch for it to be consumed.
 
 **What to look for:** New tickets in the inbox queue within a few seconds.
 
@@ -364,7 +370,7 @@ Expected sample results (file-watcher emails):
 
    ![Metrics row at the top of the inbox showing Avg classification time](docs/images/avg-classification-time.png)
 
-3. In ticket detail, note the per-ticket latency tag next to the timestamp.
+3. Query the submitted tickets and note the per-ticket latency tag next to the timestamp:
 
 ```bash
 export GW="https://$(oc get route email-gateway -n helpdesk-email-triage -o jsonpath='{.spec.host}')"
@@ -372,7 +378,8 @@ curl -sk "${GW}/tickets" | python3 -c \
   'import json,sys; t=json.load(sys.stdin); print([(x["id"], x.get("classification_ms")) for x in t[:5]])'
 ```
 
-For example in one of our tests we saw:
+4. Submit a new ticket and review the classification time. You can experiment with different ticket sizes and
+   attributes. As an example: 
 
 ```console
 $ curl -sk -X POST "${GW}/ingest/raw" \
@@ -380,7 +387,7 @@ $ curl -sk -X POST "${GW}/ingest/raw" \
   -d '{"sender":"you@example.com","subject":"VPN issue","body":"Cannot connect from home office."}'
 {"id":"TICKET-8930","sender":"[EMAIL_1]","subject":"VPN issue","sanitized_text":"Cannot connect from [WORK_LOCATION]","summary":"User cannot connect from their work location.","category":"Tech Support","urgency":"High","classification_ms":4664.3,"source":"api","model":"Qwen/Qwen2.5-1.5B-Instruct","created_at":"2026-09-30T18:09:37.280911+00:00","token_count":1}
 ```
-
+which took 4662.3 milliseconds.
 
 #### Testing classification and redaction quality
 
@@ -405,26 +412,6 @@ Use these tests to validate that PII redaction and classification are working co
    Use the **Queue** dropdown to filter by category and confirm each ticket lands in the expected bucket.
 
 3. **Residual names** — open a ticket whose body contains a full name. RHAII may add `[NAME_N]` tokens in its output. Confirm the **Sanitized body** does not contain the raw name — the gateway merge step rejects model output that drops structured tokens or reintroduces raw PII.
-
-4. **Heuristic fallback** — scale inference to zero to simulate an outage, then submit a ticket:
-
-   ```bash
-   oc scale deployment/rhaii-cpu -n helpdesk-email-triage --replicas=0
-   ```
-
-   Ingest still succeeds; the ticket's **model** field shows `heuristic-fallback`. Scale back up when finished and confirm `/health` returns the real model name:
-
-   ```bash
-   oc scale deployment/rhaii-cpu -n helpdesk-email-triage --replicas=1
-   ```
-
-5. **Regression** — run the automated test suite from your workstation:
-
-   ```bash
-   make test
-   ```
-
-   This runs API and pipeline checks and prints a pass/fail summary. All tests should pass before considering the deployment production-ready.
 
 At this point you can explore the submission channels and the results in the UI before continuing on to load testing.
 
