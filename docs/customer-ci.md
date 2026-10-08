@@ -53,7 +53,7 @@ env:
   IMAGE_TAG: latest
 ```
 
-Compose and Kustomize defaults use `quay.io/mtahhan/helpdesk-*`; override with env vars or Kustomize `images:`.
+Compose and Kustomize defaults use `quay.io/rh-ai-quickstart/helpdesk-*`; override with env vars or Kustomize `images:`.
 
 ## Reusable build workflow (call from your repo)
 

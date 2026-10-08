@@ -1,13 +1,6 @@
-# Publishes to quay.io/mtahhan:
+# Publishes to quay.io/rh-ai-quickstart:
 #   helpdesk-email-triage-email-gateway, helpdesk-email-triage-ui, helpdesk-email-triage-inference-mock
 #
-# GitHub repo secrets (Settings → Secrets and variables → Actions):
-#   REDHAT_REGISTRY_USERNAME — Quay robot, e.g. mayamtahhan+github-helpdesk-triage
-#   REDHAT_REGISTRY_PASSWORD — robot token (not your personal Quay password)
-#
-# Create the three public repos under the mayamtahhan namespace on quay.io and
-# grant the robot Write access before the first run.
-
 name: Publish container images to Quay.io
 
 on:
@@ -33,7 +26,7 @@ on:
 
 env:
   IMAGE_REGISTRY: quay.io
-  IMAGE_NAMESPACE: mtahhan
+  IMAGE_NAMESPACE: rh-ai-quickstart
   IMAGE_TAG: latest
 
 jobs:

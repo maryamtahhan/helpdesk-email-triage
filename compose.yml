@@ -49,7 +49,7 @@ services:
     build:
       context: .
       dockerfile: email-gateway/Containerfile
-    image: ${GATEWAY_IMAGE:-quay.io/mtahhan/helpdesk-email-triage-email-gateway:latest}
+    image: ${GATEWAY_IMAGE:-quay.io/rh-ai-quickstart/helpdesk-email-triage-email-gateway:latest}
     container_name: rhaii-email-gateway
     restart: unless-stopped
     depends_on:
@@ -76,7 +76,7 @@ services:
     build:
       context: .
       dockerfile: agent-dashboard/Containerfile
-    image: ${UI_IMAGE:-quay.io/mtahhan/helpdesk-email-triage-ui:latest}
+    image: ${UI_IMAGE:-quay.io/rh-ai-quickstart/helpdesk-email-triage-ui:latest}
     container_name: rhaii-triage-ui
     restart: unless-stopped
     depends_on:

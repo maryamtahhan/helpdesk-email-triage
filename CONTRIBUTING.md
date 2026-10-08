@@ -75,4 +75,4 @@ make build-images
 
 **CI** (on every PR): ruff, tests, compose e2e, kind e2e, container builds (mock inference only).
 
-**Published images:** `quay.io/mtahhan/helpdesk-email-triage-email-gateway`, `helpdesk-email-triage-ui`, `helpdesk-email-triage-inference-mock`.
+**Published images:** `quay.io/rh-ai-quickstart/helpdesk-email-triage-email-gateway`, `helpdesk-email-triage-ui`, `helpdesk-email-triage-inference-mock`.
