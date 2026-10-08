@@ -46,8 +46,8 @@ VAULT_SECRET=$(openssl rand -hex 32)
 EOF
 chmod 600 ~/.config/helpdesk/secrets.env
 
-podman build -f email-gateway/Containerfile -t localhost/helpdesk-email-gateway:prod .
-podman build -f agent-dashboard/Containerfile -t localhost/helpdesk-triage-ui:prod .
+podman build -f email-gateway/Containerfile -t localhost/helpdesk-email-triage-email-gateway:prod .
+podman build -f agent-dashboard/Containerfile -t localhost/helpdesk-email-triage-ui:prod .
 cp deploy/quadlet/*.container deploy/quadlet/*.network deploy/quadlet/*.volume \
    ~/.config/containers/systemd/
 systemctl --user daemon-reload

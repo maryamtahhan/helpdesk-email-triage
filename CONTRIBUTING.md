@@ -30,7 +30,7 @@ curl -sS http://127.0.0.1:8080/health   # classify_model: mock-triage
 
 Walk the Track 1 checklist in the [README](README.md#submit-support-tickets) ([Submit support tickets](README.md#submit-support-tickets) through redaction) at `http://127.0.0.1:8501/welcome`. Vault demo secret: `helpdesk-demo-secret`. Skip [Load testing](README.md#load-testing) unless you run `compose.yml` with RHAII.
 
-Optional maintainer checks: stop mock inference (`podman stop helpdesk-inference-mock`) and confirm **heuristic-fallback** ingest.
+Optional maintainer checks: stop mock inference (`podman stop helpdesk-email-triage-inference-mock`) and confirm **heuristic-fallback** ingest.
 
 ```bash
 make down
@@ -75,4 +75,4 @@ make build-images
 
 **CI** (on every PR): ruff, tests, compose e2e, kind e2e, container builds (mock inference only).
 
-**Published images:** `quay.io/mtahhan/helpdesk-email-gateway`, `helpdesk-triage-ui`, `helpdesk-inference-mock`.
+**Published images:** `quay.io/mtahhan/helpdesk-email-triage-email-gateway`, `helpdesk-email-triage-ui`, `helpdesk-email-triage-inference-mock`.

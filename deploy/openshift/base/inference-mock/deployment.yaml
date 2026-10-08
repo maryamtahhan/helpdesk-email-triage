@@ -24,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: inference-mock
-          image: quay.io/mtahhan/helpdesk-inference-mock:latest
+          image: quay.io/mtahhan/helpdesk-email-triage-inference-mock:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

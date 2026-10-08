@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: wait-for-inference
-          image: quay.io/mtahhan/helpdesk-email-gateway:latest
+          image: quay.io/mtahhan/helpdesk-email-triage-email-gateway:latest
           imagePullPolicy: IfNotPresent
           command:
             - python3
@@ -59,7 +59,7 @@ spec:
             runAsNonRoot: true
       containers:
         - name: email-gateway
-          image: quay.io/mtahhan/helpdesk-email-gateway:latest
+          image: quay.io/mtahhan/helpdesk-email-triage-email-gateway:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

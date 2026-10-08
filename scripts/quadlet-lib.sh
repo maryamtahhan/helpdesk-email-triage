@@ -182,8 +182,8 @@ quadlet_start_engine() {
 
 quadlet_diagnose_gateway_start() {
   echo "quadlet: --- diagnose email-gateway start failure ---" >&2
-  podman image exists localhost/helpdesk-email-gateway:prod 2>/dev/null \
-    && echo "quadlet: image localhost/helpdesk-email-gateway:prod present" >&2 \
+  podman image exists localhost/helpdesk-email-triage-email-gateway:prod 2>/dev/null \
+    && echo "quadlet: image localhost/helpdesk-email-triage-email-gateway:prod present" >&2 \
     || echo "quadlet: missing image — run: make quadlet-build" >&2
   echo "quadlet: ports 8080 / 3025:" >&2
   ss -tlnp 2>/dev/null | grep -E ':8080 |:3025 ' || true
@@ -197,8 +197,8 @@ quadlet_start_gateway() {
   quadlet_user_systemctl stop email-gateway.service 2>/dev/null || true
   quadlet_user_systemctl reset-failed email-gateway.service 2>/dev/null || true
   podman rm -f rhaii-email-gateway 2>/dev/null || true
-  if ! podman image exists localhost/helpdesk-email-gateway:prod 2>/dev/null; then
-    echo "quadlet: missing localhost/helpdesk-email-gateway:prod — run make quadlet-build" >&2
+  if ! podman image exists localhost/helpdesk-email-triage-email-gateway:prod 2>/dev/null; then
+    echo "quadlet: missing localhost/helpdesk-email-triage-email-gateway:prod — run make quadlet-build" >&2
     return 1
   fi
   if ! quadlet_user_systemctl start email-gateway.service; then
@@ -211,8 +211,8 @@ quadlet_start_gateway() {
 
 quadlet_diagnose_dashboard_start() {
   echo "quadlet: --- diagnose agent-dashboard start failure ---" >&2
-  podman image exists localhost/helpdesk-triage-ui:prod 2>/dev/null \
-    && echo "quadlet: image localhost/helpdesk-triage-ui:prod present" >&2 \
+  podman image exists localhost/helpdesk-email-triage-ui:prod 2>/dev/null \
+    && echo "quadlet: image localhost/helpdesk-email-triage-ui:prod present" >&2 \
     || echo "quadlet: missing image — run: make quadlet-build" >&2
   ss -tlnp 2>/dev/null | grep ':8501 ' || true
   podman logs rhaii-triage-ui --tail 40 2>&1 || true
@@ -223,8 +223,8 @@ quadlet_start_dashboard() {
   quadlet_user_systemctl stop agent-dashboard.service 2>/dev/null || true
   quadlet_user_systemctl reset-failed agent-dashboard.service 2>/dev/null || true
   podman rm -f rhaii-triage-ui 2>/dev/null || true
-  if ! podman image exists localhost/helpdesk-triage-ui:prod 2>/dev/null; then
-    echo "quadlet: missing localhost/helpdesk-triage-ui:prod — run make quadlet-build" >&2
+  if ! podman image exists localhost/helpdesk-email-triage-ui:prod 2>/dev/null; then
+    echo "quadlet: missing localhost/helpdesk-email-triage-ui:prod — run make quadlet-build" >&2
     return 1
   fi
   if ! quadlet_user_systemctl start agent-dashboard.service; then

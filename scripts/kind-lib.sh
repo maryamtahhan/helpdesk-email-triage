@@ -43,14 +43,14 @@ kind_ensure_cluster() {
 
 kind_build_and_load_images() {
   echo "==> Building container images"
-  docker build -f "${ROOT}/email-gateway/Containerfile" -t helpdesk-email-gateway:ci "${ROOT}"
-  docker build -f "${ROOT}/agent-dashboard/Containerfile" -t helpdesk-triage-ui:ci "${ROOT}"
-  docker build -f "${ROOT}/inference-mock/Containerfile" -t helpdesk-inference-mock:ci "${ROOT}/inference-mock"
+  docker build -f "${ROOT}/email-gateway/Containerfile" -t helpdesk-email-triage-email-gateway:ci "${ROOT}"
+  docker build -f "${ROOT}/agent-dashboard/Containerfile" -t helpdesk-email-triage-ui:ci "${ROOT}"
+  docker build -f "${ROOT}/inference-mock/Containerfile" -t helpdesk-email-triage-inference-mock:ci "${ROOT}/inference-mock"
 
   echo "==> Loading images into kind"
-  kind load docker-image helpdesk-email-gateway:ci --name "$CLUSTER_NAME"
-  kind load docker-image helpdesk-triage-ui:ci --name "$CLUSTER_NAME"
-  kind load docker-image helpdesk-inference-mock:ci --name "$CLUSTER_NAME"
+  kind load docker-image helpdesk-email-triage-email-gateway:ci --name "$CLUSTER_NAME"
+  kind load docker-image helpdesk-email-triage-ui:ci --name "$CLUSTER_NAME"
+  kind load docker-image helpdesk-email-triage-inference-mock:ci --name "$CLUSTER_NAME"
 }
 
 kind_apply_stack() {

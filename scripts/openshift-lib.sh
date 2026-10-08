@@ -19,9 +19,9 @@ openshift_kustomize_build() {
   (
     cd "$tmp"
     kustomize edit set image \
-      "quay.io/mtahhan/helpdesk-email-gateway=quay.io/mtahhan/helpdesk-email-gateway:${tag}" \
-      "quay.io/mtahhan/helpdesk-triage-ui=quay.io/mtahhan/helpdesk-triage-ui:${tag}" \
-      "quay.io/mtahhan/helpdesk-inference-mock=quay.io/mtahhan/helpdesk-inference-mock:${tag}"
+      "quay.io/mtahhan/helpdesk-email-triage-email-gateway=quay.io/mtahhan/helpdesk-email-triage-email-gateway:${tag}" \
+      "quay.io/mtahhan/helpdesk-email-triage-ui=quay.io/mtahhan/helpdesk-email-triage-ui:${tag}" \
+      "quay.io/mtahhan/helpdesk-email-triage-inference-mock=quay.io/mtahhan/helpdesk-email-triage-inference-mock:${tag}"
     kustomize build --load-restrictor LoadRestrictionsNone .
   )
 }
@@ -144,7 +144,7 @@ openshift_gateway_readiness_hint() {
   if oc logs deployment/email-gateway -n "$namespace" --tail=30 2>/dev/null \
     | grep -q 'GET /health/ready HTTP/1.1" 404'; then
     echo "WARNING: email-gateway is not Ready — the running image lacks GET /health/ready." >&2
-    echo "         Rebuild and push quay.io/mtahhan/helpdesk-email-gateway:latest, then:" >&2
+    echo "         Rebuild and push quay.io/mtahhan/helpdesk-email-triage-email-gateway:latest, then:" >&2
     echo "           oc rollout restart deployment/email-gateway -n ${namespace}" >&2
     echo "         Quick workaround (readiness on /health only):" >&2
     echo '           oc patch deployment email-gateway -n '"${namespace}"' --type=json -p='"'"'[{"op":"replace","path":"/spec/template/spec/containers/0/readinessProbe/httpGet/path","value":"/health"}]'"'" >&2
@@ -162,7 +162,7 @@ openshift_dashboard_readiness_hint() {
   echo "WARNING: agent-dashboard not serving /welcome (readyReplicas=${ready:-0}/${replicas:-0})." >&2
   echo "         Check probes: oc describe pod -l app.kubernetes.io/name=agent-dashboard -n ${namespace} | tail -25" >&2
   echo "         Probes run python3 /app/probe-welcome.py; pull a fresh UI image:" >&2
-  echo "           quay.io/mtahhan/helpdesk-triage-ui:latest (imagePullPolicy: Always)" >&2
+  echo "           quay.io/mtahhan/helpdesk-email-triage-ui:latest (imagePullPolicy: Always)" >&2
   echo "           oc rollout restart deployment/agent-dashboard -n ${namespace}" >&2
   echo "         If the pod is Ready but /welcome is 404, the node may still have a cached Streamlit-only image." >&2
 }
