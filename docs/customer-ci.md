@@ -147,6 +147,6 @@ make compose-e2e
 | OpenShift 4.x | `deploy/openshift/overlays/*`, `make deploy-openshift` |
 | Kind / Kubernetes CI | `deploy/kind/overlays/*`, `make run-on-kind`, `make kind-e2e`, `make destroy-kind` |
 | RHEL Quadlet (manual host) | `make quadlet-e2e` — see [testing/quadlet-e2e.md](testing/quadlet-e2e.md) |
+| Customer CI | GitHub Actions workflows + Makefile targets |
 
 Full test matrix: [testing/README.md](testing/README.md).
-| Customer CI | GitHub Actions workflows + Makefile targets |

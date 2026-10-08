@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import html
 import json
 import pathlib
@@ -32,19 +33,29 @@ from dashboard_samples import SAMPLE_SCENARIOS
 CATEGORIES = ("All", "Billing", "Tech Support", "Account Access", "General")
 
 
-def _load_arch_svg() -> str:
-    for p in (
-        pathlib.Path(__file__).parent.parent / "docs" / "images" / "architecture-overview.svg",
-        pathlib.Path("/app/docs/images/architecture-overview.svg"),
+def _load_arch_diagram_html() -> str:
+    for base in (
+        pathlib.Path(__file__).parent.parent / "docs" / "images",
+        pathlib.Path("/app/docs/images"),
     ):
+        svg = base / "architecture-overview.svg"
         try:
-            return p.read_text(encoding="latin-1")
+            return svg.read_text(encoding="latin-1")
+        except OSError:
+            pass
+        png = base / "architecture-overview.png"
+        try:
+            b64 = base64.b64encode(png.read_bytes()).decode("ascii")
+            return (
+                f'<img src="data:image/png;base64,{b64}" '
+                'alt="Architecture overview" style="max-width:100%;height:auto;" />'
+            )
         except OSError:
             continue
     return ""
 
 
-_ARCH_SVG = _load_arch_svg()
+_ARCH_DIAGRAM_HTML = _load_arch_diagram_html()
 URGENCY_COLOR = {"High": "#C9190B", "Medium": "#F0AB00", "Low": "#3E8635"}
 URGENCY_ICON = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}
 
@@ -113,11 +124,11 @@ with st.expander("ℹ️ How to use this demo", expanded=False):
         """,
         unsafe_allow_html=False,
     )
-    if _ARCH_SVG:
+    if _ARCH_DIAGRAM_HTML:
         st.markdown("#### Architecture")
         st.caption("Animated pipeline on the [welcome page](/welcome#architecture).")
         st.markdown(
-            f'<div style="overflow-x:auto;margin-top:0.5rem">{_ARCH_SVG}</div>',
+            f'<div style="overflow-x:auto;margin-top:0.5rem">{_ARCH_DIAGRAM_HTML}</div>',
             unsafe_allow_html=True,
         )
 

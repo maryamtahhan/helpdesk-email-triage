@@ -49,7 +49,8 @@ Sidebar **Model** shows `mock-triage`. Queue auto-refreshes every 10 seconds.
 | GDPR erasure request | General | Low |
 | Healthcare ER bill | Billing | High |
 | HR payroll dispute | Billing | High |
-| Thank-you note | General | Low |
+| Thanks for webinar (`04-general-feedback.eml`) | General | Low |
+| GDPR erasure request (`07-gdpr-deletion.eml`) | General | Low |
 
 ## Things to try
 

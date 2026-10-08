@@ -149,7 +149,7 @@ guidellm-quadlet:
 	chmod +x scripts/guidellm-quadlet.sh scripts/quadlet-lib.sh
 	./scripts/guidellm-quadlet.sh
 
-# Maintainer-only Quadlet validation on a RHEL host (see deploy/quadlet/E2E.md)
+# Maintainer-only Quadlet validation on a RHEL host (see docs/testing/quadlet-e2e.md)
 quadlet-e2e:
 	chmod +x scripts/quadlet-*.sh scripts/wait-for-tickets.sh scripts/guidellm-quadlet.sh
 	./scripts/quadlet-e2e.sh

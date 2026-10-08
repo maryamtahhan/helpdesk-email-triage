@@ -19,17 +19,48 @@ Use this folder when you need repeatable pass/fail gates (unit tests, compose/ki
 | Kind E2E | Mock stack on Kubernetes | `make kind-e2e` | Yes (Docker + kind) |
 | OpenShift smoke | Routes, health, ingest on cluster | `make verify-openshift` | Yes (cluster) |
 | **RHEL Quadlet E2E** | Real RHAII + gateway ± UI on one host | `make quadlet-e2e` | Yes (RHEL + Podman) |
+| Manual mock UI | Streamlit demo, screenshots | [testing-locally.md](../testing-locally.md) | Yes (`make demo`) |
 
 GuideLLM **benchmarking** (sizing inference for a pilot) is documented in the [README Load testing](../README.md#load-testing) section, not here. The `full` Quadlet E2E scenario optionally runs a **short** GuideLLM smoke as part of the scenario.
-| Manual mock UI | Streamlit demo, screenshots | [testing-locally.md](../testing-locally.md) | Yes (`make demo`) |
 
 ## Guides in this folder
 
 | Document | Contents |
 |----------|----------|
 | [automated-checks.md](automated-checks.md) | Workstation and CI targets (`test`, `lint`, `compose-e2e`, `kind-e2e`, webhooks) |
-| [openshift-validation.md](openshift-validation.md) | Deploy verify and manifest gates (GuideLLM → README) |
 | [quadlet-e2e.md](quadlet-e2e.md) | Full automated scenarios on RHEL (maintainer E2E) |
+
+## OpenShift validation
+
+Checks that require an OpenShift cluster and (for RHAII paths) `registry.redhat.io` plus a Hugging Face token.
+
+### Deploy and smoke test
+
+```bash
+INFERENCE=rhaii make deploy-openshift   # or INFERENCE=mock for mock-only
+make verify-openshift
+```
+
+`verify-openshift` prints Route URLs and runs health / ticket checks. Details: [deploy-openshift.md](../deploy-openshift.md).
+
+Manifest gates without a cluster: `make validate-manifests` and `make test-openshift-overlay` ([automated-checks.md](automated-checks.md)).
+
+### GuideLLM (inference benchmarking)
+
+**Canonical steps:** [README → Load testing](../README.md#load-testing) (`make guidellm-openshift` on OpenShift, `make guidellm-quadlet` on RHEL Quadlet). Use that section for image names, env vars, and reading HTML/JSON reports.
+
+This folder covers **functional** OpenShift checks (`verify-openshift`), not pilot sizing benchmarks.
+
+### Gateway load (not GuideLLM)
+
+GuideLLM targets **inference** only. For parallel **gateway** ingest, use multiple `POST /ingest/raw` against the gateway Route; add `X-Ingest-Key` when hardened. See README [Load testing](../README.md#load-testing).
+
+### Tear-down
+
+```bash
+make undeploy-openshift
+# DELETE_NAMESPACE=1 make undeploy-openshift
+```
 
 ## Customer vs maintainer
 
