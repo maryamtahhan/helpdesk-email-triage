@@ -14,7 +14,7 @@ This guide walks through every feature in the demo UI and alternative run method
 ## Start the stack
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/rh-ai-quickstart/helpdesk-email-triage
 cd helpdesk-email-triage
 make demo
 # or: podman compose -f compose.mock.demo.yml up --build
