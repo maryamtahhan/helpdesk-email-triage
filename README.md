@@ -149,7 +149,7 @@ Both tracks run RHAII 3.5 CPU inference; no GPU is required.
 #### Step 1: Deploy with RHAII CPU
 
 ```bash
-git clone <repo-url> && cd helpdesk-email-triage
+git clone https://github.com/rh-ai-quickstart/helpdesk-email-triage && cd helpdesk-email-triage
 oc new-project helpdesk-email-triage
 export HF_TOKEN="your_huggingface_token"
 podman login registry.redhat.io
@@ -565,7 +565,7 @@ pip install podman-compose
 #### Step 1: One-time setup (repo root)
 
 ```bash
-git clone <repo-url> && cd helpdesk-email-triage
+git clone https://github.com/rh-ai-quickstart/helpdesk-email-triage && cd helpdesk-email-triage
 make quadlet-setup
 ```
 

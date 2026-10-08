@@ -16,7 +16,7 @@ This guide is for **maintainers and contributors** working on the quickstart its
 ### Step 1: Start the mock stack
 
 ```bash
-git clone <repo-url> && cd helpdesk-email-triage
+git clone https://github.com/rh-ai-quickstart/helpdesk-email-triage && cd helpdesk-email-triage
 make demo
 ```
 
