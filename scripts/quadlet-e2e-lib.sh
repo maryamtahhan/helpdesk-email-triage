@@ -53,12 +53,12 @@ quadlet_e2e_fail_scenario_early() {
 
 quadlet_e2e_preflight_images() {
   local missing=0
-  if ! podman image exists localhost/helpdesk-email-gateway:prod 2>/dev/null; then
-    echo "quadlet-e2e: missing localhost/helpdesk-email-gateway:prod" >&2
+  if ! podman image exists localhost/helpdesk-email-triage-email-gateway:prod 2>/dev/null; then
+    echo "quadlet-e2e: missing localhost/helpdesk-email-triage-email-gateway:prod" >&2
     missing=1
   fi
-  if ! podman image exists localhost/helpdesk-triage-ui:prod 2>/dev/null; then
-    echo "quadlet-e2e: missing localhost/helpdesk-triage-ui:prod" >&2
+  if ! podman image exists localhost/helpdesk-email-triage-ui:prod 2>/dev/null; then
+    echo "quadlet-e2e: missing localhost/helpdesk-email-triage-ui:prod" >&2
     missing=1
   fi
   if [[ "$missing" -ne 0 ]]; then

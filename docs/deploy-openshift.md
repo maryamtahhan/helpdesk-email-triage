@@ -59,9 +59,9 @@ First RHAII start downloads weights to the `rhaii-model-cache` PVC (several minu
 
 If manifests are newer than the images on your registry (or you are moving off an old Quay `latest` tag):
 
-**Gateway not Ready (`0/1`)** — if pod logs show `GET /health/ready HTTP/1.1" 404`, the published `helpdesk-email-gateway` image is older than the manifests. Rebuild and push the gateway image (`make build-images` + push to your registry), set `IMAGE_TAG`, and `oc rollout restart deployment/email-gateway`. Quick workaround: patch the readiness probe to `/health` (see `openshift_gateway_readiness_hint` in `scripts/openshift-lib.sh`).
+**Gateway not Ready (`0/1`)** — if pod logs show `GET /health/ready HTTP/1.1" 404`, the published `helpdesk-email-triage-email-gateway` image is older than the manifests. Rebuild and push the gateway image (`make build-images` + push to your registry), set `IMAGE_TAG`, and `oc rollout restart deployment/email-gateway`. Quick workaround: patch the readiness probe to `/health` (see `openshift_gateway_readiness_hint` in `scripts/openshift-lib.sh`).
 
-**Dashboard shows the Streamlit inbox instead of `/welcome`** — the pod is almost certainly running a **legacy `helpdesk-triage-ui` image** (Streamlit on port 8501, no nginx). Current images serve onboarding at **`/welcome`** and redirect **`/`** there; the inbox is **`/inbox/`**. Readiness probes run `probe-welcome.py` so Streamlit-only images do not stay Ready. After your registry has the current `helpdesk-triage-ui` tag, run `oc rollout restart deployment/agent-dashboard -n helpdesk-email-triage` and confirm:
+**Dashboard shows the Streamlit inbox instead of `/welcome`** — the pod is almost certainly running a **legacy `helpdesk-email-triage-ui` image** (Streamlit on port 8501, no nginx). Current images serve onboarding at **`/welcome`** and redirect **`/`** there; the inbox is **`/inbox/`**. Readiness probes run `probe-welcome.py` so Streamlit-only images do not stay Ready. After your registry has the current `helpdesk-email-triage-ui` tag, run `oc rollout restart deployment/agent-dashboard -n helpdesk-email-triage` and confirm:
 
 ```bash
 oc exec deployment/agent-dashboard -n helpdesk-email-triage -- python3 /app/probe-welcome.py

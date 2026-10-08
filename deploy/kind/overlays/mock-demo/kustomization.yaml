@@ -22,12 +22,12 @@ configMapGenerator:
       - ../../../../sample_emails/07-gdpr-deletion.eml
 
 images:
-  - name: quay.io/mtahhan/helpdesk-email-gateway
-    newName: helpdesk-email-gateway
+  - name: quay.io/mtahhan/helpdesk-email-triage-email-gateway
+    newName: helpdesk-email-triage-email-gateway
     newTag: ci
-  - name: quay.io/mtahhan/helpdesk-triage-ui
-    newName: helpdesk-triage-ui
+  - name: quay.io/mtahhan/helpdesk-email-triage-ui
+    newName: helpdesk-email-triage-ui
     newTag: ci
-  - name: quay.io/mtahhan/helpdesk-inference-mock
-    newName: helpdesk-inference-mock
+  - name: quay.io/mtahhan/helpdesk-email-triage-inference-mock
+    newName: helpdesk-email-triage-inference-mock
     newTag: ci

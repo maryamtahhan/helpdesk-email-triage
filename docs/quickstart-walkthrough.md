@@ -85,7 +85,7 @@ curl -sS http://127.0.0.1:8080/tickets | python3 -c \
 1. **Custom PII patterns** — submit a message with a card number, phone, email, and `ACC-12345` account id; verify distinct tokens in the sanitized body and vault map.
 2. **Category sanity** — billing language → `Billing`; access/MFA → `Account Access`; VPN/outage → `Tech Support`.
 3. **Residual names** — RHAII may add `[NAME_N]` tokens; the gateway merge step rejects model output that drops structured tokens or reintroduces raw PII.
-4. **Heuristic fallback** — stop inference (`podman stop helpdesk-inference-mock` on laptop); ingest still works and `model` shows `heuristic-fallback`.
+4. **Heuristic fallback** — stop inference (`podman stop helpdesk-email-triage-inference-mock` on laptop); ingest still works and `model` shows `heuristic-fallback`.
 5. **Regression** — run `make test` for automated API and pipeline checks.
 
 ---

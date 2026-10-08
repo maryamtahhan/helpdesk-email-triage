@@ -36,15 +36,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: helpdesk-email-gateway
+          - image: helpdesk-email-triage-email-gateway
             context: .
             dockerfile: email-gateway/Containerfile
             smoke_test: python -c "import app.main"
-          - image: helpdesk-triage-ui
+          - image: helpdesk-email-triage-ui
             context: .
             dockerfile: agent-dashboard/Containerfile
             smoke_test: python -c "import streamlit"
-          - image: helpdesk-inference-mock
+          - image: helpdesk-email-triage-inference-mock
             context: inference-mock
             dockerfile: inference-mock/Containerfile
             smoke_test: python -c "import server"
