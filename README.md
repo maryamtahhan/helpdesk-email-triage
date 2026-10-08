@@ -496,7 +496,7 @@ xdg-open ./results/guidellm-openshift/guidellm-benchmark-*.html      # Linux
 
 The HTML report shows latency distributions, time-to-first-token (TTFT), inter-token latency (ITL), and per-request breakdowns across concurrency levels. Look for the concurrency level where p95 latency starts to increase sharply — that is the saturation point for your node configuration.
 
-A sample report from a default-sizing test run is included at [docs/examples/guidellm-benchmark-example.html](docs/examples/guidellm-benchmark-example.html).
+A sample report from a default-sizing test run is included at [docs/examples/guidellm-benchmark-example.html](docs/examples/guidellm-benchmark-example.html) (illustrative HTML from GuideLLM 0.7.x; cluster runs use the Red Hat `guidellm-rhel9` image documented above).
 
 **Step 3c: Archive or compare runs (JSON)**
 
