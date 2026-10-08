@@ -27,7 +27,7 @@ deploy/openshift/
     └── hardened-rhaii/              # RHAII + hardening
 ```
 
-Images default to `quay.io/mtahhan/helpdesk-*:latest`. Pin with `IMAGE_TAG=v1.2.3 make deploy-openshift`. RHAII image: `registry.redhat.io/rhaii/vllm-cpu-rhel9:3.5.0-1786546771`.
+Images default to `quay.io/rh-ai-quickstart/helpdesk-*:latest`. Pin with `IMAGE_TAG=v1.2.3 make deploy-openshift`. RHAII image: `registry.redhat.io/rhaii/vllm-cpu-rhel9:3.5.0-1786546771`.
 
 ## Overlay quick reference
 

@@ -15,7 +15,7 @@ services:
     build:
       context: ./inference-mock
       dockerfile: Containerfile
-    image: ${MOCK_IMAGE:-quay.io/mtahhan/helpdesk-email-triage-inference-mock:latest}
+    image: ${MOCK_IMAGE:-quay.io/rh-ai-quickstart/helpdesk-email-triage-inference-mock:latest}
     container_name: helpdesk-email-triage-inference-mock
     restart: unless-stopped
     ports:
@@ -36,7 +36,7 @@ services:
     build:
       context: .
       dockerfile: email-gateway/Containerfile
-    image: ${GATEWAY_IMAGE:-quay.io/mtahhan/helpdesk-email-triage-email-gateway:latest}
+    image: ${GATEWAY_IMAGE:-quay.io/rh-ai-quickstart/helpdesk-email-triage-email-gateway:latest}
     container_name: rhaii-email-gateway
     restart: unless-stopped
     depends_on:

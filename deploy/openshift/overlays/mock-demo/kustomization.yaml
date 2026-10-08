@@ -20,6 +20,6 @@ configMapGenerator:
 
 # Override image tags for your registry fork:
 # images:
-#   - name: quay.io/mtahhan/helpdesk-email-triage-email-gateway
+#   - name: quay.io/rh-ai-quickstart/helpdesk-email-triage-email-gateway
 #     newName: registry.example.com/acme/helpdesk-email-triage-email-gateway
 #     newTag: v1.0.0

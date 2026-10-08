@@ -17,7 +17,7 @@ The Streamlit dashboard (`agent-dashboard/`) is a **demo inbox** only. Productio
 | **Gateway-only compose** | `compose.gateway-only.yml` | Inference + gateway, no Streamlit |
 | **Integration guide** | `docs/integration.md` | This document |
 | **Webhook test scripts** | `scripts/webhook-receiver.py`, `scripts/test-webhook-sink.sh` | Local receiver + `make test-webhook` |
-| **Published images** | `quay.io/mtahhan/helpdesk-*` | Built by `.github/workflows/publish-quay.yml` on push to `main` |
+| **Published images** | `quay.io/rh-ai-quickstart/helpdesk-*` | Built by `.github/workflows/publish-quay.yml` on push to `main` |
 | **CI** | `.github/workflows/ci.yml` | Tests + Compose validation on every PR |
 
 Compose files default to the published Quay images. Use `podman compose up --build` to rebuild from source, or set `GATEWAY_IMAGE` / `UI_IMAGE` / `MOCK_IMAGE` to override.
@@ -387,7 +387,7 @@ The SMTP listener accepts mail with `250 Message accepted` and classifies in a b
 
 | File | Services | Default images |
 |---|---|---|
-| `compose.mock.demo.yml` | Mock inference + gateway + Streamlit UI | `quay.io/mtahhan/helpdesk-*:latest` |
+| `compose.mock.demo.yml` | Mock inference + gateway + Streamlit UI | `quay.io/rh-ai-quickstart/helpdesk-*:latest` |
 | `compose.gateway-only.yml` | Mock inference + gateway (no UI) | same |
 | `compose.yml` | Red Hat AI Inference + gateway + Streamlit UI | gateway + UI from Quay; RHAII from `registry.redhat.io` |
 

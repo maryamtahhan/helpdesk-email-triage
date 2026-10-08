@@ -17,11 +17,11 @@ resources:
 
 # Pin tags in your overlay or pass IMAGE_TAG= to deploy-openshift.sh
 images:
-  - name: quay.io/mtahhan/helpdesk-email-triage-email-gateway
+  - name: quay.io/rh-ai-quickstart/helpdesk-email-triage-email-gateway
     newTag: latest
-  - name: quay.io/mtahhan/helpdesk-email-triage-ui
+  - name: quay.io/rh-ai-quickstart/helpdesk-email-triage-ui
     newTag: latest
-  - name: quay.io/mtahhan/helpdesk-email-triage-inference-mock
+  - name: quay.io/rh-ai-quickstart/helpdesk-email-triage-inference-mock
     newTag: latest
 
 labels:
